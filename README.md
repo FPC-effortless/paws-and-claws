@@ -1,58 +1,92 @@
 # 🐾 Paws & Claws
 
-A pet shop website with a membership club — built as a fast, dependency-free
-static site (HTML + CSS + vanilla JS) that deploys to GitHub Pages.
+A complete pet-care platform — storefront, booking portal, pet marketplace,
+member portal, and a full admin control panel (ERP/CRM) — built as a fast,
+dependency-free static site (HTML + CSS + vanilla JS) with **no build step**,
+ready to deploy to **Vercel**.
 
 ## Pages
 
+### Storefront
+
 | Page | What's on it |
 |---|---|
-| `index.html` | Hero, categories, featured products, member perks, services, reviews, newsletter |
-| `shop.html` | Product grid with category/price filters, sorting, and a cart |
-| `membership.html` | Plan comparison, signup + login forms, membership FAQ |
-| `account.html` | Member dashboard — plan, perks, pet profile, plan switching, sign out |
-| `contact.html` | Store info, embedded map, validated contact form, FAQ |
+| `index.html` | Home — CMS-driven hero, service groups, featured pet listings, bestsellers, perks, reviews, pet-care tips, newsletter |
+| `services.html` | Services & booking portal — 4-step wizard (service → provider/time → pet/intake → confirm), real availability windows, 30% deposit, waitlist join |
+| `shop.html` | Shop & marketplace — product grid with category/price filters, 5 sort orders, `?cat=` deep links, cart, member-gated checkout |
+| `pets.html` | Pet marketplace — adoption/listing cards with health records, pedigree, temperament and inquiry flow |
+| `membership.html` | Plan comparison (Puppy Pass / Adult Adventurer / Senior Snuggler), signup + login, FAQ |
+| `account.html` | Member portal — dashboard, bookings, orders, pets & vaccines, payment methods, messages, plan switching, sign out |
+| `contact.html` | Contact & emergency — emergency hotline band, store info, weekly hours with open/closed status, map, validated form, FAQ |
+| `admin/index.html` | **Admin Control Panel** — dashboard, bookings, CRM, POS, inventory, CMS/staff/roles (see below) |
 
-## Membership features
+## Member demo accounts
 
-- **Signup** with validation (name, email, 8+ char password, pet name, terms)
-- **Login** with credential checking
-- **Three plans** — Puppy Pass (free), Adult Adventurer ($9/mo), Senior Snuggler ($19/mo)
-- **Member dashboard** showing plan, discount level, and pet profile
-- **Plan switching** from the dashboard or the membership page
-- **Sign out**
-- Nav shows a membership chip when signed in; "Join now" when signed out
+The seeded members can sign in at **`membership.html`** (or any gated flow)
+and then use the member portal, booking wizard, and checkout:
 
-State persists in `localStorage` under the `pnc_` prefix. Passwords use a
-demonstration-only scramble — **this is not real authentication**. Before going
-live, replace the auth module with a real backend or a service like Clerk,
-Auth0, or Supabase.
+| Member | Email | Password |
+|---|---|---|
+| Elena Vasquez | `elena@example.com` | `member123` |
+| Marcus Dunn | `marcus@example.com` | `member123` |
+| Priya Raman | `priya@example.com` | `member123` |
 
-## Shop features
+Their pets, bookings, and orders are seeded by `assets/js/data.js`.
 
-- 12 products with category and price filters, 5 sort orders
-- Category deep-linking via `shop.html?cat=Toys`
-- Cart with quantity steppers, add/remove, and a live subtotal badge
-- Toast notifications
+## Admin Control Panel (ERP/CRM)
+
+Role-based access with four demo roles. Sign in at **`/admin`**:
+
+| Role | Email | Password | Scope |
+|---|---|---|---|
+| Super | `owner@pawsandclaws.example` | `admin123` | Everything |
+| Front desk | `front@pawsandclaws.example` | `desk123` | Bookings, CRM, POS |
+| Provider | `rosa@pawsandclaws.example` | `rosa123` | Own bookings & pets |
+| Retail | `retail@pawsandclaws.example` | `retail123` | POS & inventory |
+
+Sections (each permission-gated via `PNC_DB.can`):
+
+- **Dashboard** — KPIs (revenue, bookings today, owners, pets, low stock,
+  pending orders/vaccines, waitlist, unread notifications), alerts, revenue
+  bars, recent audit log
+- **Bookings** — filterable schedule, mark complete, add notes, cancel,
+  manage waitlist
+- **CRM** — owner directory with lifetime spend, pet records, vaccine
+  approval queue, global search
+- **POS** — charge an owner for services/products, track order stages,
+  issue refunds
+- **Inventory** — stock adjust (±1 / +10), low-stock alerts, edit products,
+  approve or reject marketplace listings
+- **CMS & Staff** — edit hero/banner, hotline, hours, contact details and
+  service pricing; manage provider leave; review role permission matrix
+
+## State & data
+
+Everything is seeded into `localStorage` under the `pnc_` prefix by
+`assets/js/data.js` (`PNC_DB.seed()` / `PNC_DB.reset()`). The admin panel has a
+"Reset demo data" button. Passwords use a demonstration-only scramble —
+**this is not real authentication**. Before going live, replace the auth module
+with a real backend or a service like Clerk, Auth0, or Supabase.
 
 ## Structure
 
 ```
-├── index.html
-├── shop.html
-├── membership.html
-├── account.html
-├── contact.html
-├── favicon.svg
+├── index.html · services.html · shop.html · pets.html
+├── membership.html · account.html · contact.html
+├── admin/index.html              # admin control panel
+├── vercel.json                   # Vercel config (static, /admin rewrite)
 ├── assets/
 │   ├── css/
-│   │   ├── style.css     # design system: tokens, reset, header/footer, forms, modals
-│   │   └── pages.css     # page-specific styles
+│   │   ├── style.css             # design system: tokens, reset, header/footer, forms, modals
+│   │   ├── pages.css             # storefront page styles
+│   │   └── platform.css          # booking, shop, pets, member portal, contact, admin
 │   └── js/
-│       ├── app.js        # core: cart, auth, toasts, modals, product data
-│       └── shop.js       # shop filtering + sorting
-└── .github/workflows/
-    └── deploy.yml        # GitHub Pages deploy on push to main
+│       ├── app.js                # core: cart, auth, toasts, modals
+│       ├── data.js               # PNC_DB: seed data, store, booking/order/CRM engine
+│       ├── nav.js                # shared header, cart modal, footer, notifications
+│       ├── home.js · booking.js · shop.js · pets.js
+│       ├── account.js · contact.js · admin.js
+└── test/harness.js               # data-layer test suite (node test/harness.js)
 ```
 
 ## Run locally
@@ -60,19 +94,34 @@ Auth0, or Supabase.
 No build step. Open `index.html` in a browser, or:
 
 ```bash
+npx serve .
+# or
 python3 -m http.server 8000
-# visit http://localhost:8000
 ```
 
-## Deploy
+Run the data-layer tests anytime:
 
-Push to `main`. The included workflow publishes to GitHub Pages automatically.
-In the repo settings, set **Settings → Pages → Build and deployment → Source**
-to **GitHub Actions**.
+```bash
+node test/harness.js
+```
+
+## Deploy to Vercel
+
+Zero-config — the repo is static, so `vercel.json` only adds clean URLs, an
+`/admin` → `/admin/index.html` rewrite, and long-cache headers for `/assets`.
+
+```bash
+npm i -g vercel
+vercel        # preview
+vercel --prod # production
+```
+
+Or import the repo on [vercel.com](https://vercel.com) — Framework Preset
+**Other** is auto-detected; no build or output commands are needed.
 
 ## Tech
 
 - Zero dependencies. No npm install, no framework, no bundler.
 - Google Fonts (Fredoka + Quicksand) loaded via CDN.
-- Accessible-ish: semantic landmarks, `aria-modal` dialogs, visible focus rings,
-  `prefers-reduced-motion` support, keyboard-dismissible modals.
+- Accessible-ish: semantic landmarks, `aria-modal` dialogs, visible focus
+  rings, `prefers-reduced-motion` support, keyboard-dismissible modals.

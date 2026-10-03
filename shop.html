@@ -56,7 +56,7 @@
         <div class="sec-head" style="margin-bottom:26px">
           <span class="eyebrow">The store</span>
           <h1>Shop the whole store</h1>
-          <p class="lead">Hand-picked products we'd give our own pets. Club members save 15% automatically at checkout.</p>
+          <p class="lead" id="shopLead">Hand-picked products we'd give our own pets. Club members save 15% automatically at checkout.</p>
         </div>
       </div>
     </section>
@@ -69,12 +69,35 @@
             <strong style="display:block;font-size:.82rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px">Category</strong>
             <div id="filterCats"></div>
           </div>
+                    <div class="filter-group">
+            <strong style="display:block;font-size:.82rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px">Species</strong>
+            <div id="filterSpecies"></div>
+          </div>
+          <div class="filter-group">
+            <strong style="display:block;font-size:.82rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px">Age</strong>
+            <div id="filterAge"></div>
+          </div>
+          <div class="filter-group">
+            <strong style="display:block;font-size:.82rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px">Size</strong>
+            <div id="filterSize"></div>
+          </div>
           <div class="filter-group">
             <strong style="display:block;font-size:.82rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px">Max price</strong>
-            <div id="filterPrice"></div>
+            <div id="filterPrice">
+              <input type="range" id="priceRange" min="0" max="200" step="5" value="200" style="width:100%" aria-label="Maximum price">
+              <div id="priceReadout" style="font-size:.84rem;color:var(--ink-soft);margin-top:4px">Any price</div>
+            </div>
           </div>
           <div class="filter-group" style="border-top:none">
             <button class="btn btn-ghost btn-block" id="clearFilters">Clear filters</button>
+          </div>
+                    <div class="filter-group" style="border-top:none;padding-top:0">
+            <strong style="display:block;font-size:.82rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px">Fulfillment</strong>
+            <div style="display:flex;gap:8px">
+              <button type="button" class="btn btn-sm btn-ghost ful-opt" data-ful="delivery" style="flex:1">Delivery</button>
+              <button type="button" class="btn btn-sm btn-ghost ful-opt" data-ful="pickup" style="flex:1">Pickup</button>
+            </div>
+            <p id="fulNote" style="font-size:.84rem;color:var(--ink-soft);margin:8px 0 0">Same-day delivery within Riverton — order by 2pm</p>
           </div>
           <div class="filter-group" style="border-top:none;padding-top:0">
             <a class="btn btn-teal btn-block" href="membership.html">Join &amp; save 15%</a>
@@ -177,7 +200,9 @@
     </div>
   </div>
 
-  <script src="assets/js/app.js"></script>
+    <script src="assets/js/app.js"></script>
+  <script src="assets/js/data.js"></script>
+  <script src="assets/js/nav.js"></script>
   <script src="assets/js/shop.js"></script>
 </body>
 </html>

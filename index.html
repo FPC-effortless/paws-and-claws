@@ -3,78 +3,39 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Paws &amp; Claws — Everything Your Pet Needs, All in One Place</title>
-  <meta name="description" content="Paws &amp; Claws is your neighborhood pet shop for food, toys, grooming and more. Join our membership club for exclusive perks, discounts and free birthday treats.">
+  <title>Paws &amp; Claws — Pet Care, Shop &amp; Adoption, All in One Place</title>
+  <meta name="description" content="Book vet, grooming, sitting and training appointments, shop pet supplies, adopt pets, and manage your member portal — all at Paws &amp; Claws.">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/css/style.css">
   <link rel="stylesheet" href="assets/css/pages.css">
+  <link rel="stylesheet" href="assets/css/platform.css">
 </head>
 <body>
-
-  <header class="site-header">
-    <div class="wrap">
-      <nav class="nav">
-        <a class="brand" href="index.html" aria-label="Paws and Claws home">
-          <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
-            <ellipse cx="32" cy="40" rx="17" ry="14" fill="#155e5c"/>
-            <ellipse cx="14" cy="20" rx="6" ry="8" fill="#ff7a59" transform="rotate(-14 14 20)"/>
-            <ellipse cx="26" cy="12" rx="6" ry="8.5" fill="#ff7a59" transform="rotate(-4 26 12)"/>
-            <ellipse cx="40" cy="12" rx="6" ry="8.5" fill="#ff7a59" transform="rotate(4 40 12)"/>
-            <ellipse cx="52" cy="20" rx="6" ry="8" fill="#ff7a59" transform="rotate(14 52 20)"/>
-            <ellipse cx="32" cy="46" rx="9" ry="6" fill="#f7eede"/>
-          </svg>
-          <span>Paws &amp; Claws<small>Pet Co.</small></span>
-        </a>
-
-        <div class="nav-links">
-          <a href="index.html" class="active">Home</a>
-          <a href="shop.html">Shop</a>
-          <a href="membership.html">Membership</a>
-          <a href="contact.html">Contact</a>
-          <a class="btn btn-teal" href="membership.html">Join the club</a>
-        </div>
-
-        <div class="nav-actions">
-          <div id="memberZone"></div>
-          <button class="cart-btn" id="cartBtn" aria-label="Open cart">
-            <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="#155e5c" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="9" cy="20" r="1.6"/><circle cx="18" cy="20" r="1.6"/><path d="M2 3h2.5l2.6 12.2a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 2-1.5L21 8H6"/>
-            </svg>
-            <span class="cart-count" id="cartCount" data-empty="true">0</span>
-          </button>
-          <button class="burger" aria-label="Toggle menu" aria-expanded="false"><span></span></button>
-        </div>
-      </nav>
-    </div>
-  </header>
+  <header class="site-header"></header>
 
   <main>
     <section class="hero">
       <div class="wrap hero-grid">
         <div>
           <span class="eyebrow">Family-owned since 2011</span>
-          <h1>Everything your <em>best friend</em> needs, all under one woof.</h1>
-          <p class="lead">Premium food, toys that survive, grooming that sparkles, and a membership club that treats your pet like royalty. Free local delivery on orders over $35.</p>
+          <h1 id="heroTitle">Everything your <em>best friend</em> needs, all under one woof.</h1>
+          <p class="lead" id="heroLead">Book appointments with a verified care team, shop curated pet supplies, meet adoptable pets, and manage everything from one member portal.</p>
           <div class="hero-cta">
-            <a class="btn btn-primary btn-lg" href="shop.html">Shop bestsellers</a>
-            <a class="btn btn-ghost btn-lg" href="membership.html">See member perks</a>
+            <a class="btn btn-primary btn-lg" href="services.html#book">Book an appointment</a>
+            <a class="btn btn-ghost btn-lg" href="shop.html">Shop the store</a>
           </div>
-          <div class="hero-stats">
-            <div><b>12k+</b><span>Happy pets served</span></div>
-            <div><b>4.8★</b><span>Average review</span></div>
-            <div><b>4,200</b><span>Club members</span></div>
-          </div>
+          <div class="hero-stats" id="heroStats"></div>
         </div>
 
         <div class="hero-art">
           <div class="hero-card">
             <span class="hero-badge">Free birthday treat</span>
-            <div class="big-emoji">🐕</div>
-            <div class="hero-float f1">🦴 <b>Grain-free</b> kibble</div>
-            <div class="hero-float f2">💈 <b>Spa day</b> booking</div>
+            <div class="big-emoji">&#128054;</div>
+            <div class="hero-float f1">&#129356; <b>Next open slot</b></div>
+            <div class="hero-float f2">&#128136; <b>Spa day</b> booking</div>
           </div>
         </div>
       </div>
@@ -82,28 +43,56 @@
 
     <div class="marquee" aria-hidden="true">
       <div class="marquee-track">
-        <span>🚚 Free delivery over $35</span><span>🐾 Club members save 15%</span><span>♻️ Eco-friendly brands</span><span>🏥 Vet-approved nutrition</span><span>🎁 Free gift wrapping</span>
-        <span>🚚 Free delivery over $35</span><span>🐾 Club members save 15%</span><span>♻️ Eco-friendly brands</span><span>🏥 Vet-approved nutrition</span><span>🎁 Free gift wrapping</span>
+        <span>&#128666; Free local delivery over $35</span><span>&#128062; Members save 15%</span><span>&#9851; Eco-friendly brands</span><span>&#129658; Vet-approved nutrition</span><span>&#127868; Free gift wrapping</span><span>&#128138; 24/7 vet hotline</span>
+        <span>&#128666; Free local delivery over $35</span><span>&#128062; Members save 15%</span><span>&#9851; Eco-friendly brands</span><span>&#129658; Vet-approved nutrition</span><span>&#127868; Free gift wrapping</span><span>&#128138; 24/7 vet hotline</span>
       </div>
     </div>
 
-    <section>
+    <section id="areas">
       <div class="wrap">
         <div class="sec-head center">
-          <span class="eyebrow">Browse the store</span>
-          <h2>Shop by category</h2>
-          <p class="lead">From kibble to cat towers, we've curated every shelf with the same care you'd give your own pet.</p>
+          <span class="eyebrow">One platform, five ways to pamper</span>
+          <h2>Everything pet care, under one roof</h2>
+          <p class="lead">From a last-minute nail trim to a new best friend, it all happens here — and it all stays in sync with your member account.</p>
         </div>
         <div class="grid g-4">
-          <a class="card cat-card reveal" href="shop.html?cat=Food"><span class="cat-ico">🦴</span><h3>Food &amp; Treats</h3><p>Grain-free, raw, breed-specific</p></a>
-          <a class="card cat-card reveal" href="shop.html?cat=Toys"><span class="cat-ico">🪶</span><h3>Toys &amp; Play</h3><p>Teasers, tugs, puzzles</p></a>
-          <a class="card cat-card reveal" href="shop.html?cat=Grooming"><span class="cat-ico">🧴</span><h3>Grooming &amp; Spa</h3><p>Shampoo, brushes, de-shed</p></a>
-          <a class="card cat-card reveal" href="shop.html?cat=Walking"><span class="cat-ico">🦮</span><h3>Walking &amp; Travel</h3><p>Harnesses, leashes, carriers</p></a>
+          <a class="card cat-card reveal" href="services.html"><span class="cat-ico">&#128197;</span><h3>Book a visit</h3><p>Vet, grooming, sitting &amp; training with real-time availability</p></a>
+          <a class="card cat-card reveal" href="shop.html"><span class="cat-ico">&#128722;</span><h3>Shop the store</h3><p>Curated food, toys and gear with same-day local delivery</p></a>
+          <a class="card cat-card reveal" href="pets.html"><span class="cat-ico">&#128062;</span><h3>Adopt a pet</h3><p>Verified listings from trusted breeders and shelters</p></a>
+          <a class="card cat-card reveal" href="account.html"><span class="cat-ico">&#128100;</span><h3>Member portal</h3><p>Pets, bookings, orders, messages and payment in one place</p></a>
         </div>
       </div>
     </section>
 
-    <section style="padding-top:0">
+    <section id="services" style="padding-top:0">
+      <div class="wrap">
+        <div class="sec-head center">
+          <span class="eyebrow">In-store services</span>
+          <h2>More than a shop</h2>
+          <p class="lead">Four departments, one care team. Prices are flat — no surprises at checkout — and members save 10% on every service.</p>
+        </div>
+        <div id="groupGrid" class="grid g-4"></div>
+        <div class="center" style="margin-top:34px">
+          <a class="btn btn-teal btn-lg" href="services.html">See the full care menu</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="featured-pets" style="background:var(--cream-2)">
+      <div class="wrap">
+        <div class="sec-head">
+          <span class="eyebrow">Pet marketplace</span>
+          <h2>Meet a new family member</h2>
+          <p class="lead">Every listing is health-checked, vaccinated and verified. Ask a question and hear back within one business day.</p>
+        </div>
+        <div id="featuredListings" class="grid g-3"></div>
+        <div class="center" style="margin-top:34px">
+          <a class="btn btn-teal btn-lg" href="pets.html">Browse all pets</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="bestsellers" style="padding-top:0">
       <div class="wrap">
         <div class="sec-head">
           <span class="eyebrow">Member favorites</span>
@@ -125,10 +114,10 @@
           <p class="lead">Membership is free to start and pays for itself in your first month. No contracts, cancel anytime.</p>
         </div>
         <div class="perks">
-          <div class="card perk reveal"><div class="ico">💰</div><h3>15% off everything</h3><p>Member pricing on every product, every day. Stacks with sale items.</p></div>
-          <div class="card perk reveal"><div class="ico">🚚</div><h3>Free delivery</h3><p>No minimum order. We bring it to your door, same-day in the neighborhood.</p></div>
-          <div class="card perk reveal"><div class="ico">🎂</div><h3>Birthday surprises</h3><p>A free treat box and a personalized card on your pet's gotcha day.</p></div>
-          <div class="card perk reveal"><div class="ico">🩺</div><h3>Vet hotline</h3><p>24/7 access to licensed vets for "is this normal?" moments.</p></div>
+          <div class="card perk reveal"><div class="ico">&#128176;</div><h3>15% off everything</h3><p>Member pricing on every product, every day. Stacks with sale items.</p></div>
+          <div class="card perk reveal"><div class="ico">&#128666;</div><h3>Free delivery</h3><p>No minimum order. We bring it to your door, same-day in the neighborhood.</p></div>
+          <div class="card perk reveal"><div class="ico">&#127873;</div><h3>Birthday surprises</h3><p>A free treat box and a personalized card on your pet's gotcha day.</p></div>
+          <div class="card perk reveal"><div class="ico">&#129658;</div><h3>Vet hotline</h3><p>24/7 access to licensed vets for "is this normal?" moments.</p></div>
         </div>
         <div class="center" style="margin-top:36px">
           <a class="btn btn-primary btn-lg" href="membership.html">Become a member</a>
@@ -136,34 +125,7 @@
       </div>
     </section>
 
-    <section id="services">
-      <div class="wrap">
-        <div class="sec-head center">
-          <span class="eyebrow">In-store services</span>
-          <h2>More than a shop</h2>
-          <p class="lead">Book a spot with our certified groomers and trainers. Members get priority booking and 10% off every service.</p>
-        </div>
-        <div class="grid g-3">
-          <div class="card svc reveal">
-            <div class="ico">💈</div><h3>Full-Service Grooming</h3>
-            <p>Bath, blowout, nails, ears and a bandana. Breed-specific cuts by certified groomers.</p>
-            <div class="price-line">From $45 · 2 hrs</div>
-          </div>
-          <div class="card svc reveal">
-            <div class="ico">🎓</div><h3>Group Training Classes</h3>
-            <p>Puppy kindergarten, leash manners and recall. Six-week sessions, max six dogs.</p>
-            <div class="price-line">From $180 · 6 weeks</div>
-          </div>
-          <div class="card svc reveal">
-            <div class="ico">🛁</div><h3>Self-Serve Wash</h3>
-            <p>Our tubs, our towels, our shampoo. We clean up the mess, you keep the memories.</p>
-            <div class="price-line">$15 · 45 min</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section style="background:var(--cream-2);padding-top:0">
+    <section id="reviews">
       <div class="wrap">
         <div class="sec-head center">
           <span class="eyebrow">Loud and proud</span>
@@ -171,32 +133,59 @@
         </div>
         <div class="grid g-3">
           <div class="card quote reveal">
-            <div class="stars">★★★★★</div>
-            <p>"The self-serve wash changed my life. No more clogged drains, and Bruno looks like a show dog for $15."</p>
-            <div class="who"><span class="av">🧑‍🦰</span><div><b>Priya R.</b><small>Club member · 3 yrs</small></div></div>
+            <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+            <p>"Booked a groom at 8am, my dog was fluffy by noon. The portal even sent vaccine reminders first."</p>
+            <div class="who"><span class="av">&#129489;&#8205;&#129466;</span><div><b>Priya R.</b><small>Club member &middot; 3 yrs</small></div></div>
           </div>
           <div class="card quote reveal">
-            <div class="stars">★★★★★</div>
+            <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
             <p>"My picky Maine Coon finally eats something. The staff actually know cat nutrition, not just sales."</p>
-            <div class="who"><span class="av">🧔</span><div><b>Marcus D.</b><small>Club member · 1 yr</small></div></div>
+            <div class="who"><span class="av">&#129489;</span><div><b>Marcus D.</b><small>Club member &middot; 1 yr</small></div></div>
           </div>
           <div class="card quote reveal">
-            <div class="stars">★★★★★</div>
-            <p>"Birthday box for our rescue's gotcha day made my wife cry. Free, personal, and the treats were gone in minutes."</p>
-            <div class="who"><span class="av">👩</span><div><b>Elena V.</b><small>Puppy Pass member</small></div></div>
+            <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+            <p>"We adopted Clover through the marketplace and the health records were already on file. Painless."</p>
+            <div class="who"><span class="av">&#128105;</span><div><b>Elena V.</b><small>Puppy Pass member</small></div></div>
           </div>
         </div>
       </div>
     </section>
 
-    <section>
+    <section id="tips" style="padding-top:0">
+      <div class="wrap">
+        <div class="sec-head center">
+          <span class="eyebrow">Pet-care tips</span>
+          <h2>From our care team's notebook</h2>
+          <p class="lead">Short, practical reads written by the people who care for your pets.</p>
+        </div>
+        <div class="grid g-3">
+          <article class="card svc reveal">
+            <div class="ico">&#128062;</div><h3>How much exercise does my dog actually need?</h3>
+            <p>It depends on breed and age — but most dogs need 30 to 90 minutes a day. Here's how to tell if yours is getting enough.</p>
+            <div class="price-line">5 min read &middot; Dr. Dana Reyes, DVM</div>
+          </article>
+          <article class="card svc reveal">
+            <div class="ico">&#128049;</div><h3>Reading your cat's body language</h3>
+            <p>Tail flicks, slow blinks and ear angles tell you exactly how your cat feels. Learn the three signs of an overstimulated cat.</p>
+            <div class="price-line">4 min read &middot; Talia Okonjo, Groomer</div>
+          </article>
+          <article class="card svc reveal">
+            <div class="ico">&#128138;</div><h3>A vaccine schedule you can actually remember</h3>
+            <p>Core shots, boosters and lifestyle add-ons — plus how to keep records current so boarding and grooming never stall.</p>
+            <div class="price-line">6 min read &middot; Marcus Webb, DVM</div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section style="padding-top:0">
       <div class="wrap">
         <div class="cta-band reveal">
           <h2>Ready to spoil them rotten?</h2>
           <p>Join the Paws &amp; Claws club today — it's free to start, takes two minutes, and your pet gets a welcome treat in the mail.</p>
           <div class="hero-cta" style="justify-content:center;margin-top:24px">
             <a class="btn btn-ghost btn-lg" href="membership.html">Sign up free</a>
-            <a class="btn btn-primary btn-lg" href="shop.html">Start shopping</a>
+            <a class="btn btn-primary btn-lg" href="services.html#book">Book a visit</a>
           </div>
         </div>
       </div>
@@ -219,120 +208,9 @@
     </section>
   </main>
 
-  <footer class="site-footer">
-    <div class="wrap">
-      <div class="footer-grid">
-        <div>
-          <div class="footer-brand">
-            <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
-              <ellipse cx="32" cy="40" rx="17" ry="14" fill="#ff7a59"/>
-              <ellipse cx="14" cy="20" rx="6" ry="8" fill="#fdf8f0" transform="rotate(-14 14 20)"/>
-              <ellipse cx="26" cy="12" rx="6" ry="8.5" fill="#fdf8f0" transform="rotate(-4 26 12)"/>
-              <ellipse cx="40" cy="12" rx="6" ry="8.5" fill="#fdf8f0" transform="rotate(4 40 12)"/>
-              <ellipse cx="52" cy="20" rx="6" ry="8" fill="#fdf8f0" transform="rotate(14 52 20)"/>
-            </svg>
-            Paws &amp; Claws
-          </div>
-          <p>Your neighborhood pet shop since 2011. Family-owned, pet-obsessed, and always happy to see you.</p>
-          <div class="socials">
-            <a href="#" aria-label="Instagram"><svg viewBox="0 0 24 24"><path d="M12 2c2.7 0 3 0 4.1.1 1.1 0 1.8.2 2.4.5.6.2 1.1.5 1.6 1 .5.5.8 1 1 1.6.3.6.4 1.3.5 2.4.1 1.1.1 1.4.1 4.4s0 3.3-.1 4.4c0 1.1-.2 1.8-.5 2.4a4.5 4.5 0 0 1-1 1.6c-.5.5-1 .8-1.6 1-.6.3-1.3.4-2.4.5-1.1.1-1.4.1-4.1.1s-3 0-4.1-.1c-1.1 0-1.8-.2-2.4-.5a4.5 4.5 0 0 1-1.6-1c-.5-.5-.8-1-1-1.6-.3-.6-.4-1.3-.5-2.4C2.3 15.3 2.3 15 2.3 12s0-3.3.1-4.4c0-1.1.2-1.8.5-2.4a4.5 4.5 0 0 1 1-1.6c.5-.5 1-.8 1.6-1 .6-.3 1.3-.4 2.4-.5C9 2 9.3 2 12 2Zm0 5a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm0 8.2a3.2 3.2 0 1 1 0-6.4 3.2 3.2 0 0 1 0 6.4ZM18.4 6.8a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4Z"/></svg></a>
-            <a href="#" aria-label="Facebook"><svg viewBox="0 0 24 24"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.2c-1.2 0-1.6.8-1.6 1.6V12h2.7l-.4 2.9h-2.3v7A10 10 0 0 0 22 12Z"/></svg></a>
-            <a href="#" aria-label="TikTok"><svg viewBox="0 0 24 24"><path d="M16.5 2h-2.6v13a2.4 2.4 0 1 1-2.4-2.4c.2 0 .5 0 .7.1V9.9a5.1 5.1 0 1 0 4.3 5V8.6a5.9 5.9 0 0 0 3.5 1.2V7.1a3.4 3.4 0 0 1-3.5-3.4V2Z"/></svg></a>
-          </div>
-        </div>
-        <div>
-          <h4>Shop</h4>
-          <ul>
-            <li><a href="shop.html?cat=Food">Food &amp; Treats</a></li>
-            <li><a href="shop.html?cat=Toys">Toys</a></li>
-            <li><a href="shop.html?cat=Grooming">Grooming</a></li>
-            <li><a href="shop.html?cat=Beds">Beds &amp; Furniture</a></li>
-          </ul>
-        </div>
-        <div>
-          <h4>Company</h4>
-          <ul>
-            <li><a href="membership.html">Membership</a></li>
-            <li><a href="index.html#services">Services</a></li>
-            <li><a href="contact.html">Contact</a></li>
-            <li><a href="contact.html#faq">FAQ</a></li>
-          </ul>
-        </div>
-        <div>
-          <h4>Visit us</h4>
-          <ul>
-            <li>142 Alder Brook Lane<br>Suite 3, Riverton</li>
-            <li>Mon–Sat: 9am – 7pm</li>
-            <li>Sun: 10am – 4pm</li>
-            <li>(555) 018-4427</li>
-          </ul>
-        </div>
-      </div>
-      <div class="footer-bottom">
-        <span>© 2026 Paws &amp; Claws Pet Co. All rights reserved.</span>
-        <span>Made with 🐾 for pets everywhere.</span>
-      </div>
-    </div>
-  </footer>
-
-  <div class="modal-backdrop" id="cartModal">
-    <div class="modal modal-shell" role="dialog" aria-modal="true" aria-labelledby="cartTitle">
-      <button class="modal-close" data-close-modal="cartModal" aria-label="Close cart">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#155e5c" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-      </button>
-      <div class="modal-pad">
-        <h2 id="cartTitle" style="font-size:1.5rem">Your cart</h2>
-        <div id="cartBody"></div>
-        <div class="cart-foot" id="cartDrawer" hidden>
-          <div class="row"><span>Subtotal</span><span id="cartTotal">$0.00</span></div>
-          <div class="row"><span>Delivery</span><span>Calculated at checkout</span></div>
-          <button class="btn btn-primary btn-block" id="cartCheckout">Proceed to checkout</button>
-          <p class="cart-note">Demo store — no payment is processed.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <script src="assets/js/app.js"></script>
-  <script>
-    document.addEventListener("pnc:ready", function () {
-      var grid = document.getElementById("featuredGrid");
-      if (grid) {
-        grid.innerHTML = PNC.PRODUCTS.slice(0, 4).map(function (p) {
-          return '<div class="card product reveal in">' +
-            '<div class="product-art"><span class="badge tag tag--coral">' + p.badge + "</span>" + p.icon +
-              '<button class="fav" aria-label="Add to wishlist"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-9.4A4.1 4.1 0 0 1 12 7.6 4.1 4.1 0 0 1 19 10.6c0 5-7 9.4-7 9.4Z"/></svg></button>' +
-            "</div>" +
-            '<div class="product-body">' +
-              '<div class="stars">★★★★★<small>(' + p.rating + ")</small></div>" +
-              "<h3>" + p.name + "</h3>" +
-              "<p>" + p.desc + "</p>" +
-              '<div class="product-foot">' +
-                '<span class="product-price">' + PNC.money(p.price) + "</span>" +
-                '<button class="add-btn" data-add="' + p.id + '">' +
-                  '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Add' +
-                "</button>" +
-              "</div>" +
-            "</div>" +
-          "</div>";
-        }).join("");
-      }
-
-      var nl = document.getElementById("newsletterForm");
-      if (nl) nl.addEventListener("submit", function (e) {
-        e.preventDefault();
-        var msg = document.getElementById("nl-msg");
-        var email = document.getElementById("nl-email");
-        if (!PNC.isValidEmail(email.value)) {
-          msg.style.color = "var(--danger)";
-          msg.textContent = "Please enter a valid email address.";
-          return;
-        }
-        msg.style.color = "var(--ok)";
-        msg.textContent = "You're subscribed! Watch for the weekly snoot. 🐾";
-        email.value = "";
-      });
-    });
-  </script>
+  <script src="assets/js/data.js"></script>
+  <script src="assets/js/nav.js"></script>
+  <script src="assets/js/home.js"></script>
 </body>
 </html>

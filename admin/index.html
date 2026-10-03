@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin Control Panel — Paws &amp; Claws</title>
+  <meta name="description" content="Paws &amp; Claws admin control panel: bookings, CRM, POS, inventory, listings, CMS, staff and roles.">
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <link rel="stylesheet" href="../assets/css/pages.css">
+  <link rel="stylesheet" href="../assets/css/platform.css">
+</head>
+<body class="admin-body">
+
+  <!-- ===================== LOGIN GATE ===================== -->
+  <div class="admin-gate" id="adminGate">
+    <div class="gate-card">
+      <div class="gate-mark">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <ellipse cx="32" cy="40" rx="17" ry="14" fill="#155e5c"/>
+          <ellipse cx="14" cy="20" rx="6" ry="8" fill="#ff7a59" transform="rotate(-14 14 20)"/>
+          <ellipse cx="26" cy="12" rx="6" ry="8.5" fill="#ff7a59" transform="rotate(-4 26 12)"/>
+          <ellipse cx="40" cy="12" rx="6" ry="8.5" fill="#ff7a59" transform="rotate(4 40 12)"/>
+          <ellipse cx="52" cy="20" rx="6" ry="8" fill="#ff7a59" transform="rotate(14 52 20)"/>
+          <ellipse cx="32" cy="46" rx="9" ry="6" fill="#f7eede"/>
+        </svg>
+      </div>
+      <h1>Admin Control Panel</h1>
+      <p class="hint">Sign in to manage bookings, customers, POS, inventory and the site.</p>
+      <form id="adminLoginForm" novalidate>
+        <div class="field">
+          <label for="ad-email">Admin email</label>
+          <input class="input" id="ad-email" name="email" type="email" autocomplete="username" placeholder="owner@pawsandclaws.example">
+          <span class="err-msg" data-err="email"></span>
+        </div>
+        <div class="field">
+          <label for="ad-pw">Password</label>
+          <div class="pw-wrap">
+            <input class="input" id="ad-pw" name="password" type="password" autocomplete="current-password" placeholder="admin123">
+            <button type="button" class="pw-toggle" aria-label="Show password">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <span class="err-msg" data-err="password"></span>
+        </div>
+        <button class="btn btn-primary btn-lg btn-block" type="submit">Sign in</button>
+        <p class="hint" id="ad-msg" role="status" style="margin:12px 0 0"></p>
+      </form>
+      <div class="demo-creds">
+        <b>Demo accounts</b>
+        <div class="cred-grid" id="credGrid"></div>
+      </div>
+      <a class="gate-back" href="../index.html">&#8592; Back to the store</a>
+    </div>
+  </div>
+
+  <!-- ===================== ADMIN SHELL ===================== -->
+  <div class="admin-shell" id="adminShell" hidden>
+
+    <aside class="admin-side" id="adminSide">
+      <div class="side-brand">
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <ellipse cx="32" cy="40" rx="17" ry="14" fill="#155e5c"/>
+          <ellipse cx="14" cy="20" rx="6" ry="8" fill="#ff7a59" transform="rotate(-14 14 20)"/>
+          <ellipse cx="26" cy="12" rx="6" ry="8.5" fill="#ff7a59" transform="rotate(-4 26 12)"/>
+          <ellipse cx="40" cy="12" rx="6" ry="8.5" fill="#ff7a59" transform="rotate(4 40 12)"/>
+          <ellipse cx="52" cy="20" rx="6" ry="8" fill="#ff7a59" transform="rotate(14 52 20)"/>
+          <ellipse cx="32" cy="46" rx="9" ry="6" fill="#f7eede"/>
+        </svg>
+        <span>Paws &amp; Claws<br><small>Control Panel</small></span>
+      </div>
+      <nav class="side-nav" id="sideNav" aria-label="Admin sections"></nav>
+      <div class="side-foot">
+        <button class="btn btn-ghost btn-block btn-sm" id="adReset">&#128260; Reset demo data</button>
+        <a class="btn btn-ghost btn-block btn-sm" href="../index.html">&#127968; View store</a>
+        <button class="btn btn-teal btn-block btn-sm" id="adLogout">&#8594; Sign out</button>
+      </div>
+    </aside>
+
+    <div class="admin-main">
+      <header class="admin-topbar">
+        <button class="side-toggle" id="sideToggle" aria-label="Toggle sidebar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <div class="topbar-search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="globalSearch" type="search" placeholder="Search customers, pets, bookings&hellip;" aria-label="Global CRM search">
+        </div>
+        <div class="topbar-actions">
+          <div id="adAlerts"></div>
+          <div class="ad-user" id="adUser"></div>
+        </div>
+      </header>
+
+      <div id="searchResults" hidden></div>
+
+      <main class="admin-scroll" id="adminScroll">
+        <!-- Dashboard -->
+        <section class="admin-view active" id="view-dashboard">
+          <div class="view-head">
+            <div><h1>Dashboard</h1><p id="dashSub">Today's snapshot of the whole business.</p></div>
+            <button class="btn btn-teal btn-sm" id="dashRefresh">&#128260; Refresh</button>
+          </div>
+          <div class="kpis" id="kpiRow"></div>
+          <div class="dash-cols">
+            <div class="panel-stack">
+              <div class="admin-panel">
+                <div class="panel-head"><h2>Upcoming appointments</h2><a href="#" data-goto="bookings">Manage &rarr;</a></div>
+                <div id="dashBookings"></div>
+              </div>
+              <div class="admin-panel">
+                <div class="panel-head"><h2>Needs attention</h2></div>
+                <div id="dashAlerts"></div>
+              </div>
+            </div>
+            <div class="panel-stack">
+              <div class="admin-panel">
+                <div class="panel-head"><h2>Revenue</h2><span class="muted" id="revNote"></span></div>
+                <div id="dashRevenue"></div>
+              </div>
+              <div class="admin-panel">
+                <div class="panel-head"><h2>Recent activity</h2></div>
+                <div id="dashAudit"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Bookings -->
+        <section class="admin-view" id="view-bookings">
+          <div class="view-head">
+            <div><h1>Bookings &amp; Calendar</h1><p>Confirm, reschedule, complete and note appointments.</p></div>
+            <div class="chip-filters" id="bkFilters"></div>
+          </div>
+          <div class="admin-panel">
+            <div class="panel-head"><h2 id="bkTitle">All appointments</h2><span class="muted" id="bkCount"></span></div>
+            <div class="table-wrap"><table class="adm-table" id="bkTable"></table></div>
+          </div>
+          <div class="admin-panel">
+            <div class="panel-head"><h2>Waitlist</h2><span class="muted">Customers waiting for a slot</span></div>
+            <div id="waitlistHost"></div>
+          </div>
+        </section>
+
+        <!-- CRM -->
+        <section class="admin-view" id="view-crm">
+          <div class="view-head">
+            <div><h1>Customers &amp; Pets</h1><p>Owners, pets, vaccine records and lifetime value.</p></div>
+            <button class="btn btn-teal btn-sm" id="newOwnerBtn">&#43; New customer</button>
+          </div>
+          <div class="admin-panel">
+            <div class="panel-head"><h2>Owners</h2><span class="muted" id="crmCount"></span></div>
+            <div class="table-wrap"><table class="adm-table" id="crmTable"></table></div>
+          </div>
+          <div class="admin-panel">
+            <div class="panel-head"><h2>Pets &amp; vaccine review</h2><span class="muted" id="vaxNote">Approve pending records to unlock grooming &amp; boarding</span></div>
+            <div id="petHost"></div>
+          </div>
+        </section>
+
+        <!-- POS -->
+        <section class="admin-view" id="view-pos">
+          <div class="view-head">
+            <div><h1>POS &amp; Orders</h1><p>Take an integrated payment and fulfill online orders.</p></div>
+          </div>
+          <div class="pos-cols">
+            <div class="admin-panel pos-pad">
+              <div class="panel-head"><h2>New charge</h2></div>
+              <form id="posForm" novalidate>
+                <div class="field">
+                  <label for="posOwner">Customer</label>
+                  <select class="input" id="posOwner"></select>
+                </div>
+                <div id="posLines" class="pos-lines"></div>
+                <button type="button" class="btn btn-ghost btn-block btn-sm" id="posAddLine">&#43; Add line</button>
+                <div class="field" style="margin-top:12px">
+                  <label for="posMethod">Payment method</label>
+                  <select class="input" id="posMethod">
+                    <option>Cash</option><option>Card</option><option>Store credit</option>
+                  </select>
+                </div>
+                <div class="pos-total"><span>Total</span><b id="posTotal">$0.00</b></div>
+                <button class="btn btn-primary btn-lg btn-block" type="submit">Charge</button>
+                <p class="hint" id="posMsg" role="status" style="margin:10px 0 0"></p>
+              </form>
+            </div>
+            <div class="panel-stack">
+              <div class="admin-panel">
+                <div class="panel-head"><h2>Online orders</h2><span class="muted" id="posOrderCount"></span></div>
+                <div id="orderHost"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Inventory -->
+        <section class="admin-view" id="view-inventory">
+          <div class="view-head">
+            <div><h1>Inventory &amp; Listings</h1><p>Stock levels, product catalog and the pet marketplace.</p></div>
+          </div>
+          <div class="admin-panel">
+            <div class="panel-head"><h2>Products</h2><span class="muted" id="invNote"></span></div>
+            <div class="table-wrap"><table class="adm-table" id="invTable"></table></div>
+          </div>
+          <div class="admin-panel">
+            <div class="panel-head"><h2>Pet listings</h2><span class="muted">Approve, reserve or mark pets as sold</span></div>
+            <div id="listingHost"></div>
+          </div>
+        </section>
+
+        <!-- CMS -->
+        <section class="admin-view" id="view-cms">
+          <div class="view-head">
+            <div><h1>Site, Services &amp; Staff</h1><p>CMS content, service pricing, staff leave, roles and audit log.</p></div>
+          </div>
+          <div class="cms-cols">
+            <div class="panel-stack">
+              <div class="admin-panel pos-pad">
+                <div class="panel-head"><h2>Site content</h2></div>
+                <form id="cmsForm" novalidate>
+                  <div class="field"><label for="cms-banner">Announcement banner</label>
+                    <input class="input" id="cms-banner" name="banner" placeholder="Free shipping this week &mdash; leave empty for none"></div>
+                  <div class="field"><label for="cms-hero">Homepage hero headline</label>
+                    <input class="input" id="cms-hero" name="heroTitle"></div>
+                  <div class="field"><label for="cms-tag">Homepage intro line</label>
+                    <input class="input" id="cms-tag" name="tagline"></div>
+                  <div class="form-grid">
+                    <div class="field"><label for="cms-hot">Emergency hotline</label>
+                      <input class="input" id="cms-hot" name="emergencyHotline"></div>
+                    <div class="field"><label for="cms-phone">Store phone</label>
+                      <input class="input" id="cms-phone" name="phone"></div>
+                    <div class="field"><label for="cms-email">Contact email</label>
+                      <input class="input" id="cms-email" name="email"></div>
+                    <div class="field"><label for="cms-addr">Store address</label>
+                      <input class="input" id="cms-addr" name="address"></div>
+                  </div>
+                  <div class="field"><label for="cms-enote">Emergency note</label>
+                    <input class="input" id="cms-enote" name="emergencyNote"></div>
+                  <button class="btn btn-primary btn-block" type="submit">Save content</button>
+                  <p class="hint" id="cmsMsg" role="status" style="margin:10px 0 0"></p>
+                </form>
+              </div>
+              <div class="admin-panel pos-pad">
+                <div class="panel-head"><h2>Service pricing</h2></div>
+                <form id="svcForm" novalidate>
+                  <div class="field"><label for="svcPick">Service</label>
+                    <select class="input" id="svcPick"></select></div>
+                  <div class="form-grid">
+                    <div class="field"><label for="svcName">Name</label>
+                      <input class="input" id="svcName"></div>
+                    <div class="field"><label for="svcPrice">Price</label>
+                      <input class="input" id="svcPrice" type="number" min="0" step="0.01"></div>
+                    <div class="field"><label for="svcDur">Hours</label>
+                      <input class="input" id="svcDur" type="number" min="0.25" step="0.25"></div>
+                    <div class="field"><label for="svcPop">Popular?</label>
+                      <select class="input" id="svcPop"><option value="1">Yes</option><option value="0">No</option></select></div>
+                  </div>
+                  <div class="field"><label for="svcDesc">Description</label>
+                    <textarea class="input" id="svcDesc" rows="2"></textarea></div>
+                  <button class="btn btn-primary btn-block" type="submit">Save service</button>
+                  <p class="hint" id="svcMsg" role="status" style="margin:10px 0 0"></p>
+                </form>
+              </div>
+            </div>
+            <div class="panel-stack">
+              <div class="admin-panel pos-pad">
+                <div class="panel-head"><h2>Staff &amp; leave</h2></div>
+                <div id="staffHost"></div>
+                <form id="leaveForm" class="leave-form" novalidate>
+                  <div class="form-grid">
+                    <div class="field"><label for="lvWho">Provider</label>
+                      <select class="input" id="lvWho"></select></div>
+                    <div class="field"><label for="lvDate">Date off</label>
+                      <input class="input" id="lvDate" type="date"></div>
+                  </div>
+                  <div class="field"><label for="lvWhy">Reason</label>
+                    <input class="input" id="lvWhy" placeholder="Vacation"></div>
+                  <button class="btn btn-teal btn-block btn-sm" type="submit">Block the day</button>
+                  <p class="hint" id="lvMsg" role="status" style="margin:10px 0 0"></p>
+                </form>
+              </div>
+              <div class="admin-panel">
+                <div class="panel-head"><h2>Roles &amp; permissions</h2></div>
+                <div id="rolesHost"></div>
+              </div>
+              <div class="admin-panel">
+                <div class="panel-head"><h2>Audit log</h2><span class="muted">Every staff action</span></div>
+                <div id="auditHost"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="../assets/js/app.js"></script>
+  <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/admin.js"></script>
+</body>
+</html>

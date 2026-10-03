@@ -301,7 +301,7 @@
       }
       $$("[data-member-only]").forEach((el) => { el.hidden = !u; });
       $$("[data-guest-only]").forEach((el) => { el.hidden = !!u; });
-      global.dispatchEvent(new CustomEvent("pnc:auth", { detail: u }));
+      document.dispatchEvent(new CustomEvent("pnc:auth", { detail: u }));
     }
   };
 
@@ -398,7 +398,7 @@
     mountCartDrawer();
     mountAuthForms();
     mountReveal();
-    global.dispatchEvent(new CustomEvent("pnc:ready"));
+    document.dispatchEvent(new CustomEvent("pnc:ready"));
   });
 
   /* ------------------------------- API -------------------------------- */

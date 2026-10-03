@@ -1,148 +1,291 @@
 /* ============================================================
-   Paws & Claws — Shop page logic
-   Filtering, sorting, URL param support. No dependencies.
+   Paws & Claws — Shop & Marketplace controller
+   Facets: category / species / life stage / size / price
+   Fulfillment: delivery vs pickup · real checkout via PNC_DB
    ============================================================ */
-
 (function () {
-  "use strict";
+  'use strict';
 
-  const $ = (s) => document.querySelector(s);
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const $ = (s, r) => (r || document).querySelector(s);
+  const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+  const D = window.PNC_DB;
+  const PNC = window.PNC;
 
-  const PRICE_STEPS = [10, 20, 30, 40, 65, 100];
-  const state = { cat: "All", maxPrice: 100, sort: "featured", query: "" };
+  const state = {
+    cats: new Set(),
+    species: new Set(),
+    ages: new Set(),
+    sizes: new Set(),
+    maxPrice: 0,
+    sort: 'featured',
+    ful: 'delivery'
+  };
 
-  // Pre-select a category from ?cat=
-  const params = new URLSearchParams(location.search);
-  const catParam = params.get("cat");
-  if (catParam) {
-    const match = PNC.PRODUCTS.find((p) => p.cat.toLowerCase() === catParam.toLowerCase());
-    if (match) state.cat = match.cat;
+  /* The cart lives in the shared PNC chrome and stores {id, qty} lines.
+     Use the platform catalog as the source of truth — it carries species,
+     life stage, size and stock, which the static app.js list does not. */
+  function store() { return D.db.products; }
+  function catalog() { return D.PRODUCTS; }
+  function member() { return D.currentOwner(); }
+  function product(id) {
+    const p = store().find(x => x.id === id);
+    return p || catalog().find(x => x.id === id);
   }
-  const qParam = params.get("q");
-  if (qParam) state.query = qParam.trim();
 
-  const CATS = ["All"].concat(Array.from(new Set(PNC.PRODUCTS.map((p) => p.cat))).sort());
+  function applied() {
+    const out = [];
+    state.cats.forEach(v => out.push({ k: 'cats', v: v, label: v }));
+    state.species.forEach(v => out.push({ k: 'species', v: v, label: D.speciesIcon(v) + ' ' + v }));
+    state.ages.forEach(v => out.push({ k: 'ages', v: v, label: D.titleCase(v) }));
+    state.sizes.forEach(v => out.push({ k: 'sizes', v: v, label: 'Size ' + v }));
+    if (state.maxPrice) out.push({ k: 'price', v: state.maxPrice, label: 'Under ' + D.money(state.maxPrice) });
+    return out;
+  }
 
-  function productCard(p) {
-    const badge = p.badge
-      ? '<span class="badge tag ' + (p.badge === "New" ? "tag--gold" : "tag--coral") + '">' + esc(p.badge) + "</span>"
-      : "";
-    return (
-      '<div class="card product">' +
-        '<div class="product-art">' + badge + p.icon +
-          '<button class="fav" aria-label="Add ' + esc(p.name) + ' to wishlist">' +
-            '<svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-9.4A4.1 4.1 0 0 1 12 7.6 4.1 4.1 0 0 1 19 10.6c0 5-7 9.4-7 9.4Z"/></svg>' +
-          "</button>" +
-        "</div>" +
-        '<div class="product-body">' +
-          '<div class="stars">★★★★★<small>(' + p.rating + ")</small></div>" +
-          "<h3>" + esc(p.name) + "</h3>" +
-          "<p>" + esc(p.desc) + "</p>" +
-          '<div class="product-foot">' +
-            '<span class="product-price">' + PNC.money(p.price) + "</span>" +
-            '<button class="add-btn" data-add="' + p.id + '">' +
-              '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Add' +
-            "</button>" +
-          "</div>" +
-        "</div>" +
-      "</div>"
-    );
+  /* ---------- facets ---------- */
+  function buildFacets() {
+    const cats = Array.from(new Set(catalog().map(p => p.cat))).sort();
+    $('#filterCats').innerHTML = cats.map(c =>
+      '<button type="button" class="f-chip" data-f="cats" data-v="' + D.esc(c) + '">' + D.esc(c) + '</button>').join('');
+
+    const sp = Array.from(new Set(catalog().flatMap(p => p.species))).sort();
+    $('#filterSpecies').innerHTML = sp.map(s =>
+      '<button type="button" class="f-chip" data-f="species" data-v="' + D.esc(s) + '">' +
+      D.speciesIcon(s) + ' ' + D.esc(s) + '</button>').join('');
+
+    const ages = ['puppy', 'kitten', 'adult', 'senior'];
+    $('#filterAge').innerHTML = ages.map(a => {
+      const n = catalog().filter(p => (p.age || []).indexOf(a) !== -1).length;
+      return n ? '<button type="button" class="f-chip" data-f="ages" data-v="' + a + '">' +
+        D.titleCase(a) + ' <span class="f-n">' + n + '</span></button>' : '';
+    }).join('');
+
+    const sizes = Array.from(new Set(catalog().flatMap(p => p.size))).sort();
+    $('#filterSize').innerHTML = sizes.map(s =>
+      '<button type="button" class="f-chip" data-f="sizes" data-v="' + D.esc(s) + '">' +
+      D.esc(s) + '</button>').join('');
+
+    const top = Math.max.apply(null, catalog().map(p => p.price));
+    const range = $('#priceRange');
+    if (range) { range.max = String(top); range.value = String(top); }
+    state.maxPrice = 0;
+    const readout = $('#priceReadout');
+    if (readout) readout.textContent = 'Any price';
+  }
+
+  function syncFacets() {
+    $$('.f-chip').forEach(b => {
+      const on = state[b.dataset.f] && state[b.dataset.f].has(b.dataset.v);
+      b.classList.toggle('active', !!on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+
+  function renderChips() {
+    const a = applied();
+    $('#activeChips').innerHTML = a.length
+      ? a.map(x => '<button type="button" class="chip" data-rk="' + x.k + '" data-rv="' +
+          D.esc(String(x.v)) + '">' + D.esc(x.label) + ' &times;</button>').join('')
+      : '<span class="chip chip-muted">No filters yet — showing everything</span>';
+  }
+
+  /* ---------- product cards ---------- */
+  function badge(p) {
+    if (p.stock <= 0) return '<span class="badge badge-out">Sold out</span>';
+    if (p.stock <= (p.lowAt || 3)) return '<span class="badge badge-low">Only ' + p.stock + ' left</span>';
+    if (p.badge) return '<span class="badge badge-tag">' + D.esc(p.badge) + '</span>';
+    return '';
+  }
+
+  function card(p) {
+    return '<article class="product-card" data-id="' + p.id + '">' +
+      '<div class="product-art">' +
+        '<span class="product-emoji" aria-hidden="true">' + p.icon + '</span>' +
+        badge(p) +
+      '</div>' +
+      '<div class="product-body">' +
+        '<span class="product-cat">' + D.esc(p.cat) + '</span>' +
+        '<h3>' + D.esc(p.name) + '</h3>' +
+        '<p>' + D.esc(p.desc || '') + '</p>' +
+        '<div class="product-meta">' +
+          ((p.species || []).length ? '<span>' + D.speciesIcon(p.species[0]) + ' ' + D.esc(p.species.join(', ')) + '</span>' : '') +
+          '<span>' + (p.age || []).map(D.titleCase).join(', ') + '</span>' +
+          ((p.size || []).length ? '<span>Size ' + D.esc(p.size.join('/')) + '</span>' : '') +
+        '</div>' +
+        '<div class="price-row">' +
+          '<span class="price">' + D.money(p.price) + '</span>' +
+          '<button type="button" class="btn btn-teal btn-sm add-btn" data-add="' + p.id + '"' +
+            (p.stock <= 0 ? ' disabled' : '') + '>' +
+            (p.stock <= 0 ? 'Sold out' : 'Add to cart') + '</button>' +
+        '</div>' +
+      '</div>' +
+    '</article>';
   }
 
   function filtered() {
-    let list = PNC.PRODUCTS.filter((p) => p.price <= state.maxPrice);
-    if (state.cat !== "All") list = list.filter((p) => p.cat === state.cat);
-    if (state.query) {
-      const q = state.query.toLowerCase();
-      list = list.filter((p) => (p.name + " " + p.desc + " " + p.cat).toLowerCase().includes(q));
-    }
-    const by = {
-      "price-asc": (a, b) => a.price - b.price,
-      "price-desc": (a, b) => b.price - a.price,
-      "rating": (a, b) => b.rating - a.rating || a.price - b.price,
-      "name": (a, b) => a.name.localeCompare(b.name),
-      "featured": (a, b) => Number(!!b.badge) - Number(!!a.badge) || b.rating - a.rating
-    }[state.sort];
-    return list.sort(by);
+    const list = catalog().filter(p => {
+      if (state.cats.size && !state.cats.has(p.cat)) return false;
+      if (state.species.size && !(p.species || []).some(s => state.species.has(s))) return false;
+      if (state.ages.size && !(p.age || []).some(a => state.ages.has(a))) return false;
+      if (state.sizes.size && !(p.size || []).some(s => state.sizes.has(s))) return false;
+      if (state.maxPrice && p.price > state.maxPrice) return false;
+      return true;
+    });
+    const s = state.sort;
+    list.sort((a, b) => {
+      if (s === 'price-asc') return a.price - b.price;
+      if (s === 'price-desc') return b.price - a.price;
+      if (s === 'rating') return (b.rating || 0) - (a.rating || 0);
+      if (s === 'name') return a.name.localeCompare(b.name);
+      return (b.badge ? 1 : 0) - (a.badge ? 1 : 0) || (b.rating || 0) - (a.rating || 0);
+    });
+    return list;
   }
 
   function render() {
     const list = filtered();
-    const grid = $("#productGrid");
-    grid.innerHTML = list.map(productCard).join("");
-    grid.parentElement.previousElementSibling; // no-op keep flow explicit
-    $("#noResults").style.display = list.length ? "none" : "block";
-    $("#resultCount").textContent = list.length + (list.length === 1 ? " product" : " products");
-
-    // active filter chips
-    const chips = [];
-    if (state.cat !== "All") chips.push({ k: "cat", label: state.cat });
-    if (state.maxPrice < 100) chips.push({ k: "price", label: "Under " + PNC.money(state.maxPrice) });
-    if (state.query) chips.push({ k: "q", label: '“' + state.query + "”" });
-    $("#activeChips").innerHTML = chips.length
-      ? chips.map((c) => '<button class="chip active" data-clear="' + c.k + '">' + esc(c.label) + " ✕</button>").join("")
-      : "";
-
-    // highlight selected filter controls
-    document.querySelectorAll("[data-cat]").forEach((el) => {
-      el.checked = el.dataset.cat === state.cat;
-    });
-    document.querySelectorAll("[data-price]").forEach((el) => {
-      el.checked = Number(el.dataset.price) === state.maxPrice;
-    });
+    $('#productGrid').innerHTML = list.map(card).join('');
+    $('#resultCount').textContent = list.length + (list.length === 1 ? ' product' : ' products');
+    $('#noResults').style.display = list.length ? 'none' : 'block';
+    renderChips();
+    syncFacets();
   }
 
-  function buildFilters() {
-    $("#filterCats").innerHTML = CATS.map((c) => {
-      const n = c === "All" ? PNC.PRODUCTS.length : PNC.PRODUCTS.filter((p) => p.cat === c).length;
-      return (
-        '<label class="f-radio"><input type="radio" name="cat" data-cat="' + esc(c) + '"' + (c === state.cat ? " checked" : "") + ">" +
-        "<span>" + esc(c) + "</span>" +
-        '<span class="f-count">' + n + "</span></label>"
-      );
-    }).join("");
-
-    $("#filterPrice").innerHTML = PRICE_STEPS.map((amt) => {
-      const n = PNC.PRODUCTS.filter((p) => p.price <= amt).length;
-      return (
-        '<label class="f-radio"><input type="radio" name="price" data-price="' + amt + '"' + (amt === state.maxPrice ? " checked" : "") + ">" +
-        "<span>Up to " + PNC.money(amt) + "</span>" +
-        '<span class="f-count">' + n + "</span></label>"
-      );
-    }).join("");
+  function reset() {
+    state.cats.clear();
+    state.species.clear();
+    state.ages.clear();
+    state.sizes.clear();
+    state.maxPrice = 0;
+    const r = $('#priceRange');
+    if (r) r.value = r.max;
+    const ro = $('#priceReadout');
+    if (ro) ro.textContent = 'Any price';
+    render();
   }
 
-  document.addEventListener("pnc:ready", function () {
-    buildFilters();
+  /* ---------- fulfillment ---------- */
+  function setFul(v) {
+    state.ful = v;
+    $$('.ful-opt').forEach(b => {
+      const on = b.dataset.ful === v;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    const note = $('#fulNote');
+    if (note) {
+      note.textContent = v === 'pickup'
+        ? 'Free pickup at 142 Alder Brook Lane — ready in 2 hours'
+        : 'Same-day delivery within Riverton — order by 2pm';
+    }
+    PNC.toast(v === 'pickup' ? 'Pickup selected — no delivery fee' : 'Delivery selected');
+  }
+
+  /* ---------- totals & checkout ---------- */
+  function deliveryFee() { return state.ful === 'pickup' ? 0 : 6; }
+
+  function checkout() {
+    const items = PNC.Cart.items;
+    if (!items.length) { PNC.toast('Your cart is empty'); return; }
+    const m = member();
+    if (!m) {
+      PNC.toast('Create a free account to check out');
+      window.location.href = 'account.html?next=' + encodeURIComponent('shop.html');
+      return;
+    }
+    const lines = items.map(i => {
+      const p = product(i.id);
+      return p ? { id: p.id, qty: Math.min(i.qty, p.stock) } : null;
+    }).filter(Boolean);
+    if (!lines.length) { PNC.toast('Those items are no longer available'); return; }
+    const res = D.placeOrder(lines, state.ful);
+    if (res.error) { PNC.toast(res.error); return; }
+    PNC.Cart.clear();
+    PNC.closeModal();
+    PNC.toast('Order ' + res.order.id + ' placed! Track it in your account.');
+    setTimeout(function () { window.location.href = 'account.html#orders'; }, 1100);
+  }
+
+  /* ---------- init ---------- */
+  function init() {
+    buildFacets();
     render();
 
-    $("#filterCats").addEventListener("change", (e) => {
-      if (e.target.dataset.cat) { state.cat = e.target.dataset.cat; render(); }
+    $('#productGrid').addEventListener('click', function (e) {
+      const b = e.target.closest('.add-btn');
+      if (!b || b.disabled) return;
+      const p = product(b.dataset.add);
+      if (!p) return;
+      if (p.stock <= 0) { PNC.toast('That one is sold out'); return; }
+      PNC.Cart.add(p.id);
     });
-    $("#filterPrice").addEventListener("change", (e) => {
-      if (e.target.dataset.price) { state.maxPrice = Number(e.target.dataset.price); render(); }
-    });
-    $("#sortBy").addEventListener("change", (e) => { state.sort = e.target.value; render(); });
 
-    function resetAll() {
-      state.cat = "All"; state.maxPrice = 100; state.sort = "featured"; state.query = "";
-      $("#sortBy").value = "featured";
-      buildFilters();
+    $$('.f-chip').forEach(function (b) {
+      b.addEventListener('click', function () {
+        const set = state[b.dataset.f];
+        if (!set) return;
+        if (set.has(b.dataset.v)) set.delete(b.dataset.v); else set.add(b.dataset.v);
+        render();
+      });
+    });
+
+    $('#activeChips').addEventListener('click', function (e) {
+      const c = e.target.closest('.chip[data-rk]');
+      if (!c) return;
+      const k = c.dataset.rk;
+      if (k === 'price') {
+        state.maxPrice = 0;
+        const r = $('#priceRange');
+        if (r) r.value = r.max;
+        const ro = $('#priceReadout');
+        if (ro) ro.textContent = 'Any price';
+      } else if (state[k]) {
+        state[k].delete(c.dataset.rv);
+      }
+      render();
+    });
+
+    const range = $('#priceRange');
+    if (range) {
+      range.addEventListener('input', function (e) {
+        const v = Number(e.target.value), max = Number(e.target.max);
+        state.maxPrice = v >= max ? 0 : v;
+        const ro = $('#priceReadout');
+        if (ro) ro.textContent = state.maxPrice ? 'Up to ' + D.money(state.maxPrice) : 'Any price';
+        render();
+      });
+    }
+
+    $('#clearFilters').addEventListener('click', reset);
+    $('#resetEmpty').addEventListener('click', reset);
+    $('#sortBy').addEventListener('change', function (e) { state.sort = e.target.value; render(); });
+
+    $$('.ful-opt').forEach(function (b) {
+      b.addEventListener('click', function () { setFul(b.dataset.ful); });
+    });
+
+    /* deep link: shop.html?cat=Toys */
+    const cat = new URLSearchParams(window.location.search).get('cat');
+    if (cat && catalog().some(function (p) { return p.cat === cat; })) {
+      state.cats.add(cat);
       render();
     }
-    $("#clearFilters").addEventListener("click", resetAll);
-    $("#resetEmpty").addEventListener("click", resetAll);
 
-    $("#activeChips").addEventListener("click", (e) => {
-      const b = e.target.closest("[data-clear]");
-      if (!b) return;
-      const k = b.dataset.clear;
-      if (k === "cat") state.cat = "All";
-      if (k === "price") state.maxPrice = 100;
-      if (k === "q") { state.query = ""; history.replaceState(null, "", "shop.html"); }
-      buildFilters();
-      render();
-    });
-  });
+    /* member pricing note */
+    const m = member();
+    if (m && m.plan !== 'free') {
+      const lead = $('#shopLead');
+      if (lead) lead.textContent = 'Club members save 15% on every order — your discount is applied at checkout.';
+    }
+
+    /* the checkout button lives in the shared cart modal */
+    const co = $('#cartCheckout');
+    if (co) co.addEventListener('click', checkout);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();

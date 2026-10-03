@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pet Marketplace — Paws &amp; Claws</title>
+  <meta name="description" content="Browse vetted, health-checked pets available from Paws &amp; Claws and our partner breeders. Health guarantees, transparent pedigrees, and meet-and-greets.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/pages.css">
+  <link rel="stylesheet" href="assets/css/platform.css">
+</head>
+<body>
+  <header class="site-header"></header>
+
+  <main>
+    <section class="hero" style="padding-top:clamp(34px,5vw,56px);padding-bottom:0">
+      <div class="wrap">
+        <div class="sec-head" style="margin-bottom:22px">
+          <span class="eyebrow">Pet marketplace</span>
+          <h1>Meet your new <em>best friend</em></h1>
+          <p class="lead" id="petsLead">Every pet here is vet-checked, vaccinated, and backed by our health guarantee. Meet-and-greets are always free.</p>
+        </div>
+        <div class="pet-facts" id="petFacts"></div>
+      </div>
+    </section>
+
+    <section style="padding-top:0">
+      <div class="wrap pet-layout">
+        <aside class="pet-facets">
+          <h3>Find your match</h3>
+          <div class="filter-group">
+            <strong class="f-cap">Species</strong>
+            <div id="fSpecies"></div>
+          </div>
+          <div class="filter-group">
+            <strong class="f-cap">Status</strong>
+            <div id="fStatus"></div>
+          </div>
+          <div class="filter-group">
+            <strong class="f-cap">Sex</strong>
+            <div id="fSex"></div>
+          </div>
+          <div class="filter-group">
+            <strong class="f-cap">Max price</strong>
+            <div class="price-scale">
+              <input type="range" id="petPriceRange" min="0" max="800" step="20" value="800" aria-label="Maximum price">
+              <span class="price-readout" id="petPriceReadout">Any price</span>
+            </div>
+          </div>
+          <div class="filter-group">
+            <strong class="f-cap">Temperament</strong>
+            <div id="fTemp"></div>
+          </div>
+          <div class="filter-group" style="border-top:none">
+            <button type="button" class="btn btn-ghost btn-block" id="petClear">Clear filters</button>
+          </div>
+        </aside>
+
+        <div>
+          <div class="shop-toolbar">
+            <span class="result-count" id="petCount"></span>
+            <div style="margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <label for="petSort" style="font-size:.86rem;color:var(--ink-soft);font-weight:600">Sort</label>
+              <select id="petSort">
+                <option value="new">Newest first</option>
+                <option value="price-asc">Price: low to high</option>
+                <option value="price-desc">Price: high to low</option>
+                <option value="age-asc">Youngest first</option>
+              </select>
+            </div>
+          </div>
+          <div class="chips" id="petChips" style="margin-bottom:20px"></div>
+          <div class="grid g-3" id="petGrid"></div>
+          <p id="petEmpty" style="text-align:center;padding:50px 0;display:none">No pets match those filters right now. <button type="button" class="btn btn-ghost" id="petResetEmpty" style="margin-left:8px">Reset</button></p>
+          <div class="pet-cta" id="petCta"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal-backdrop" id="inqModal">
+    <div class="modal modal-shell" role="dialog" aria-modal="true" aria-labelledby="inqTitle">
+      <button class="modal-close" data-close-modal="inqModal" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#155e5c" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+      <div class="modal-pad">
+        <h2 id="inqTitle" style="font-size:1.5rem">Ask about <span id="inqPetName"></span></h2>
+        <p style="color:var(--ink-soft);font-size:.92rem;margin-bottom:18px" id="inqPetMeta"></p>
+        <form id="inqForm" novalidate>
+          <div class="field">
+            <label for="inqName">Your name</label>
+            <input class="input" id="inqName" type="text" autocomplete="name" required>
+          </div>
+          <div class="field">
+            <label for="inqEmail">Email</label>
+            <input class="input" id="inqEmail" type="email" autocomplete="email" required>
+          </div>
+          <div class="field">
+            <label for="inqMsg">Your message</label>
+            <textarea class="input" id="inqMsg" rows="4" placeholder="Tell us about your home, family, and experience with pets."></textarea>
+          </div>
+          <button class="btn btn-primary btn-block btn-lg" type="submit">Send inquiry</button>
+          <p class="cart-note">We reply within one business day. Meet-and-greets are always free.</p>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/js/app.js"></script>
+  <script src="assets/js/data.js"></script>
+  <script src="assets/js/nav.js"></script>
+  <script src="assets/js/pets.js"></script>
+</body>
+</html>
