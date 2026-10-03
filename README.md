@@ -65,8 +65,31 @@ Sections (each permission-gated via `PNC_DB.can`):
 Everything is seeded into `localStorage` under the `pnc_` prefix by
 `assets/js/data.js` (`PNC_DB.seed()` / `PNC_DB.reset()`). The admin panel has a
 "Reset demo data" button. Passwords use a demonstration-only scramble —
-**this is not real authentication**. Before going live, replace the auth module
-with a real backend or a service like Clerk, Auth0, or Supabase.
+**this is not real authentication**.
+
+### Optional: add a real backend (Convex)
+
+The site is **static-first** — `data.js` is the source of truth and nothing
+requires a server. When you want real auth plus state shared across devices,
+an optional [Convex](https://convex.dev) layer ships with the repo and stays
+inert until you turn it on:
+
+```bash
+npm install            # adds the convex dev dependency
+npx convex dev         # signs in with your GitHub, creates the deployment
+```
+
+Then open the site once and run in the browser console:
+
+```js
+PNC_CONVEX.seedAll();   // uploads the seeded store to Convex
+```
+
+`assets/js/convexClient.js` loads the Convex browser client only after a
+deployment URL exists, so until then the site behaves exactly as before.
+`convex/schema.js` mirrors the relational model documented at the top of
+`data.js`, and `convex/auth.js` replaces the demo scramble with server-side
+**scrypt** hashing plus expiring session tokens.
 
 ## Structure
 
@@ -75,15 +98,21 @@ with a real backend or a service like Clerk, Auth0, or Supabase.
 ├── membership.html · account.html · contact.html
 ├── admin/index.html              # admin control panel
 ├── vercel.json                   # Vercel config (static, /admin rewrite)
+├── convex.json                   # Convex config (optional backend)
+├── convex/                       # optional backend
+│   ├── schema.js                 # mirrors the data.js relational model
+│   ├── auth.js                   # scrypt hashing + session tokens
+│   └── seed.js                   # one-time upload of the local store
 ├── assets/
 │   ├── css/
 │   │   ├── style.css             # design system: tokens, reset, header/footer, forms, modals
 │   │   ├── pages.css             # storefront page styles
 │   │   └── platform.css          # booking, shop, pets, member portal, contact, admin
 │   └── js/
-│       ├── app.js                # core: cart, auth, toasts, modals
+│       ├── app.js                # core: cart, toasts, modals, password strength
 │       ├── data.js               # PNC_DB: seed data, store, booking/order/CRM engine
 │       ├── nav.js                # shared header, cart modal, footer, notifications
+│       ├── convexClient.js       # optional Convex sync (inert until configured)
 │       ├── home.js · booking.js · shop.js · pets.js
 │       ├── account.js · contact.js · admin.js
 └── test/harness.js               # data-layer test suite (node test/harness.js)

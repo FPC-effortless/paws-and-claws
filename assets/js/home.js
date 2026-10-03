@@ -47,7 +47,7 @@
         '<span class="cat-ico">' + g.icon + "</span>" +
         "<h3>" + g.name + "</h3>" +
         "<p>" + g.blurb + "</p>" +
-        '<span class="tag tag--coral">From ' + money(from) + "</span>" +
+        '<span class="tag tag--yellow">From ' + money(from) + "</span>" +
         "</a>";
     }).join("");
   }
@@ -98,7 +98,7 @@
       .sort(function (a, b) { return b.rating - a.rating; })
       .slice(0, 4);
     host.innerHTML = prods.map(function (p) {
-      const badge = p.badge ? '<span class="badge tag tag--coral">' + esc(p.badge) + "</span>" : "";
+      const badge = p.badge ? '<span class="badge tag tag--yellow">' + esc(p.badge) + "</span>" : "";
       return '<div class="card product reveal in">' +
         '<div class="product-art">' + badge + p.icon +
           '<button class="fav" aria-label="Add to wishlist"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-9.4A4.1 4.1 0 0 1 12 7.6 4.1 4.1 0 0 1 19 10.6c0 5-7 9.4-7 9.4Z"/></svg></button>' +

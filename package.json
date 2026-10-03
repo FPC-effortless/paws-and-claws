@@ -1,0 +1,14 @@
+{
+  "name": "paws-and-claws",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Pet care platform: bookings, shop, marketplace, member portal and admin panel.",
+  "scripts": {
+    "test": "node test/harness.js",
+    "convex": "convex dev",
+    "convex:deploy": "convex deploy"
+  },
+  "devDependencies": {
+    "convex": "^1.17.0"
+  }
+}

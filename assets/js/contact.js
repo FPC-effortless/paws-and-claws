@@ -58,7 +58,7 @@
     body.innerHTML = rows.map(function (h) {
       const isToday = h.day === todayName;
       return '<tr class="' + (isToday ? "is-today" : "") + '">' +
-        "<th scope=\"row\">" + esc(h.day) + (isToday ? " <span class=\"tag tag--coral\">Today</span>" : "") + "</th>" +
+        "<th scope=\"row\">" + esc(h.day) + (isToday ? " <span class=\"tag tag--yellow\">Today</span>" : "") + "</th>" +
         "<td>" + esc(h.open) + " &ndash; " + esc(h.close) + "</td>" +
       "</tr>";
     }).join("");

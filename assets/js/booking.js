@@ -22,11 +22,11 @@
     return (
       '<div class="card svc-card reveal in" data-svc-card="' + s.id + '">' +
         '<div class="flex gap12" style="align-items:flex-start">' +
-          '<span class="ico" style="width:52px;height:52px;border-radius:14px;display:grid;place-items:center;font-size:1.5rem;background:var(--teal-100);flex:none">' + s.icon + "</span>" +
+          '<span class="ico" style="width:52px;height:52px;border-radius:14px;display:grid;place-items:center;font-size:1.5rem;background:var(--ocean-100);flex:none">' + s.icon + "</span>" +
           "<div><h3>" + esc(s.name) + "</h3>" +
           '<div class="svc-meta">' +
-            (s.popular ? '<span class="tag tag--coral">Popular</span>' : "") +
-            (s.requiresVaccine ? '<span class="tag tag--gold">Vaccines required</span>' : '<span class="tag">No vaccine requirement</span>') +
+            (s.popular ? '<span class="tag tag--yellow">Popular</span>' : "") +
+            (s.requiresVaccine ? '<span class="tag tag--yellow">Vaccines required</span>' : '<span class="tag">No vaccine requirement</span>') +
           "</div></div>" +
         "</div>" +
         "<p>" + esc(s.desc) + "</p>" +
@@ -65,14 +65,14 @@
       return (
         '<div class="card svc-card reveal in">' +
           '<div class="flex gap12" style="align-items:flex-start">' +
-            '<span class="pi" style="width:52px;height:52px;border-radius:14px;display:grid;place-items:center;font-size:1.5rem;background:var(--coral-100);flex:none">' + p.icon + "</span>" +
+            '<span class="pi" style="width:52px;height:52px;border-radius:14px;display:grid;place-items:center;font-size:1.5rem;background:var(--yellow-100);flex:none">' + p.icon + "</span>" +
             "<div><h3>" + esc(p.name) + "</h3>" +
             '<p class="small muted" style="margin:2px 0 0">' + esc(p.title) + "</p></div>" +
           "</div>" +
           "<p>" + esc(p.bio) + "</p>" +
           '<div class="svc-meta">' +
             '<span class="tag">' + esc(p.role) + "</span>" +
-            svc.slice(0, 2).map((s) => '<span class="tag tag--gold">' + esc(s.name) + "</span>").join("") +
+            svc.slice(0, 2).map((s) => '<span class="tag tag--yellow">' + esc(s.name) + "</span>").join("") +
             (svc.length > 2 ? '<span class="tag">+' + (svc.length - 2) + " more</span>" : "") +
           "</div>" +
           '<div class="svc-foot">' +
@@ -280,7 +280,7 @@
           "<span><b>" + esc(p.petName) + "</b><small>" + esc(p.species) + " · " + esc(p.breed || "Mixed") +
           " · " + D.petAge(p) + "</small>" +
           (svc.requiresVaccine
-            ? '<br><small style="color:' + (ok ? "var(--ok)" : "var(--coral-600)") + '">' + (ok ? "✓ Vaccines current" : "⚠ Vaccine records needed") + "</small>"
+            ? '<br><small style="color:' + (ok ? "var(--ok)" : "var(--yellow-600)") + '">' + (ok ? "✓ Vaccines current" : "⚠ Vaccine records needed") + "</small>"
             : "") +
           "</span>" +
         "</button>"
@@ -529,7 +529,7 @@
       const open = D.slotsFor(D.db, sid, date).filter((s) => s.available);
       const msg = $("#qbMsg");
       if (!open.length) {
-        msg.style.color = "var(--coral-600)";
+        msg.style.color = "var(--yellow-600)";
         msg.textContent = "No open slots in the next 60 days — try the waitlist.";
         return;
       }

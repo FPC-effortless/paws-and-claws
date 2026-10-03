@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Admin Control Panel — Paws &amp; Claws</title>
   <meta name="description" content="Paws &amp; Claws admin control panel: bookings, CRM, POS, inventory, listings, CMS, staff and roles.">
-  <link rel="icon" href="../favicon.svg" type="image/svg+xml">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="icon" href="../assets/brand/favicon.ico" sizes="any">
+  <link rel="icon" href="../assets/brand/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="../assets/brand/favicon-180.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../assets/css/style.css">
@@ -19,14 +21,7 @@
   <div class="admin-gate" id="adminGate">
     <div class="gate-card">
       <div class="gate-mark">
-        <svg viewBox="0 0 64 64" aria-hidden="true">
-          <ellipse cx="32" cy="40" rx="17" ry="14" fill="#155e5c"/>
-          <ellipse cx="14" cy="20" rx="6" ry="8" fill="#ff7a59" transform="rotate(-14 14 20)"/>
-          <ellipse cx="26" cy="12" rx="6" ry="8.5" fill="#ff7a59" transform="rotate(-4 26 12)"/>
-          <ellipse cx="40" cy="12" rx="6" ry="8.5" fill="#ff7a59" transform="rotate(4 40 12)"/>
-          <ellipse cx="52" cy="20" rx="6" ry="8" fill="#ff7a59" transform="rotate(14 52 20)"/>
-          <ellipse cx="32" cy="46" rx="9" ry="6" fill="#f7eede"/>
-        </svg>
+        <img class="brand-img" src="../assets/brand/logo.jpg" width="56" height="56" alt="" loading="eager">
       </div>
       <h1>Admin Control Panel</h1>
       <p class="hint">Sign in to manage bookings, customers, POS, inventory and the site.</p>
@@ -39,7 +34,7 @@
         <div class="field">
           <label for="ad-pw">Password</label>
           <div class="pw-wrap">
-            <input class="input" id="ad-pw" name="password" type="password" autocomplete="current-password" placeholder="admin123">
+            <input class="input" id="ad-pw" name="password" type="password" autocomplete="current-password" placeholder="Your admin password">
             <button type="button" class="pw-toggle" aria-label="Show password">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
             </button>
@@ -62,14 +57,7 @@
 
     <aside class="admin-side" id="adminSide">
       <div class="side-brand">
-        <svg viewBox="0 0 64 64" aria-hidden="true">
-          <ellipse cx="32" cy="40" rx="17" ry="14" fill="#155e5c"/>
-          <ellipse cx="14" cy="20" rx="6" ry="8" fill="#ff7a59" transform="rotate(-14 14 20)"/>
-          <ellipse cx="26" cy="12" rx="6" ry="8.5" fill="#ff7a59" transform="rotate(-4 26 12)"/>
-          <ellipse cx="40" cy="12" rx="6" ry="8.5" fill="#ff7a59" transform="rotate(4 40 12)"/>
-          <ellipse cx="52" cy="20" rx="6" ry="8" fill="#ff7a59" transform="rotate(14 52 20)"/>
-          <ellipse cx="32" cy="46" rx="9" ry="6" fill="#f7eede"/>
-        </svg>
+        <img class="brand-img" src="../assets/brand/logo.jpg" width="34" height="34" alt="" loading="eager">
         <span>Paws &amp; Claws<br><small>Control Panel</small></span>
       </div>
       <nav class="side-nav" id="sideNav" aria-label="Admin sections"></nav>
@@ -299,6 +287,7 @@
 
   <script src="../assets/js/app.js"></script>
   <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/convexClient.js"></script>
   <script src="../assets/js/admin.js"></script>
 </body>
 </html>

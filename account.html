@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Member Portal — Paws &amp; Claws</title>
   <meta name="description" content="Your pets, appointments, orders, messages and payment methods — all in one place.">
-  <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="icon" href="assets/brand/favicon.ico" sizes="any">
+  <link rel="icon" href="assets/brand/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="assets/brand/favicon-180.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/css/style.css">
@@ -35,7 +37,7 @@
             <input class="input" id="siPw" type="password" autocomplete="current-password" placeholder="At least 8 characters" required>
           </div>
           <button class="btn btn-primary btn-block btn-lg" type="submit">Sign in</button>
-          <p class="gate-hint">Demo: any account you create works. Seeded demo families have no password yet — create a new account to explore.</p>
+          <p class="gate-hint">New here? Create an account — it takes about a minute.</p>
         </form>
 
         <form id="signUpForm" class="gate-form" style="display:none" novalidate>
@@ -101,7 +103,7 @@
   <div class="modal-backdrop" id="petModal">
     <div class="modal modal-shell" role="dialog" aria-modal="true" aria-labelledby="petModalTitle">
       <button class="modal-close" data-close-modal="petModal" aria-label="Close">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#155e5c" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--ocean)" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
       <div class="modal-pad">
         <h2 id="petModalTitle" style="font-size:1.5rem">Add a pet</h2>
@@ -152,7 +154,7 @@
   <div class="modal-backdrop" id="vaxModal">
     <div class="modal modal-shell" role="dialog" aria-modal="true" aria-labelledby="vaxTitle">
       <button class="modal-close" data-close-modal="vaxModal" aria-label="Close">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#155e5c" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--ocean)" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
       <div class="modal-pad">
         <h2 id="vaxTitle" style="font-size:1.5rem">Upload a vaccine record</h2>
@@ -180,6 +182,7 @@
   <script src="assets/js/app.js"></script>
   <script src="assets/js/data.js"></script>
   <script src="assets/js/nav.js"></script>
+  <script src="assets/js/convexClient.js"></script>
   <script src="assets/js/account.js"></script>
 </body>
 </html>

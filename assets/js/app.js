@@ -176,134 +176,6 @@
     senior: { id: "senior", name: "Senior Snuggler", price: 19, period: "per month", badge: "Best value" }
   };
 
-  const Auth = {
-    member: read(STORE_KEYS.member, null),
-    users: read(STORE_KEYS.users, {}),
-
-    save() {
-      write(STORE_KEYS.member, this.member);
-      write(STORE_KEYS.users, this.users);
-      this.render();
-    },
-
-    /** Fake "hash" — a demo-only scramble. NOT real security. */
-    hash(s) {
-      let h = 0x811c9dc5;
-      for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
-      return "h" + h.toString(16).padStart(8, "0") + ":" + s.length;
-    },
-
-    signup(form) {
-      const fd = new FormData(form);
-      const name = String(fd.get("name") || "").trim();
-      const email = String(fd.get("email") || "").trim().toLowerCase();
-      const pw = String(fd.get("password") || "");
-      const petName = String(fd.get("petName") || "").trim();
-      const petType = String(fd.get("petType") || "");
-      const plan = PLANS[String(fd.get("plan") || "puppy")] || PLANS.puppy;
-      const agreed = fd.get("agree");
-
-      let ok = true;
-      const fail = (inputName, msgEl, msg) => {
-        const input = form.querySelector('[name="' + inputName + '"]');
-        const err = form.querySelector('[data-err="' + inputName + '"]') || form.querySelector('[data-err]');
-        if (input) input.setAttribute("aria-invalid", "true");
-        if (err) err.textContent = msg;
-        ok = false;
-      };
-      ["name", "email", "password", "petName"].forEach((n) => {
-        const input = form.querySelector('[name="' + n + '"]');
-        if (input) input.removeAttribute("aria-invalid");
-      });
-      $$("[data-err]", form).forEach((el) => (el.textContent = ""));
-
-      if (name.length < 2) fail("name", null, "Please tell us your name.");
-      if (!isValidEmail(email)) fail("email", null, "Enter a valid email address.");
-      if (pw.length < 8) fail("password", null, "Password must be at least 8 characters.");
-      if (!petName) fail("petName", null, "Your pet's name, please!");
-      if (!agreed) { toast("Please accept the terms to continue", "err"); ok = false; }
-      if (!ok) { toast("Please fix the highlighted fields", "err"); return null; }
-
-      if (Object.prototype.hasOwnProperty.call(this.users, email)) {
-        fail("email", null, "An account with this email already exists. Try logging in.");
-        toast("Email already registered", "err");
-        return null;
-      }
-
-      this.users[email] = { name, email, hash: this.hash(pw), petName, petType, plan: plan.id, joined: new Date().toISOString() };
-      this.member = { email, plan: plan.id, since: new Date().toISOString() };
-      this.save();
-      toast("Welcome to the pack, " + name.split(" ")[0] + "! 🐾");
-      return this.member;
-    },
-
-    login(form) {
-      const fd = new FormData(form);
-      const email = String(fd.get("email") || "").trim().toLowerCase();
-      const pw = String(fd.get("password") || "");
-      $$("[data-err]", form).forEach((el) => (el.textContent = ""));
-      const input = form.querySelector('[name="email"]');
-      if (input) input.removeAttribute("aria-invalid");
-
-      const rec = this.users[email];
-      if (!rec || rec.hash !== this.hash(pw)) {
-        if (input) input.setAttribute("aria-invalid", "true");
-        const err = form.querySelector('[data-err]') || form.querySelector('[data-err="email"]');
-        if (err) err.textContent = "Incorrect email or password.";
-        toast("Incorrect email or password", "err");
-        return null;
-      }
-      this.member = { email, plan: rec.plan, since: new Date().toISOString() };
-      this.save();
-      toast("Welcome back, " + rec.name.split(" ")[0] + "! 🐾");
-      return this.member;
-    },
-
-    logout() {
-      this.member = null;
-      write(STORE_KEYS.member, null);
-      this.render();
-      toast("You've been signed out");
-    },
-
-    current() {
-      if (!this.member) return null;
-      const rec = this.users[this.member.email];
-      return rec ? Object.assign({}, rec, { planObj: PLANS[rec.plan] || PLANS.puppy }) : null;
-    },
-
-    changePlan(planId) {
-      const rec = this.users[this.member && this.member.email];
-      if (!rec || !PLANS[planId]) { toast("Sign in to change your plan", "err"); return false; }
-      rec.plan = planId;
-      this.member.plan = planId;
-      this.save();
-      toast("Switched to " + PLANS[planId].name);
-      return true;
-    },
-
-    render() {
-      const u = this.current();
-      const chipZone = $("#memberZone");
-      const greet = $("#navGreet");
-      if (greet) greet.textContent = u ? "Hi, " + u.name.split(" ")[0] : "Membership";
-
-      if (chipZone) {
-        if (u) {
-          chipZone.innerHTML =
-            '<a class="member-chip" href="account.html" title="Your member dashboard">' +
-              '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"/></svg>' +
-              esc(u.planObj.name) +
-            "</a>";
-        } else {
-          chipZone.innerHTML = '<a class="btn btn-teal" href="membership.html">Join now</a>';
-        }
-      }
-      $$("[data-member-only]").forEach((el) => { el.hidden = !u; });
-      $$("[data-guest-only]").forEach((el) => { el.hidden = !!u; });
-      document.dispatchEvent(new CustomEvent("pnc:auth", { detail: u }));
-    }
-  };
 
   /* ---------------------------- page chrome --------------------------- */
   function mountChrome() {
@@ -320,7 +192,6 @@
     if (cartBtn) cartBtn.addEventListener("click", () => openModal("cartModal"));
 
     Cart.render();
-    Auth.render();
   }
 
   function mountCartDrawer() {
@@ -331,30 +202,9 @@
     });
   }
 
-  function mountAuthForms() {
-    const su = $("#signupForm");
-    if (su) su.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const m = Auth.signup(su);
-      if (m) { closeModal("signupModal"); window.location.href = "account.html"; }
-    });
-
-    const li = $("#loginForm");
-    if (li) li.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const m = Auth.login(li);
-      if (m) { closeModal("loginModal"); if (/membership\.html|account\.html/.test(location.pathname)) location.reload(); }
-    });
-
-    $$("[data-logout]").forEach((b) => b.addEventListener("click", () => Auth.logout()));
-
-    $$("[data-plan]").forEach((btn) => btn.addEventListener("click", () => {
-      const planId = btn.dataset.plan;
-      if (!Auth.current()) { toast("Create an account to choose this plan", "err"); openModal("signupModal"); return; }
-      Auth.changePlan(planId);
-    }));
-
-    // password reveal + strength
+  function mountPasswordStrength() {
+    /* Password reveal toggles and the strength meter back the
+       signup forms on membership.html and index.html. */
     $$(".pw-toggle").forEach((t) => t.addEventListener("click", () => {
       const input = t.parentElement.querySelector(".input");
       if (!input) return;
@@ -373,7 +223,7 @@
       if (/\d/.test(v)) score++;
       if (/[^A-Za-z0-9]/.test(v)) score++;
       const widths = ["0%", "28%", "52%", "76%", "100%"];
-      const colors = ["var(--danger)", "var(--danger)", "var(--gold)", "var(--teal-300)", "var(--ok)"];
+      const colors = ["var(--danger)", "var(--danger)", "var(--yellow)", "var(--ocean-300)", "var(--ok)"];
       meter.style.width = widths[score];
       meter.style.background = colors[score];
     }));
@@ -396,11 +246,11 @@
   document.addEventListener("DOMContentLoaded", () => {
     mountChrome();
     mountCartDrawer();
-    mountAuthForms();
+    mountPasswordStrength();
     mountReveal();
     document.dispatchEvent(new CustomEvent("pnc:ready"));
   });
 
   /* ------------------------------- API -------------------------------- */
-  global.PNC = { Cart, Auth, PLANS, PRODUCTS, PRODUCT_BY_ID, money, esc, toast, openModal, closeModal, isValidEmail, $, $$ };
+  global.PNC = { Cart, PLANS, PRODUCTS, PRODUCT_BY_ID, money, esc, toast, openModal, closeModal, isValidEmail, $, $$ };
 })(window);

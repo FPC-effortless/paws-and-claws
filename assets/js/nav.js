@@ -26,6 +26,17 @@
     return p.replace(/\.html$/, "");
   }
 
+  /* assets/ are always referenced from the site root so the same markup
+     works at /index.html and /admin/ (which is one level deeper) */
+  function asset(p) {
+    return (location.pathname.indexOf("/admin/") === 0 ? "../" : "/") + "assets/" + p;
+  }
+
+  function brandImg(cls) {
+    return '<img class="' + cls + '" src="' + asset("brand/logo.jpg") +
+      '" width="42" height="42" alt="" loading="eager" decoding="async">';
+  }
+
   function bellSvg() {
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' +
       '<path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>';
@@ -39,7 +50,7 @@
     }).join("");
 
     const cart = '<button class="cart-btn" id="cartBtn" aria-label="Open cart">' +
-      '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="#155e5c" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' +
+      '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="var(--ocean)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' +
       '<circle cx="9" cy="20" r="1.6"/><circle cx="18" cy="20" r="1.6"/><path d="M2 3h2.5l2.6 12.2a2 2 0 0 0 2 1.6h8.6a2 2 0 0 0 2-1.5L21 8H6"/>' +
       "</svg>" +
       '<span class="cart-count" id="cartCount" data-empty="true">0</span>' +
@@ -51,14 +62,7 @@
     return (
       '<div class="wrap"><nav class="nav">' +
         '<a class="brand" href="index.html" aria-label="Paws and Claws home">' +
-          '<svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">' +
-            '<ellipse cx="32" cy="40" rx="17" ry="14" fill="#155e5c"/>' +
-            '<ellipse cx="14" cy="20" rx="6" ry="8" fill="#ff7a59" transform="rotate(-14 14 20)"/>' +
-            '<ellipse cx="26" cy="12" rx="6" ry="8.5" fill="#ff7a59" transform="rotate(-4 26 12)"/>' +
-            '<ellipse cx="40" cy="12" rx="6" ry="8.5" fill="#ff7a59" transform="rotate(4 40 12)"/>' +
-            '<ellipse cx="52" cy="20" rx="6" ry="8" fill="#ff7a59" transform="rotate(14 52 20)"/>' +
-            '<ellipse cx="32" cy="46" rx="9" ry="6" fill="#f7eede"/>' +
-          "</svg>" +
+          brandImg("brand-mark brand-img") +
           "<span>Paws &amp; Claws<small>Pet Co.</small></span>" +
         "</a>" +
         '<div class="nav-links">' + links +
@@ -79,7 +83,7 @@
       '<div class="modal-backdrop" id="cartModal">' +
         '<div class="modal modal-shell" role="dialog" aria-modal="true" aria-labelledby="cartTitle">' +
           '<button class="modal-close" data-close-modal="cartModal" aria-label="Close cart">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="#155e5c" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="var(--ocean)" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>' +
           "</button>" +
           '<div class="modal-pad">' +
             '<h2 id="cartTitle" style="font-size:1.5rem">Your cart</h2>' +
@@ -100,13 +104,7 @@
     const g = '<svg viewBox="0 0 24 24"><path d="M12 2c2.7 0 3 0 4.1.1 1.1 0 1.8.2 2.4.5.6.2 1.1.5 1.6 1 .5.5.8 1 1 1.6.3.6.4 1.3.5 2.4.1 1.1.1 1.4.1 4.4s0 3.3-.1 4.4c0 1.1-.2 1.8-.5 2.4a4.5 4.5 0 0 1-1 1.6c-.5.5-1 .8-1.6 1-.6.3-1.3.4-2.4.5-1.1.1-1.4.1-4.1.1s-3 0-4.1-.1c-1.1 0-1.8-.2-2.4-.5a4.5 4.5 0 0 1-1.6-1c-.5-.5-.8-1-1-1.6-.3-.6-.4-1.3-.5-2.4C2.3 15.3 2.3 15 2.3 12s0-3.3.1-4.4c0-1.1.2-1.8.5-2.4a4.5 4.5 0 0 1 1-1.6c.5-.5 1-.8 1.6-1 .6-.3 1.3-.4 2.4-.5C9 2 9.3 2 12 2Zm0 5a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm0 8.2a3.2 3.2 0 1 1 0-6.4 3.2 3.2 0 0 1 0 6.4ZM18.4 6.8a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4Z"/></svg>';
     const f = '<svg viewBox="0 0 24 24"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.2c-1.2 0-1.6.8-1.6 1.6V12h2.7l-.4 2.9h-2.3v7A10 10 0 0 0 22 12Z"/></svg>';
     const t = '<svg viewBox="0 0 24 24"><path d="M16.5 2h-2.6v13a2.4 2.4 0 1 1-2.4-2.4c.2 0 .5 0 .7.1V9.9a5.1 5.1 0 1 0 4.3 5V8.6a5.9 5.9 0 0 0 3.5 1.2V7.1a3.4 3.4 0 0 1-3.5-3.4V2Z"/></svg>';
-    const mark = '<svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">' +
-      '<ellipse cx="32" cy="40" rx="17" ry="14" fill="#ff7a59"/>' +
-      '<ellipse cx="14" cy="20" rx="6" ry="8" fill="#fdf8f0" transform="rotate(-14 14 20)"/>' +
-      '<ellipse cx="26" cy="12" rx="6" ry="8.5" fill="#fdf8f0" transform="rotate(-4 26 12)"/>' +
-      '<ellipse cx="40" cy="12" rx="6" ry="8.5" fill="#fdf8f0" transform="rotate(4 40 12)"/>' +
-      '<ellipse cx="52" cy="20" rx="6" ry="8" fill="#fdf8f0" transform="rotate(14 52 20)"/>' +
-    "</svg>";
+    const mark = brandImg("brand-mark brand-img footer-mark");
     return (
       '<footer class="site-footer"><div class="wrap"><div class="footer-grid">' +
         "<div>" +

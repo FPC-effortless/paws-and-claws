@@ -114,7 +114,7 @@
       "</div>";
   }
 
-  /* ========================= login gate ============================ */
+    /* ========================= login gate ============================ */
   function renderCreds() {
     const host = $("#credGrid");
     if (!host) return;
@@ -124,16 +124,21 @@
       { r: "provider", e: "rosa@pawsandclaws.example", p: "rosa123", n: "Rosa Delgado" },
       { r: "retail", e: "retail@pawsandclaws.example", p: "retail123", n: "Sam Okafor" }
     ];
+    /* Never render the password into the DOM — it lives only in the
+       dataset of the button, which fills the form on click. The
+       visible text is the role + name + email only. */
     host.innerHTML = rows.map(function (x) {
-      return '<button type="button" class="cred" data-crede="' + x.e + '" data-credp="' + x.p + '">' +
+      return '<button type="button" class="cred" data-crede="' + esc(x.e) + '" data-credp="' + esc(x.p) + '">' +
         "<b>" + esc(D.ADMIN_ROLES[x.r].name) + "</b>" +
         "<span>" + esc(x.n) + "</span>" +
-        "<code>" + esc(x.e) + "</code><code>" + esc(x.p) + "</code></button>";
+        "<code>" + esc(x.e) + "</code>" +
+        "<code>Click to fill password</code></button>";
     }).join("");
     $$("[data-crede]", host).forEach(function (b) {
       b.addEventListener("click", function () {
         $("#ad-email").value = b.dataset.crede;
         $("#ad-pw").value = b.dataset.credp;
+        $("#ad-pw").focus();
       });
     });
   }
@@ -472,7 +477,7 @@
                     : "") + "</td></tr>";
               }).join("") + "</tbody></table>"
             : '<p class="hint" style="margin:8px 0 0">No vaccine records on file.</p>') +
-          (pend ? '<p class="hint" style="margin:8px 0 0;color:var(--gold)">' + pend + " pending record(s)</p>" : "") +
+          (pend ? '<p class="hint" style="margin:8px 0 0;color:var(--yellow)">' + pend + " pending record(s)</p>" : "") +
         "</div></div>";
     }).join("") + "</div>";
 
@@ -655,7 +660,7 @@
           "<td>" + esc(p.cat) + "</td>" +
           '<td class="num">' + money(p.price) + "</td>" +
           '<td class="num">' + money(p.cost || 0) + "</td>" +
-          '<td class="num"><b style="color:' + (out ? "var(--danger)" : isLow ? "var(--gold)" : "var(--ink)") + '">' + p.stock + "</b>" +
+          '<td class="num"><b style="color:' + (out ? "var(--danger)" : isLow ? "var(--yellow)" : "var(--ink)") + '">' + p.stock + "</b>" +
             (isLow ? " <span class='mini-btn warn' style='cursor:default'>" + (out ? "Out" : "Low") + "</span>" : "") + "</td>" +
           '<td><div style="display:flex;gap:5px;flex-wrap:wrap">' +
             '<button class="mini-btn" data-stk="' + p.id + ':-1">−1</button>' +

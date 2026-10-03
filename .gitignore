@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Convex local state (created by `npx convex dev`)
+.env.local
+convex/_generated/
+
+# Scratch / build tooling — never shipped
+tmp/
