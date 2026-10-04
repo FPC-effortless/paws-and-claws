@@ -89,7 +89,9 @@
             '<h2 id="cartTitle" style="font-size:1.5rem">Your cart</h2>' +
             '<div id="cartBody"></div>' +
             '<div class="cart-foot" id="cartDrawer" hidden>' +
-              '<div class="row"><span>Subtotal</span><span id="cartTotal">$0.00</span></div>' +
+              '<div class="row" id="cartSubtotal" hidden></div>' +
+              '<div class="row" id="cartDiscount" hidden></div>' +
+              '<div class="row"><span>Total</span><span id="cartTotal">$0.00</span></div>' +
               '<div class="row"><span>Delivery</span><span>Calculated at checkout</span></div>' +
               '<button class="btn btn-primary btn-block" id="cartCheckout">Proceed to checkout</button>' +
               '<p class="cart-note">Demo store — no payment is processed.</p>' +

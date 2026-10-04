@@ -344,8 +344,12 @@
 
   function balanceDue() {
     const svc = D.SERVICE_BY_ID[W.serviceId];
-    const dep = svc.deposit ? Math.round(svc.price * D.DEPOSIT_RATE * 100) / 100 : svc.price;
-    return { deposit: dep, remainder: Math.round((svc.price - dep) * 100) / 100 };
+    const o = D.currentOwner();
+    /* Mirror createBooking: members get their plan discount. */
+    const rate = o ? (D.PLAN_DISCOUNT[o.plan] || 0) : 0;
+    const net = Math.round(svc.price * (1 - rate) * 100) / 100;
+    const dep = svc.deposit ? Math.round(net * D.DEPOSIT_RATE * 100) / 100 : net;
+    return { deposit: dep, remainder: Math.round((net - dep) * 100) / 100, net, rate };
   }
 
   function renderStep4() {
@@ -364,6 +368,9 @@
         ? '<div class="row"><span>Notes</span><span style="max-width:60%;text-align:right">' + esc(JSON.stringify(W.intake)).slice(0, 180) + "</span></div>"
         : "") +
       '<div class="row"><span>Service total</span><span>' + money(svc.price) + "</span></div>" +
+      (b.rate
+        ? '<div class="row"><span>Member discount (' + Math.round(b.rate * 100) + '%)</span><span style="color:var(--ok)">&minus;' + money(Math.round(svc.price * b.rate * 100) / 100) + "</span></div>"
+        : "") +
       '<div class="row"><span>Deposit today (30%)</span><span><b>' + money(b.deposit) + "</b></span></div>" +
       '<div class="row"><span>Balance at the visit</span><span>' + money(b.remainder) + "</span></div>" +
       '<div class="row total"><span>Charged now</span><span>' + money(b.deposit) + "</span></div>" +

@@ -25,6 +25,11 @@
   const KEY = "pnc_db_v1";
   const CURRENCY = "$";
   const DEPOSIT_RATE = 0.3; /* 30% deposit at booking checkout */
+  /* Membership plan discount, applied to shop orders and bookings.
+     Keep in sync with the PLAN_DISCOUNT labels in account.js. */
+  const PLAN_DISCOUNT = { puppy: 0.05, adult: 0.15, senior: 0.25 };
+  const discountRate = (owner) =>
+    owner ? (PLAN_DISCOUNT[owner.plan] || 0) : 0;
 
   /* ------------------------------ utils ------------------------------ */
   const esc = (s) =>
@@ -514,6 +519,19 @@
     setSession(owner.id);
     return { owner };
   }
+  /* When the optional Convex backend is active, the server owns the
+     password hashes, so hand off to it instead. */
+  async function logInRemote(email, pw) {
+    const cv = global.PNC_CONVEX;
+    if (!cv || !cv.active) return null;
+    const res = await cv.logIn(email, pw);
+    if (!res || res.error) return res ? res : { error: "Sign-in service unavailable." };
+    const owner = db.owners.find((o) => o.email === String(email).trim().toLowerCase()) ||
+      (res.ownerId && byId(db.owners, res.ownerId));
+    if (!owner) return { error: "Account exists on the server but not in this browser. Reload the page." };
+    setSession(owner.id);
+    return { owner };
+  }
 
   function setSession(ownerId) {
     try { localStorage.setItem(MEMBER_KEY, ownerId); } catch {}
@@ -602,14 +620,17 @@
     const slot = slots.find((s) => s.hour === Number(input.hour) && s.providerId === provider.id);
     if (!slot) return { error: "That time slot is no longer available. Please pick another." };
 
-    const total = svc.price;
+    /* Members get their plan discount on the service total. */
+    const rate = discountRate(owner);
+    const total = Math.round(svc.price * (1 - rate) * 100) / 100;
     const deposit = svc.deposit ? Math.round(total * DEPOSIT_RATE * 100) / 100 : total;
     const bk = {
       id: "bk-" + (1000 + db.bookings.length + 1),
       ownerId: owner.id, petId: pet.id, serviceId: svc.id, providerId: provider.id,
       date: input.date, hour: slot.hour, duration: svc.duration,
       status: "confirmed", deposit, total, paid: deposit,
-      intake: input.intake || {}, createdAt: todayISO(), createdBy: "self"
+      intake: input.intake || {}, createdAt: todayISO(), createdBy: "self",
+      discountRate: rate || undefined
     };
     db.bookings.push(bk);
     notify(owner.id, "booking", "Booking confirmed: " + svc.name,
@@ -679,7 +700,10 @@
       return p ? { productId: p.id, qty: Math.min(i.qty, p.stock), price: p.price } : null;
     }).filter(Boolean);
     if (!lines.length) return { error: "Your cart is empty." };
-    const total = Math.round(lines.reduce((n, l) => n + l.price * l.qty, 0) * 100) / 100;
+    /* Members get their plan discount on the order subtotal. */
+    const rate = discountRate(owner);
+    const sub = lines.reduce((n, l) => n + l.price * l.qty, 0);
+    const total = Math.round(sub * (1 - rate) * 100) / 100;
     const pm = (db.payments || []).find((p) => p.ownerId === owner.id && p.primary) || (db.payments || []).find((p) => p.ownerId === owner.id);
     const order = {
       id: "or-" + (2000 + db.orders.length + 1),
@@ -687,7 +711,8 @@
       fulfillment: fulfillment === "pickup" ? "pickup" : "delivery",
       address: fulfillment === "pickup" ? "" : (address || owner.address),
       status: "open", stage: "pending", total, paid: total,
-      method: pm ? pm.brand + " ending " + pm.last4 : "Visa ending 4242"
+      method: pm ? pm.brand + " ending " + pm.last4 : "Visa ending 4242",
+      discountRate: rate || undefined
     };
     db.orders.push(order);
     lines.forEach((l) => {
@@ -863,9 +888,25 @@
 
   function removePet(petId) {
     const p = byId(db.pets, petId);
+    if (!p) return { error: "Pet not found." };
     db.pets = db.pets.filter((x) => x.id !== petId);
-    db.bookings = db.bookings.filter((b) => b.petId !== petId && b.status === "cancelled" ? false : b.petId !== petId || true);
-    if (p) audit("Pet removed", p.petName);
+    /* A removed pet cannot keep active bookings: cancel future
+       appointments rather than orphaning them (which would leave
+       phantom rows on the schedule and in the member's history). */
+    let cancelled = 0;
+    db.bookings.forEach(function (b) {
+      if (b.petId === petId && b.status !== "cancelled" && b.status !== "completed" && b.status !== "no-show") {
+        b.status = "cancelled";
+        b.note = "Cancelled automatically when " + p.petName + " was removed from the account.";
+        cancelled++;
+      }
+    });
+    if (cancelled) {
+      notify(p.ownerId, "booking", "Appointments cancelled",
+        cancelled + " appointment" + (cancelled === 1 ? "" : "s") + " for " + p.petName +
+        " were cancelled when the pet was removed from the account.");
+    }
+    audit("Pet removed", p.petName + (cancelled ? " — cancelled " + cancelled + " booking" + (cancelled === 1 ? "" : "s") : ""));
     persist();
     return true;
   }
@@ -937,7 +978,7 @@
   /* ------------------------------ export ------------------------------ */
   global.PNC_DB = {
     /* constants */
-    KEY, CURRENCY, DEPOSIT_RATE, SPECIES, SEXES, ALTERED, VACCINES, TEMPERAMENTS,
+    KEY, CURRENCY, DEPOSIT_RATE, PLAN_DISCOUNT, SPECIES, SEXES, ALTERED, VACCINES, TEMPERAMENTS,
     SERVICE_GROUPS, ADMIN_ROLES, STAGES, PRODUCTS, PRODUCT_BY_ID, SERVICES, SERVICE_BY_ID,
     PROVIDERS, PROVIDER_BY_ID, DAY_START, DAY_END, STEP,
     /* helpers */
@@ -953,7 +994,7 @@
     /* engine */
     notify, message, audit,
     /* owner auth */
-    signUp, logIn, logOut, currentOwner, setSession, migrateLegacy, hashPw,
+    signUp, logIn, logInRemote, logOut, currentOwner, setSession, migrateLegacy, hashPw,
     /* admin auth + RBAC */
     adminLogin, adminLogout, session, currentAdmin, can, scopeOf, PERMS,
     /* booking */

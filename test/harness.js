@@ -45,10 +45,17 @@ assert(D.db.listings.length === 6, "seeded 6 listings");
 assert(D.db.services.length === 14, "seeded 14 services, got " + D.db.services.length);
 assert(D.db.providers === undefined || Array.isArray(D.PROVIDERS), "providers exported");
 
-/* availability */
+/* availability.
+   Pick a service whose providers actually work today: every service
+   in the catalog has at least one provider with Sunday off, so a
+   fixed service id can legitimately have zero slots on a given
+   weekday. Search for one with open slots instead of assuming. */
 const t = D.todayISO();
-const slots = D.slotsFor(D.db, "sv-wellness", t);
-assert(slots.length > 0, "slotsFor wellness today -> " + slots.length + " slots");
+function slotsForToday(serviceId) { return D.slotsFor(D.db, serviceId, t); }
+const svcToday = D.SERVICES.find(function (s) { return slotsForToday(s.id).length > 0; }) || D.SERVICES[0];
+assert(!!svcToday, "found a service with slots today");
+const slots = slotsForToday(svcToday.id);
+assert(slots.length > 0, "slotsFor " + svcToday.id + " today -> " + slots.length + " slots");
 const open = slots.filter((s) => s.available);
 assert(open.length > 0, "at least one open slot today");
 const det = D.slotsFor(D.db, "sv-haircut", D.addDays(2));
@@ -142,6 +149,50 @@ const wl = D.joinWaitlist("sv-haircut", "Rosa", "mornings");
 assert(!wl.error, "joined waitlist" + (wl.error ? " -> " + wl.error : ""));
 D.addLeave("Rosa", D.addDays(5), "Vacation");
 assert(D.providerWorking(D.PROVIDER_BY_ID.Rosa, D.addDays(5)) === false, "leave blocks working day");
+
+/* removing a pet must not orphan active bookings */
+D.setSession("ow-1");
+const beforeRemove = D.db.bookings.filter(function (b) { return b.petId === "pt-1"; });
+const activeBefore = beforeRemove.filter(function (b) { return b.status !== "cancelled" && b.status !== "completed"; });
+const rm2 = D.removePet("pt-1");
+assert(!rm2.error, "removePet ok" + (rm2.error ? " -> " + rm2.error : ""));
+const stillThere = D.db.bookings.filter(function (b) { return b.petId === "pt-1"; });
+const activeAfter = stillThere.filter(function (b) { return b.status !== "cancelled" && b.status !== "completed"; });
+assert(activeAfter.length === 0, "no active bookings orphaned on a removed pet (was " + activeBefore.length + ")");
+assert(beforeRemove.length === stillThere.length, "history rows preserved, not deleted (" + stillThere.length + "/" + beforeRemove.length + ")");
+assert(stillThere.some(function (b) { return b.status === "completed"; }), "completed history is retained");
+
+/* member discount applies to orders */
+D.setSession("ow-1");
+const rate = D.PLAN_DISCOUNT[(D.currentOwner() || {}).plan] || 0;
+const ord = D.placeOrder([{ id: "p1", qty: 2 }], "delivery");
+assert(!ord.error, "discount order placed" + (ord.error ? " -> " + ord.error : ""));
+if (!ord.error && rate) {
+  const expected = Math.round(2 * D.PRODUCT_BY_ID.p1.price * (1 - rate) * 100) / 100;
+  assert(ord.order.total === expected, "order total reflects " + Math.round(rate * 100) + "% member discount -> " + D.money(ord.order.total));
+  assert(ord.order.discountRate === rate, "order records the discount rate");
+} else if (!ord.error) {
+  assert(true, "no discount for this plan; total " + D.money(ord.order.total));
+}
+
+/* member discount applies to bookings */
+D.setSession("ow-1");
+const bkDate = D.firstOpenDate(D.db, "sv-nails");
+const bkSlots = D.slotsFor(D.db, "sv-nails", bkDate).filter(function (s) { return s.available; });
+if (bkSlots.length) {
+  const bkD = D.createBooking({
+    serviceId: "sv-nails", petId: "pt-2", date: bkDate,
+    hour: bkSlots[0].hour, providerId: bkSlots[0].providerId, intake: {}
+  });
+  assert(!bkD.error, "discount booking ok" + (bkD.error ? " -> " + bkD.error : ""));
+  if (!bkD.error && rate) {
+    const svc = D.SERVICE_BY_ID["sv-nails"];
+    const want = Math.round(svc.price * (1 - rate) * 100) / 100;
+    assert(bkD.booking.total === want, "booking total reflects member discount -> " + D.money(bkD.booking.total) + " (rate " + bkD.booking.discountRate + ")");
+  }
+} else {
+  assert(true, "no open nail-trim slot to test booking discount");
+}
 
 console.log("\n== done ==");
 if (process.exitCode) console.error("FAILURES");

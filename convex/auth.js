@@ -1,33 +1,70 @@
 /* ============================================================
    Paws & Claws — Convex server functions: authentication
    ------------------------------------------------------------
-   Server-side password hashing (scrypt) replaces the demo-only
-   FNV scramble in data.js and the plaintext comparison the admin
-   panel currently uses. Session tokens are stored in a
-   `sessions` table so logouts actually invalidate them.
+   Server-side password hashing replaces the demo-only FNV scramble
+   in data.js and the plaintext comparison the admin panel currently
+   uses. Session tokens are stored in a `sessions` table so logouts
+   actually invalidate them.
+
+   NOTE ON CRYPTO: Convex functions run in a V8 isolate, not Node,
+   so `node:crypto` is unavailable. Hashing uses the Web Crypto
+   subtle APIs (PBKDF2-SHA-256), which are available there and are
+   more than adequate for session password verification. Output
+   format: "pbkdf2:<saltHex>:<hashHex>".
    ============================================================ */
 
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
-/* SHA-style output: "scrypt:<salt>:<hash>" */
-const ROUNDS = 16384;
+const ITERATIONS = 100_000;
+const KEY_LEN = 32; /* 256-bit derived key */
 
-export function hashPassword(password) {
-  const salt = randomBytes(16).toString("hex");
-  const hash = scryptSync(password, salt, 64).toString("hex");
-  return "scrypt:" + salt + ":" + hash;
+const enc = new TextEncoder();
+
+function toHex(buf) {
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+function fromHex(hex) {
+  const out = new Uint8Array(Math.ceil(hex.length / 2));
+  for (let i = 0; i < hex.length; i += 2) {
+    out[i / 2] = parseInt(hex.substr(i, 2), 16);
+  }
+  return out;
 }
 
-export function verifyPassword(password, stored) {
-  if (typeof stored !== "string" || !stored.startsWith("scrypt:")) return false;
-  const [, salt, hash] = stored.split(":");
-  if (!salt || !hash) return false;
-  const candidate = scryptSync(password, salt, 64);
-  const existing = Buffer.from(hash, "hex");
-  if (candidate.length !== existing.length) return false;
-  return timingSafeEqual(candidate, existing);
+export async function hashPassword(password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey(
+    "raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt, iterations: ITERATIONS, hash: "SHA-256" },
+    key, KEY_LEN * 8
+  );
+  return "pbkdf2:" + toHex(salt) + ":" + toHex(bits);
+}
+
+export async function verifyPassword(password, stored) {
+  if (typeof stored !== "string" || !stored.startsWith("pbkdf2:")) return false;
+  const [, saltHex, hashHex] = stored.split(":");
+  if (!saltHex || !hashHex) return false;
+  const salt = fromHex(saltHex);
+  const key = await crypto.subtle.importKey(
+    "raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt, iterations: ITERATIONS, hash: "SHA-256" },
+    key, KEY_LEN * 8
+  );
+  /* Constant-time-ish compare over the derived bits. */
+  const a = new Uint8Array(bits);
+  const b = fromHex(hashHex);
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
 }
 
 /* ----------------------------- owner ----------------------------- */
@@ -53,7 +90,7 @@ export const signUp = mutation({
     const ownerId = await ctx.db.insert("owners", {
       fullName: args.fullName.trim(),
       email,
-      passwordHash: hashPassword(args.password),
+      passwordHash: await hashPassword(args.password),
       phone: args.phone || "",
       notes: "",
       createdAt: now,
@@ -84,18 +121,21 @@ export const logIn = mutation({
       .query("owners")
       .filter((q) => q.eq(q.field("email"), e))
       .first();
-    if (!owner || !verifyPassword(password, owner.passwordHash)) {
+    if (!owner || !await verifyPassword(password, owner.passwordHash)) {
       return { error: "Incorrect email or password." };
     }
-    const token = randomBytes(32).toString("hex");
+    const token = tokenFor(owner._id, "owner");
     const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
     await ctx.db.insert("sessions", {
-      subjectId: owner._id,
+      /* Store the stable string id the client store uses, not the
+         Convex _id, so auth:session can return it directly and the
+         member portal finds the same row locally and remotely. */
+      subjectId: owner.id || owner._id,
       subjectType: "owner",
       token,
       expiresAt,
     });
-    return { token, ownerId: owner._id, expiresAt };
+    return { token, ownerId: owner.id || owner._id, expiresAt };
   },
 });
 
@@ -108,20 +148,25 @@ export const adminLogIn = mutation({
       .query("admins")
       .filter((q) => q.eq(q.field("email"), e))
       .first();
-    if (!admin || !verifyPassword(password, admin.passwordHash)) {
+    if (!admin || !await verifyPassword(password, admin.passwordHash)) {
       return { error: "Invalid admin credentials." };
     }
-    const token = randomBytes(32).toString("hex");
+    const token = tokenFor(admin._id, "admin");
     const expiresAt = Date.now() + 12 * 60 * 60 * 1000;
     await convexCtx.db.insert("sessions", {
-      subjectId: admin._id,
+      subjectId: admin.id || admin._id,
       subjectType: "admin",
       token,
       expiresAt,
     });
-    return { token, adminId: admin._id, role: admin.role, expiresAt };
+    return { token, adminId: admin.id || admin._id, role: admin.role, expiresAt };
   },
 });
+
+function tokenFor(subjectId, subjectType) {
+  return subjectId + "|" + subjectType + "|" +
+    toHex(crypto.getRandomValues(new Uint8Array(32)));
+}
 
 export const logout = mutation({
   args: { token: v.string() },
@@ -137,7 +182,10 @@ export const logout = mutation({
 
 /* Lookup used by the client to restore a session from a stored
    token. Read-only; expired sessions are ignored and swept by
-   auth:sweepExpired (a cron can call it). */
+   auth:sweepExpired (a cron can call it).
+
+   `subjectType` selects the collection, because `subjectId` is the
+   stable string id of either an owner or an admin. */
 export const session = query({
   args: { token: v.string() },
   handler: async (ctx, { token }) => {
@@ -146,9 +194,20 @@ export const session = query({
       .filter((q) => q.eq(q.field("token"), token))
       .first();
     if (!s || s.expiresAt < Date.now()) return null;
-    const doc = await ctx.db.get(s.subjectId);
-    if (!doc) return null;
-    return { subjectType: s.subjectType, email: doc.email, role: doc.role || null };
+    if (s.subjectType === "admin") {
+      const admin = await ctx.db
+        .query("admins")
+        .filter((q) => q.eq(q.field("id"), s.subjectId))
+        .first();
+      if (!admin) return null;
+      return { subjectType: "admin", email: admin.email, role: admin.role };
+    }
+    const owner = await ctx.db
+      .query("owners")
+      .filter((q) => q.eq(q.field("id"), s.subjectId))
+      .first();
+    if (!owner) return null;
+    return { subjectType: "owner", email: owner.email, role: null };
   },
 });
 

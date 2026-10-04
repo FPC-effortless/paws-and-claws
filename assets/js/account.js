@@ -52,13 +52,24 @@
     $('#signUpForm').style.display = which === 'signUp' ? '' : 'none';
   }
 
-  function doSignIn(e) {
+  async function doSignIn(e) {
     e.preventDefault();
-    const res = D.logIn($('#siEmail').value, $('#siPw').value);
-    if (res.error) { PNC.toast(res.error, 'err'); $('#siPw').focus(); return; }
-    PNC.toast('Welcome back, ' + res.owner.fullName.split(' ')[0]);
-    window.dispatchEvent(new CustomEvent('pnc:auth'));
-    syncView();
+    const email = $('#siEmail').value;
+    const pw = $('#siPw').value;
+    const btn = e.target.querySelector('button[type="submit"]');
+    if (btn) btn.disabled = true;
+    try {
+      /* When the optional Convex backend is connected the server owns
+         the password hashes, so verify against it; otherwise fall
+         back to the local store. */
+      const res = D.logInRemote && (await D.logInRemote(email, pw)) || D.logIn(email, pw);
+      if (res.error) { PNC.toast(res.error, 'err'); $('#siPw').focus(); return; }
+      PNC.toast('Welcome back, ' + res.owner.fullName.split(' ')[0]);
+      window.dispatchEvent(new CustomEvent('pnc:auth'));
+      syncView();
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   }
 
   function doSignUp(e) {
@@ -243,7 +254,7 @@
   function removePet(id) {
     const p = D.db.pets.find(x => x.id === id);
     if (!p) return;
-    if (!window.confirm('Remove ' + p.petName + ' from your family? This also clears their bookings.')) return;
+    if (!window.confirm('Remove ' + p.petName + ' from your family? Any upcoming appointments are cancelled automatically.')) return;
     D.removePet(id);
     PNC.toast(p.petName + ' removed');
     renderTab('pets');

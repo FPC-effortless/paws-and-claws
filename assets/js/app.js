@@ -110,6 +110,15 @@
 
     get count() { return this.items.reduce((n, i) => n + i.qty, 0); },
     get subtotal() { return this.items.reduce((n, i) => n + (PRODUCT_BY_ID[i.id] ? PRODUCT_BY_ID[i.id].price * i.qty : 0), 0); },
+    /* Members get their plan discount at checkout (see PNC_DB.placeOrder).
+       Rates live in data.js so the data layer stays the source of truth. */
+    get discountRate() {
+      const D = global.PNC_DB;
+      if (!D || !D.currentOwner) return 0;
+      const o = D.currentOwner();
+      return o ? (D.PLAN_DISCOUNT[o.plan] || 0) : 0;
+    },
+    get total() { return Math.round(this.subtotal * (1 - this.discountRate) * 100) / 100; },
 
     render() {
       const badge = $("#cartCount");
@@ -152,9 +161,27 @@
       }
 
       const totalEl = $("#cartTotal");
-      if (totalEl) totalEl.textContent = money(this.subtotal);
+      if (totalEl) totalEl.textContent = money(this.total);
       const checkoutBtn = $("#cartCheckout");
       if (checkoutBtn) checkoutBtn.disabled = !this.items.length;
+
+      /* Show the member discount as its own line so the total is
+         not a surprise at checkout. */
+      const dl = $("#cartDiscount");
+      if (dl) {
+        const rate = this.discountRate;
+        dl.hidden = !rate;
+        if (rate) {
+          dl.innerHTML = '<span>Member discount (' + Math.round(rate * 100) + '%)</span>' +
+            '<b style="color:var(--ok)">&minus;' + money(Math.round(this.subtotal * rate * 100) / 100) + "</b>";
+        }
+      }
+      const st = $("#cartSubtotal");
+      if (st) {
+        const rate = this.discountRate;
+        st.hidden = !rate;
+        if (rate) st.innerHTML = '<span>Subtotal</span><b>' + money(this.subtotal) + "</b>";
+      }
     }
   };
 
