@@ -194,6 +194,119 @@ if (bkSlots.length) {
   assert(true, "no open nail-trim slot to test booking discount");
 }
 
-console.log("\n== done ==");
-if (process.exitCode) console.error("FAILURES");
-else console.log("ALL CHECKS PASSED");
+/* ===================== Clerk identity bridge =====================
+   The bridge must be inert when Clerk is absent (DEMO MODE — the
+   deployed demo and this harness run without a key) and correct when
+   a Clerk session is present. PNC_CLERK is stubbed both ways: it is
+   what data.js consults, so the harness needs no network. */
+console.log("\n== Clerk identity bridge ==");
+
+/* DEMO MODE: no PNC_CLERK at all, the way every page starts before
+   clerk.js runs. Identity falls back to the local session and nothing
+   throws. */
+sandbox.PNC_CLERK = undefined;
+assert(D.clerkOn() === false, "clerkOn() false with no Clerk present");
+assert(D.demoMode() === true, "demoMode() true with no Clerk present");
+assert(D.currentAdmin() === null || !!D.currentAdmin(), "currentAdmin does not throw without Clerk");
+D.setSession("ow-1");
+assert(!!D.currentOwner() && D.currentOwner().id === "ow-1", "local session resolves without Clerk");
+D.clearSession();
+assert(!D.currentOwner(), "session cleared");
+
+/* DEMO MODE flag: PNC_CLERK present but inactive. */
+sandbox.PNC_CLERK = { active: false, demo: true };
+assert(D.clerkOn() === false, "clerkOn() false when Clerk is in demo mode");
+assert(D.demoMode() === true, "demoMode() true when Clerk reports demo");
+
+/* CLERK MODE: active session. currentOwner() must link the Clerk user
+   to an existing owner row by email, not create a duplicate. */
+sandbox.PNC_CLERK = {
+  active: true,
+  demo: false,
+  currentOwner: function () {
+    return {
+      id: "user_abc", clerkId: "user_abc",
+      email: "elena@example.com",
+      fullName: "Elena Vasquez",
+      plan: "senior",
+      source: "clerk",
+    };
+  },
+  currentAdmin: function () { return null; },
+  signOut: function () {},
+};
+assert(D.clerkOn() === true, "clerkOn() true with an active Clerk session");
+assert(D.demoMode() === false, "demoMode() false in Clerk mode");
+const ownersBefore = D.db.owners.length;
+const clerkOwner = D.currentOwner();
+assert(!!clerkOwner, "currentOwner resolves a Clerk user");
+assert(clerkOwner.id === "ow-1", "Clerk user linked to the existing owner by email");
+assert(clerkOwner.clerkId === "user_abc", "clerkId backfilled onto the linked owner");
+assert(clerkOwner.plan === "senior", "plan mirrored from Clerk publicMetadata");
+assert(D.db.owners.length === ownersBefore, "no duplicate owner created on link");
+
+/* A Clerk user we have never seen gets an owner row. This is a
+   data-link, not an auth decision — the Clerk session proved them. */
+sandbox.PNC_CLERK.currentOwner = function () {
+  return {
+    id: "user_new", clerkId: "user_new",
+    email: "newmember@example.com",
+    fullName: "New Member",
+    plan: "adult",
+    source: "clerk",
+  };
+};
+const created = D.currentOwner();
+assert(!!created && created.id !== "ow-1", "unknown Clerk user gets a new owner row");
+assert(created.clerkId === "user_new", "new owner carries the clerkId");
+assert(created.email === "newmember@example.com", "new owner carries the email");
+assert(D.db.owners.filter(function (o) { return o.email === "newmember@example.com"; }).length === 1, "exactly one owner for that Clerk user on a second lookup");
+const second = D.currentOwner();
+assert(second.id === created.id, "repeated lookup returns the same owner");
+
+/* Staff: a Clerk user is staff only if publicMetadata.role is set,
+   and the role maps onto the existing RBAC table. */
+sandbox.PNC_CLERK.currentOwner = function () { return null; };
+sandbox.PNC_CLERK.currentAdmin = function () {
+  return { id: "user_desk", clerkId: "user_desk", email: "front@pawsandclaws.example", name: "Jordan Pike", role: "desk", source: "clerk" };
+};
+const cAdmin = D.currentAdmin();
+assert(!!cAdmin, "currentAdmin resolves a Clerk staff user");
+assert(cAdmin.role === "desk", "role taken from publicMetadata");
+assert(cAdmin.roleObj && cAdmin.roleObj.id === "desk", "roleObj attached from the RBAC table");
+assert(D.can("bookings.manage") === true, "Clerk desk staff can manage bookings");
+assert(D.can("cms.edit") === false, "Clerk desk staff cannot edit CMS");
+
+/* A Clerk user with no role is not staff, even when signed in. */
+sandbox.PNC_CLERK.currentAdmin = function () { return null; };
+assert(D.currentAdmin() === null, "Clerk user without a role is not staff");
+
+/* An unknown staff role falls back to desk, not to undefined. */
+sandbox.PNC_CLERK.currentAdmin = function () {
+  return { id: "u2", clerkId: "u2", email: "unknown-role@example.com", name: "Mystery", role: "intern", source: "clerk" };
+};
+const fb = D.currentAdmin();
+assert(!!fb && fb.role === "desk", "unknown Clerk role falls back to desk");
+assert(D.can("bookings.manage") === true, "fallback role still gets desk permissions");
+
+/* logOut() returns a promise in both modes so callers can await it
+   without a type error (see the account.js sign-out handlers). */
+sandbox.PNC_CLERK = { active: true, demo: false, currentOwner: function () { return null; }, currentAdmin: function () { return null; }, signOut: function () {} };
+let signOutCalled = false;
+sandbox.PNC_CLERK.signOut = function () { signOutCalled = true; };
+const p = D.logOut();
+assert(typeof p.then === "function", "logOut() returns a promise in Clerk mode");
+p.then(function () {
+  assert(signOutCalled, "logOut() ends the Clerk session");
+  assert(!D.currentOwner(), "logOut() clears the member session");
+
+  /* DEMO MODE logOut resolves without touching Clerk. */
+  sandbox.PNC_CLERK = undefined;
+  const p2 = D.logOut();
+  assert(typeof p2.then === "function", "logOut() returns a promise in demo mode too");
+  p2.then(function () {
+    console.log("\n== done ==");
+    if (process.exitCode) console.error("FAILURES");
+    else console.log("ALL CHECKS PASSED");
+  });
+});

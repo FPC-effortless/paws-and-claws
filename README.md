@@ -3,7 +3,7 @@
 A complete pet-care platform — storefront, booking portal, pet marketplace,
 member portal, and a full admin control panel (ERP/CRM) — built as a fast,
 dependency-free static site (HTML + CSS + vanilla JS) with **no build step**,
-ready to deploy to **Vercel**.
+deployed to **GitHub Pages**.
 
 ## Pages
 
@@ -91,13 +91,49 @@ deployment URL exists, so until then the site behaves exactly as before.
 `data.js`, and `convex/auth.js` replaces the demo scramble with server-side
 **scrypt** hashing plus expiring session tokens.
 
+### Optional: add real identity (Clerk)
+
+The same static-first rule applies to identity. An optional
+[Clerk](https://clerk.com) layer ships in `assets/js/clerk.js` and is
+**inert until you configure it** — no key, no Clerk call is ever made.
+
+When Clerk is configured it is the **sole identity provider** for members
+*and* staff (Replace mode): the sign-in/sign-up forms on `membership.html`,
+`account.html` and `admin/index.html` are swapped for Clerk's hosted UI,
+loaded from Clerk's own CDN the same way the Convex client is.
+
+1. Create a project at [dashboard.clerk.com](https://dashboard.clerk.com).
+2. Copy the **publishable** key (`pk_test_…`) and paste it into
+   `assets/js/clerk.js` — it is the one place the key lives, and it is read
+   by every page. (The **secret** key never goes in this repo; it belongs in
+   the Convex dashboard.)
+3. Provision staff by opening each staff user in the Clerk dashboard and
+   setting `publicMetadata`:
+   - `role` — one of `super`, `desk`, `provider`, `retail`, which maps onto
+     the RBAC table in `data.js`. A user with no `role` is a plain member.
+   - `providerId` — required for `provider` (e.g. `"Rosa"`), so a groomer or
+     vet is scoped to their own schedule and customers.
+   - `plan` — optional, for members (`puppy` / `adult` / `senior`), so member
+     discounts still resolve.
+4. Done. `PNC_DB.currentOwner()` / `PNC_DB.currentAdmin()` resolve the Clerk
+   user to a row in the local store on first sight, so bookings, orders and
+   notifications still attach.
+
+**Demo mode.** With no key configured (or `?demo=1`, or `sessionStorage`),
+the site runs in DEMO MODE and the local forms stay as the documented demo
+path. This is *not* an authentication fallback — Clerk is still the only
+thing that can issue a real session, and no session is ever minted by the
+demo path. It exists so the deployed demo and the test harness stay usable
+while the Clerk project is being created.
+
 ## Structure
 
 ```
 ├── index.html · services.html · shop.html · pets.html
 ├── membership.html · account.html · contact.html
 ├── admin/index.html              # admin control panel
-├── vercel.json                   # Vercel config (static, /admin rewrite)
+├── vercel.json                   # static config (clean URLs, /admin rewrite, cache headers)
+├── .github/workflows/deploy.yml  # GitHub Pages deploy (upload-pages-artifact, path: .)
 ├── convex.json                   # Convex config (optional backend)
 ├── convex/                       # optional backend
 │   ├── schema.js                 # mirrors the data.js relational model
@@ -113,9 +149,12 @@ deployment URL exists, so until then the site behaves exactly as before.
 │       ├── data.js               # PNC_DB: seed data, store, booking/order/CRM engine
 │       ├── nav.js                # shared header, cart modal, footer, notifications
 │       ├── convexClient.js       # optional Convex sync (inert until configured)
+│       ├── clerk.js              # optional Clerk identity (inert until keyed)
 │       ├── home.js · booking.js · shop.js · pets.js
 │       ├── account.js · contact.js · admin.js
-└── test/harness.js               # data-layer test suite (node test/harness.js)
+└── test/
+    ├── harness.js             # data-layer suite (node test/harness.js)
+    └── clerk_demo.js          # demo-mode gate for the identity layer
 ```
 
 ## Run locally
@@ -131,22 +170,21 @@ python3 -m http.server 8000
 Run the data-layer tests anytime:
 
 ```bash
-node test/harness.js
+node test/harness.js        # data layer + Clerk identity bridge
+node test/clerk_demo.js     # identity layer degrades to demo mode, never crashes
 ```
 
-## Deploy to Vercel
+## Deploy
 
-Zero-config — the repo is static, so `vercel.json` only adds clean URLs, an
-`/admin` → `/admin/index.html` rewrite, and long-cache headers for `/assets`.
+The repo is static, so there is nothing to build. A GitHub Actions workflow
+(`.github/workflows/deploy.yml`) deploys to **GitHub Pages** on every push to
+`main` — it just uploads the tree as-is with `upload-pages-artifact` and
+publishes it. Enable Pages in the repo settings (Source: **GitHub Actions**)
+and the next push goes live.
 
-```bash
-npm i -g vercel
-vercel        # preview
-vercel --prod # production
-```
-
-Or import the repo on [vercel.com](https://vercel.com) — Framework Preset
-**Other** is auto-detected; no build or output commands are needed.
+`vercel.json` is retained for anyone who prefers Vercel: it only adds clean
+URLs, an `/admin` → `/admin/index.html` rewrite, and long-cache headers for
+`/assets`. Neither config runs a build or an output command.
 
 ## Tech
 

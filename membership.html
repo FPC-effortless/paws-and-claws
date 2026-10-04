@@ -74,6 +74,9 @@
     <section id="join" style="padding-top:clamp(40px,5vw,64px)">
       <div class="wrap">
         <div class="auth-card">
+          <!-- Clerk replaces the local forms when a publishable key is set.
+               This page is about joining, so Clerk's <SignUp/> is mounted. -->
+          <div id="clerkMemberHolder" hidden style="padding:4px 0 8px"></div>
           <div class="auth-tabs" role="tablist">
             <button id="tabSignup" class="active" role="tab" aria-selected="true" aria-controls="paneSignup">Sign up</button>
             <button id="tabLogin" role="tab" aria-selected="false" aria-controls="paneLogin">Log in</button>
@@ -203,6 +206,9 @@
   <script src="assets/js/data.js"></script>
   <script src="assets/js/nav.js"></script>
   <script src="assets/js/convexClient.js"></script>
+  <!-- Clerk identity layer. The publishable key lives in clerk.js;
+       without one the local forms below stay as the demo path. -->
+  <script src="assets/js/clerk.js"></script>
   <script>
     document.addEventListener("pnc:ready", function () {
       var grid = document.getElementById("planGrid");
@@ -282,6 +288,25 @@
       }
       bindPlatform(document.getElementById("signupForm"), "signup");
       bindPlatform(document.getElementById("loginForm"), "login");
+
+      /* Clerk (REPLACE mode): with a publishable key configured, this
+         page mounts Clerk's <SignUp/> and the local forms are hidden.
+         Without a key the site is in DEMO MODE and the local forms
+         above remain the documented demo path. */
+      function mountClerkJoin() {
+        var ck = window.PNC_CLERK;
+        var holder = document.getElementById("clerkMemberHolder");
+        if (!holder || !ck || !ck.active) return;
+        holder.hidden = false;
+        ck.mountSignUp(holder, {
+          appearance: { elements: { rootBox: "width:100%" } }
+        });
+        document.querySelector(".auth-tabs").style.display = "none";
+        document.getElementById("paneSignup").style.display = "none";
+        document.getElementById("paneLogin").style.display = "none";
+      }
+      mountClerkJoin();
+      window.addEventListener("pnc:clerk", mountClerkJoin);
 
       var pre = new URLSearchParams(location.search).get("plan");
       if (pre) {

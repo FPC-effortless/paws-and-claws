@@ -48,6 +48,11 @@
         <b>Demo accounts</b>
         <div class="cred-grid" id="credGrid"></div>
       </div>
+      <!-- Clerk replaces the local form when a publishable key is set.
+           Staff roles come from the Clerk user's publicMetadata.role. -->
+      <div id="clerkAdmin" hidden style="margin-top:18px">
+        <div id="clerkAdminHolder"></div>
+      </div>
       <a class="gate-back" href="../index.html">&#8592; Back to the store</a>
     </div>
   </div>
@@ -288,6 +293,9 @@
   <script src="../assets/js/app.js"></script>
   <script src="../assets/js/data.js"></script>
   <script src="../assets/js/convexClient.js"></script>
+  <!-- Clerk identity layer. The publishable key lives in clerk.js.
+       Without a key the gate falls back to the demo accounts above. -->
+  <script src="../assets/js/clerk.js"></script>
   <script src="../assets/js/admin.js"></script>
 </body>
 </html>

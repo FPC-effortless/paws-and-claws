@@ -166,6 +166,38 @@
     });
   }
 
+  /* ------------------------- Clerk gate ------------------------- */
+  /* In Clerk mode the staff gate is Clerk's <SignIn/>. This is
+     REPLACE mode: without a publishable key the site runs in DEMO
+     MODE and the local credential cards stay available. */
+  function mountClerkGate() {
+    const host = $("#clerkAdmin");
+    if (!host) return;
+    const ck = window.PNC_CLERK;
+    if (!ck || !ck.active) {
+      host.hidden = true;
+      return;
+    }
+    host.hidden = false;
+    const holder = $("#clerkAdminHolder");
+    if (holder) ck.mountSignIn(holder, {
+      appearance: { elements: { rootBox: "width:100%" } },
+      signIn: { redirectUrl: new URL("/admin", location.origin).toString() }
+    });
+    const local = $("#adminLoginForm");
+    if (local) local.hidden = true;
+    const demo = document.querySelector(".demo-creds");
+    if (demo) demo.hidden = true;
+    /* Clerk mounted the real UI, so the gate is satisfied by the
+       Clerk session alone. Re-check on every Clerk state change. */
+    if (window.PNC_CLERK._unsubAdmin) try { window.PNC_CLERK._unsubAdmin(); } catch {}
+    if (ck.clerk && ck.clerk.addListener) {
+      window.PNC_CLERK._unsubAdmin = ck.clerk.addListener(function () {
+        if (D.currentAdmin()) enter();
+      });
+    }
+  }
+
   function enter() {
     const a = admin();
     $("#adminGate").hidden = true;
@@ -1024,10 +1056,18 @@
 
     renderCreds();
     mountLogin();
+    mountClerkGate();
     mountShell();
     mountPOS();
     mountCMS();
     mountSearch();
+
+    /* Clerk loads asynchronously from a CDN; re-mount the gate and
+       re-evaluate the staff session once it reports ready. */
+    window.addEventListener("pnc:clerk", function () {
+      mountClerkGate();
+      if (admin()) enter();
+    });
 
     const a = admin();
     if (a) enter();

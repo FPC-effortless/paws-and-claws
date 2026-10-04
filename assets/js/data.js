@@ -2,7 +2,7 @@
    Paws & Claws — Platform data layer ("ERP + CRM" core)
    ------------------------------------------------------------
    Vanilla JS, zero dependencies. Built for static hosting
-   (Vercel): every mutation persists to localStorage, and the
+   (GitHub Pages): every mutation persists to localStorage, and the
    store re-seeds deterministically on first load so the demo
    is never empty.
 
@@ -536,11 +536,70 @@
   function setSession(ownerId) {
     try { localStorage.setItem(MEMBER_KEY, ownerId); } catch {}
   }
-  function logOut() { try { localStorage.removeItem(MEMBER_KEY); } catch {} }
-  function currentOwner() {
+  /* Sign out of whichever identity provider is in charge. Returns a
+     promise so callers can await before redirecting/re-rendering;
+     resolves immediately when there is nothing async to do. */
+  function logOut() {
+    clearSession();
+    const c = clerk();
+    if (!c || !c.active) return Promise.resolve();
+    return Promise.resolve(c.signOut()).catch(function () {});
+  }
+  function clearSession() { try { localStorage.removeItem(MEMBER_KEY); } catch {} }
+  function localOwner() {
     let id = null;
     try { id = localStorage.getItem(MEMBER_KEY); } catch {}
     return id ? byId(db.owners, id) : null;
+  }
+
+  /* ------------------- Clerk identity bridge ---------------------- */
+  /* Clerk is the sole identity provider. When a Clerk session is
+     present it is authoritative: `currentOwner` and `currentAdmin`
+     resolve the Clerk user to a row in this store so bookings,
+     orders and notifications still attach. Passwords are never
+     read from localStorage in Clerk mode.
+
+     DEMO MODE is not an authentication fallback. It is engaged only
+     when no Clerk publishable key is configured (or ?demo=1 is
+     present), so the deployed demo and the test harness stay usable
+     while the Clerk project is being provisioned. No Clerk session
+     is ever minted by this code path. */
+  function clerk() { return global.PNC_CLERK || null; }
+  function clerkOn() { const c = clerk(); return !!(c && c.active); }
+  function demoMode() { const c = clerk(); return !c || c.demo; }
+
+  /* Map a Clerk user onto an owners row, creating it if this is the
+     first time we have seen them. This is a data-link, not an
+     authentication decision — the Clerk session is what proved the
+     identity. */
+  function resolveOwner(cOwner) {
+    if (!cOwner) return null;
+    let owner = (cOwner.clerkId && db.owners.find((o) => o.clerkId === cOwner.clerkId)) ||
+      (cOwner.email && db.owners.find((o) => o.email === cOwner.email));
+    if (owner) {
+      let changed = false;
+      if (cOwner.clerkId && owner.clerkId !== cOwner.clerkId) { owner.clerkId = cOwner.clerkId; changed = true; }
+      if (cOwner.email && owner.email !== cOwner.email) { owner.email = cOwner.email; changed = true; }
+      if (cOwner.fullName && owner.fullName !== cOwner.fullName) { owner.fullName = cOwner.fullName; changed = true; }
+      if (cOwner.plan && owner.plan !== cOwner.plan) { owner.plan = cOwner.plan; changed = true; }
+      if (changed) persist();
+      return owner;
+    }
+    owner = {
+      id: uid("ow"), clerkId: cOwner.clerkId || null,
+      fullName: cOwner.fullName || "Member", email: cOwner.email || "",
+      phone: cOwner.phone || "", emergencyContact: "", address: "",
+      plan: cOwner.plan || "puppy", createdAt: todayISO(), notes: "",
+      source: "clerk"
+    };
+    db.owners.push(owner);
+    persist();
+    return owner;
+  }
+
+  function currentOwner() {
+    if (clerkOn()) return resolveOwner(clerk().currentOwner());
+    return localOwner();
   }
 
   /* ---------------------- admin auth (RBAC) --------------------------- */
@@ -566,6 +625,15 @@
     }
   };
 
+  /* ---------------------- admin auth (RBAC) --------------------------- */
+  /* Clerk is authoritative for staff identity too. A Clerk user is
+     staff only when `publicMetadata.role` is set (provisioned in the
+     Clerk dashboard, never written from the browser). The role maps
+     onto the RBAC table below so can()/scopeOf() keep working.
+
+     `adminLogIn` remains for DEMO MODE only — it is what the
+     credential cards on the admin gate use. In Clerk mode the
+     button hands off to PNC_CLERK.openSignIn() instead. */
   function adminLogin(email, pw) {
     email = String(email || "").trim().toLowerCase();
     const a = db.admins.find((x) => x.email === email);
@@ -574,11 +642,35 @@
     audit("Admin sign-in", a.email + " signed in as " + ADMIN_ROLES[a.role].name);
     return { admin: a };
   }
-  function adminLogout() { try { localStorage.removeItem(SESSION_KEY); } catch {} }
+  function adminLogout() {
+    try { localStorage.removeItem(SESSION_KEY); } catch {}
+    /* Also end the Clerk staff session when it is in charge, so
+       leaving the console can't leave a live session behind. */
+    const c = clerk();
+    if (c && c.active) c.signOut();
+  }
   function session() {
     try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch { return null; }
   }
   function currentAdmin() {
+    /* Clerk staff session wins. */
+    if (clerkOn()) {
+      const cAdmin = clerk().currentAdmin();
+      if (cAdmin) {
+        const known = db.admins.find((a) => a.email === cAdmin.email) || null;
+        /* An unrecognized role falls back to desk for BOTH `role` and
+           `roleObj`. Falling back on only one would leave `role` as,
+           say, "intern", and can() would look up PERMS["intern"],
+           find nothing, and silently deny everything. */
+        const rawRole = known ? known.role : cAdmin.role;
+        const role = ADMIN_ROLES[rawRole] ? rawRole : "desk";
+        return Object.assign({}, known || {}, cAdmin, {
+          role,
+          roleObj: ADMIN_ROLES[role]
+        });
+      }
+      return null;
+    }
     const s = session();
     if (!s) return null;
     const a = db.admins.find((x) => x.email === s.email);
@@ -994,7 +1086,10 @@
     /* engine */
     notify, message, audit,
     /* owner auth */
-    signUp, logIn, logInRemote, logOut, currentOwner, setSession, migrateLegacy, hashPw,
+    signUp, logIn, logInRemote, logOut, clearSession, currentOwner, setSession,
+    migrateLegacy, hashPw, localOwner, resolveOwner,
+    /* clerk bridge */
+    clerkOn, demoMode,
     /* admin auth + RBAC */
     adminLogin, adminLogout, session, currentAdmin, can, scopeOf, PERMS,
     /* booking */

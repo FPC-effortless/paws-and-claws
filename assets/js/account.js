@@ -42,6 +42,34 @@
     if (!m) showGate(); else showApp();
   }
 
+  /* ------------------- Clerk gate ------------------- */
+  /* REPLACE mode: when Clerk is active the gate IS Clerk's
+     <SignIn/>. The local forms are hidden, and sign-out goes through
+     Clerk. Without a publishable key the site is in DEMO MODE and
+     the local forms stay as the documented demo path. */
+  function mountClerkGate() {
+    const ck = window.PNC_CLERK;
+    const holder = $('#clerkMemberHolder');
+    if (!holder) return;
+    if (!ck || !ck.active) { holder.hidden = true; return; }
+    holder.hidden = false;
+    ck.mountSignIn(holder, {
+      appearance: { elements: { rootBox: 'width:100%' } }
+    });
+    const gate = $('#acctGate');
+    if (gate) {
+      /* Keep the tab UI but hide the local forms, which Clerk has
+         replaced. */
+      $$('.gate-form', gate).forEach(f => f.style.display = 'none');
+      $$('.gate-tab', gate).forEach(t => t.style.display = 'none');
+    }
+    /* Clerk sessions change asynchronously; re-evaluate the gate on
+       every state change so a completed sign-in flips to the app. */
+    if (ck.clerk && ck.clerk.addListener) {
+      ck.clerk.addListener(function () { syncView(); });
+    }
+  }
+
   function setGate(which) {
     $$('.gate-tab').forEach(b => {
       const on = b.dataset.gate === which;
@@ -551,8 +579,8 @@
     $$('.acct-tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
 
     /* account-level actions */
-    $('#acctLogout').addEventListener('click', function () {
-      D.logOut();
+    $('#acctLogout').addEventListener('click', async function () {
+      await D.logOut();
       window.dispatchEvent(new CustomEvent('pnc:auth'));
       PNC.toast('Signed out');
       syncView();
@@ -593,7 +621,14 @@
       const rmc = e.target.closest('[data-rmcard]');
       if (rmc) { D.removePaymentMethod(rmc.dataset.rmcard); PNC.toast('Card removed'); renderTab('payment'); return; }
       const so = e.target.closest('#signOutBtn');
-      if (so) { D.logOut(); window.dispatchEvent(new CustomEvent('pnc:auth')); PNC.toast('Signed out'); syncView(); return; }
+      if (so) {
+        D.logOut().then(function () {
+          window.dispatchEvent(new CustomEvent('pnc:auth'));
+          PNC.toast('Signed out');
+          syncView();
+        });
+        return;
+      }
     });
 
     $('#profileForm') && null;
@@ -611,6 +646,14 @@
     if (h && ['overview', 'pets', 'bookings', 'orders', 'inbox', 'payment', 'settings'].indexOf(h) !== -1) {
       tab = h;
     }
+    mountClerkGate();
+    /* Clerk loads asynchronously; re-mount the gate and re-evaluate
+       the view once it reports ready. */
+    window.addEventListener('pnc:clerk', function () {
+      mountClerkGate();
+      syncView();
+      if (me()) setTab(tab);
+    });
     syncView();
     if (me()) setTab(tab);
   }
