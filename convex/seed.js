@@ -10,7 +10,7 @@ import { v } from "convex/values";
 const TABLES = [
   "owners", "pets", "bookings", "orders", "listings", "products", "services",
   "serviceGroups", "providers", "staffLeave", "waitlist", "messages",
-  "notifications", "payments", "audit", "admins", "inquiries", "cms"
+  "notifications", "payments", "audit", "admins", "inquiries", "contactMessages", "cms"
 ];
 
 function requireSecret(given) {
