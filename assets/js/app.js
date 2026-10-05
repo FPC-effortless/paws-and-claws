@@ -67,23 +67,10 @@
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
 
   /* --------------------------- product data --------------------------- */
-  const PRODUCTS = [
-    { id: "p1", name: "Salmon & Sweet Potato Kibble", cat: "Food", price: 24.99, badge: "Bestseller", rating: 4.9, icon: "🦴", desc: "Grain-free, wild-caught salmon recipe for dogs of all sizes. 5 lb bag.", tag: "food" },
-    { id: "p2", name: "Feather Wand Cat Teaser", cat: "Toys", price: 8.49, badge: "", rating: 4.7, icon: "🪶", desc: "Hand-wand teaser with natural feathers and a jingle bell. Cats go wild.", tag: "toy" },
-    { id: "p3", name: "Cozy Donut Pet Bed", cat: "Beds", price: 39.00, badge: "New", rating: 4.8, icon: "🛏️", desc: "Orthopedic memory-foam donut bed with a machine-washable cover.", tag: "bed" },
-    { id: "p4", name: "Aloe Oatmeal Pet Shampoo", cat: "Grooming", price: 12.95, badge: "Eco", rating: 4.6, icon: "🧴", desc: "Soothing, tear-free formula for sensitive skin. 16 oz, pH balanced.", tag: "groom" },
-    { id: "p5", name: "No-Pull Padded Harness", cat: "Walking", price: 27.50, badge: "", rating: 4.8, icon: "🦮", desc: "Front-clip reflective harness in 4 sizes. chest 18–34 in.", tag: "walk" },
-    { id: "p6", name: "Dental Chew Trio Pack", cat: "Treats", price: 15.75, badge: "", rating: 4.5, icon: "🦷", desc: "Three textures of vet-approved dental sticks. Fresh breath in a week.", tag: "food" },
-    { id: "p7", name: "Tough Rope Tug", cat: "Toys", price: 11.20, badge: "", rating: 4.4, icon: "🪢", desc: "Knotted cotton-blend rope for heavy chewers and tug-of-war champs.", tag: "toy" },
-    { id: "p8", name: "Stainless Slow Feeder Bowl", cat: "Feeding", price: 18.90, badge: "", rating: 4.7, icon: "🥣", desc: "Non-slip stainless bowl with a maze insert to slow fast eaters.", tag: "feed" },
-    { id: "p9", name: "Cat Scratching Post Tower", cat: "Furniture", price: 64.00, badge: "New", rating: 4.9, icon: "🏰", desc: "Multi-level tower with sisal posts and a lookout platform. 32 in.", tag: "furniture" },
-    { id: "p10", name: "Grain-Free Puppy Pâté", cat: "Food", price: 21.40, badge: "", rating: 4.6, icon: "🥫", desc: "Wet pâté packed with chicken and pumpkin. 12 × 12.5 oz cans.", tag: "food" },
-    { id: "p11", name: "Retractable LED Leash", cat: "Walking", price: 22.99, badge: "", rating: 4.5, icon: "🔦", desc: "16 ft retractable leash with an LED handle for night walks.", tag: "walk" },
-    { id: "p12", name: "De-Shedding Grooming Glove", cat: "Grooming", price: 9.99, badge: "Eco", rating: 4.3, icon: "🧤", desc: "Silicone glove that gently lifts loose fur. One size fits all.", tag: "groom" }
-  ];
-
-  const PRODUCT_BY_ID = Object.fromEntries(PRODUCTS.map((p) => [p.id, p]));
-
+  /* data.js is loaded before app.js on every page, so the catalog has
+     exactly one source of truth. */
+  const PRODUCTS = (global.PNC_DB && global.PNC_DB.PRODUCTS) || [];
+  const PRODUCT_BY_ID = (global.PNC_DB && global.PNC_DB.PRODUCT_BY_ID) || {};
   /* ------------------------------ cart -------------------------------- */
   const Cart = {
     items: read(STORE_KEYS.cart, []),
