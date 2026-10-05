@@ -801,12 +801,12 @@
     /* Members get their plan discount on the service total. */
     const rate = discountRate(owner);
     const total = Math.round(svc.price * (1 - rate) * 100) / 100;
-    const deposit = svc.deposit ? Math.round(total * DEPOSIT_RATE * 100) / 100 : total;
+    const deposit = svc.deposit ? Math.round(total * DEPOSIT_RATE * 100) / 100 : 0;
     const bk = {
       id: "bk-" + (1000 + db.bookings.length + 1),
       ownerId: owner.id, petId: pet.id, serviceId: svc.id, providerId: provider.id,
       date: input.date, hour: slot.hour, duration: svc.duration,
-      status: "confirmed", deposit, total, paid: deposit,
+      status: "confirmed", deposit, total, paid: deposit, paymentStatus: svc.deposit ? "demo-pending" : "not_required",
       intake: input.intake || {}, createdAt: todayISO(), createdBy: "self",
       discountRate: rate || undefined
     };
