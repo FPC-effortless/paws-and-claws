@@ -164,6 +164,15 @@ const li = D.logIn("test@example.com", "password123");
 assert(!li.error, "logIn with new account ok" + (li.error ? " -> " + li.error : ""));
 const bad = D.logIn("test@example.com", "wrongpassword");
 assert(!!bad.error, "bad password rejected");
+D.setSession("ow-1");
+const badQty = D.placeOrder([{ id: "p1", qty: -5 }], "delivery");
+assert(!!badQty.error, "negative order quantities are rejected");
+const beforeStock = D.byId(D.db.products, "p2").stock;
+const badProduct = D.updateProduct("p2", { price: -1 });
+assert(!!badProduct.error, "negative product price is rejected");
+assert(D.byId(D.db.products, "p2").stock === beforeStock, "rejected product edit leaves stock unchanged");
+const inquiryDetail = D.submitInquiry("lt-2", "I would like to meet Mochi this weekend.");
+assert(!inquiryDetail.error && D.db.inquiries.some(i => i.ref === inquiryDetail.ref && i.message.indexOf("meet Mochi") !== -1), "inquiry message is retained");
 
 /* waitlist + leave */
 D.setSession("ow-1");
