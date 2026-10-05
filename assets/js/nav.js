@@ -210,7 +210,7 @@
                 return global.PNC_CONVEX.syncBootstrap().then(function () { return x; });
               })
             : { error: "Secure backend is not available." });
-          if (r && r.error) return PNC.toast(r.error, "err");
+          if (r && r.error) return (global.PNC ? global.PNC.toast(r.error, "err") : undefined);
         } else {
           n.read = true;
           D.persist();
