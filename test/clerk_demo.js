@@ -32,7 +32,7 @@ sandbox.document = {
   createElement() { throw new Error("no DOM / CDN blocked"); },
   head: { appendChild() {} },
 };
-sandbox.location = { search: "", origin: "https://example.com" };
+sandbox.location = { search: "", origin: "http://localhost:8000", hostname: "localhost" };
 sandbox.sessionStorage = { getItem: () => null };
 /* A page dispatches events; record them so the test can confirm the
    gate announces demo mode to its listeners. */
