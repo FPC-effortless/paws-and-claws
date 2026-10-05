@@ -506,7 +506,7 @@
                 return '<tr class="vax-row"><td>' + esc(v.name) + "</td><td>" + D.fmtDate(v.date) + "</td>" +
                   "<td>" + pill(v.status, v.status === "approved" ? "primary" : v.status === "rejected" ? "danger" : "warn") + "</td>" +
                   "<td>" + (v.status !== "approved"
-                    ? (allowed("crm.edit") ? '<button class="mini-btn primary" data-vok="' + p.id + ":" + i + '">Approve</button>' : "")'
+                    ? (allowed("crm.edit") ? '<button class="mini-btn primary" data-vok="' + p.id + ":" + i + '">Approve</button>' : "")
                     : "") + "</td></tr>";
               }).join("") + "</tbody></table>"
             : '<p class="hint" style="margin:8px 0 0">No vaccine records on file.</p>') +
@@ -514,10 +514,10 @@
         "</div></div>";
     }).join("") + "</div>";
 
-    $$("[data-vok]").forEach(function (b) {
-      b.addEventListener("click", function () {
+    $("[data-vok]").forEach(function (b) {
+      b.addEventListener("click", async function () {
         const parts = b.dataset.vok.split(":");
-        const r = D.setVaccineStatus(parts[0], Number(parts[1]), "approved");
+        const r = await Promise.resolve(D.setVaccineStatus(parts[0], Number(parts[1]), "approved"));
         if (r.error) return toast(r.error, "err");
         toast("Vaccine record approved");
         render();
