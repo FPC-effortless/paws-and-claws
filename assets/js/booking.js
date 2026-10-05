@@ -350,7 +350,7 @@
     /* Mirror createBooking: members get their plan discount. */
     const rate = o ? (D.PLAN_DISCOUNT[o.plan] || 0) : 0;
     const net = Math.round(svc.price * (1 - rate) * 100) / 100;
-    const dep = svc.deposit ? Math.round(net * D.DEPOSIT_RATE * 100) / 100 : net;
+    const dep = svc.deposit ? Math.round(net * D.DEPOSIT_RATE * 100) / 100 : 0;
     return { deposit: dep, remainder: Math.round((net - dep) * 100) / 100, net, rate };
   }
 
@@ -373,9 +373,9 @@
       (b.rate
         ? '<div class="row"><span>Member discount (' + Math.round(b.rate * 100) + '%)</span><span style="color:var(--ok)">&minus;' + money(Math.round(svc.price * b.rate * 100) / 100) + "</span></div>"
         : "") +
-      '<div class="row"><span>Deposit today (30%)</span><span><b>' + money(b.deposit) + "</b></span></div>" +
-      '<div class="row"><span>Balance at the visit</span><span>' + money(b.remainder) + "</span></div>" +
-      '<div class="row total"><span>Charged now</span><span>' + money(b.deposit) + "</span></div>" +
+      '<div class="row"><span>' + (svc.deposit ? "Deposit today (30%)" : "Payment due at visit") + '</span><span><b>' + money(b.deposit) + "</b></span></div>" +
+      (svc.deposit ? '<div class="row"><span>Balance at the visit</span><span>' + money(b.remainder) + "</span></div>" : "") +
+      '<div class="row total"><span>' + (svc.deposit ? "Charged now" : "Charged now") + '</span><span>' + money(b.deposit) + "</span></div>" +
       '<p class="tiny muted" style="margin:10px 0 0">Free cancellation up to 24 hours before. Demo checkout — no real card is charged.</p>';
 
     $("#acctGate").innerHTML = o
