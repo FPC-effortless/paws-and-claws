@@ -201,7 +201,11 @@
     if (res.error) { PNC.toast(res.error, 'err'); return; }
     PNC.Cart.clear();
     PNC.closeModal();
-    PNC.toast('Order ' + res.order.id + ' placed! Track it in your account.');
+    if (res.order && res.order.paymentStatus === 'pending') {
+      PNC.toast('Order ' + res.order.id + ' created. Payment is still pending.');
+    } else {
+      PNC.toast('Order ' + res.order.id + ' placed! Track it in your account.');
+    }
     setTimeout(function () { window.location.href = 'account.html#orders'; }, 1100);
   }
 
