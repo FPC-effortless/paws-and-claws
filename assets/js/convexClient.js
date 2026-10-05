@@ -101,10 +101,13 @@
 
   global.PNC_CONVEX = api;
 
-  function bindClerk() {
-    api.connect().then(function () {
-      api.syncBootstrap();
-    });
+  async function bindClerk() {
+    const on = await api.connect();
+    if (!on) return;
+    if (global.PNC_CLERK && global.PNC_CLERK.active) {
+      try { await api.mutate("ensureOwner", {}); } catch {}
+    }
+    await api.syncBootstrap();
   }
 
   global.addEventListener("pnc:clerk", bindClerk);
