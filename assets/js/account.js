@@ -164,7 +164,7 @@
           '<div class="perk"><span class="perk-ico">&#128375;</span><div><strong>' +
             PLAN_DISCOUNT[m.plan] + ' off everything</strong><small>Applied automatically at checkout</small></div></div>' +
           '<div class="perk"><span class="perk-ico">&#128666;</span><div><strong>' +
-            (m.plan === 'puppy' ? 'Free delivery over $35' : 'Free delivery, no minimum') +
+            'Free delivery, no minimum' +
             '</strong><small>Within Riverton and nearby</small></div></div>' +
           '<div class="perk"><span class="perk-ico">&#129389;</span><div><strong>Birthday treat box</strong>' +
             '<small>Every pet, every year</small></div></div>' +

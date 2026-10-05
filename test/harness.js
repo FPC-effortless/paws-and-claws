@@ -93,6 +93,28 @@ assert(stockAfter === 36, "stock decremented 38 -> " + stockAfter);
 D.setOrderStage(order.order.id, "packing");
 assert(D.byId(D.db.orders, order.order.id).stage === "packing", "order stage -> packing");
 
+/* Delivery is free for members on every plan. The $35-minimum / $6-fee
+   experiment was reverted in favour of the homepage promise, so a
+   delivery order must never cost more than the discounted subtotal.
+   Guarding it here is what keeps a half-removed fee from quietly
+   coming back. */
+function assertNoDeliveryFee(ownerId, lines) {
+  D.setSession(ownerId);
+  const r = D.placeOrder(lines, "delivery");
+  if (r.error) { console.error("FAIL: placeOrder(delivery) -> " + r.error); process.exitCode = 1; return null; }
+  const o = D.byId(D.db.orders, r.order.id);
+  const plan = D.byId(D.db.owners, ownerId).plan;
+  const rate = D.PLAN_DISCOUNT[plan] || 0;
+  const want = Math.round(o.items.reduce(function (n, l) { return n + l.price * l.qty; }, 0) * (1 - rate) * 100) / 100;
+  assert(o.total === want, plan + " delivery has no fee under $35 (" + o.total + " vs " + want + ")");
+  return o;
+}
+const puppySmall = assertNoDeliveryFee("ow-2", [{ id: "p2", qty: 1 }]);  /* puppy, $8.49 */
+const adultSmall = assertNoDeliveryFee("ow-1", [{ id: "p2", qty: 1 }]);  /* adult */
+const seniorBig = assertNoDeliveryFee("ow-3", [{ id: "p9", qty: 1 }]);   /* senior */
+assert(puppySmall && adultSmall && seniorBig, "delivery orders placed on all three plans");
+D.setSession("ow-1");
+
 /* listings + inquiry */
 const inq = D.submitInquiry("lt-1");
 assert(!inq.error, "inquiry ok -> " + (inq.ref || inq.error));

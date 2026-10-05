@@ -222,9 +222,9 @@
     const now = new Date().toISOString();
 
     const owners = [
-      { id: "ow-1", fullName: "Elena Vasquez", email: "elena@example.com", phone: "(555) 014-2288", emergencyContact: "(555) 014-9911", address: "88 Alder Brook Ln, Riverton, OR 97008", createdAt: addDays(-420), notes: "", passwordHash: hashPw("member123") },
-      { id: "ow-2", fullName: "Marcus Dunn", email: "marcus@example.com", phone: "(555) 014-7732", emergencyContact: "(555) 014-7733", address: "12 Cedar Row, Riverton, OR 97008", createdAt: addDays(-300), notes: "Prefers email contact.", passwordHash: hashPw("member123") },
-      { id: "ow-3", fullName: "Priya Raman", email: "priya@example.com", phone: "(555) 014-4410", emergencyContact: "(555) 014-4411", address: "5 Willow Court, Riverton, OR 97008", createdAt: addDays(-180), notes: "", passwordHash: hashPw("member123") }
+      { id: "ow-1", fullName: "Elena Vasquez", email: "elena@example.com", phone: "(555) 014-2288", emergencyContact: "(555) 014-9911", address: "88 Alder Brook Ln, Riverton, OR 97008", createdAt: addDays(-420), notes: "", plan: "adult", passwordHash: hashPw("member123") },
+      { id: "ow-2", fullName: "Marcus Dunn", email: "marcus@example.com", phone: "(555) 014-7732", emergencyContact: "(555) 014-7733", address: "12 Cedar Row, Riverton, OR 97008", createdAt: addDays(-300), notes: "Prefers email contact.", plan: "puppy", passwordHash: hashPw("member123") },
+      { id: "ow-3", fullName: "Priya Raman", email: "priya@example.com", phone: "(555) 014-4410", emergencyContact: "(555) 014-4411", address: "5 Willow Court, Riverton, OR 97008", createdAt: addDays(-180), notes: "", plan: "senior", passwordHash: hashPw("member123") }
     ];
 
     const pets = [

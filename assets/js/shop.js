@@ -178,11 +178,10 @@
         ? 'Free pickup at 142 Alder Brook Lane — ready in 2 hours'
         : 'Same-day delivery within Riverton — order by 2pm';
     }
-    PNC.toast(v === 'pickup' ? 'Pickup selected — no delivery fee' : 'Delivery selected');
+    PNC.toast(v === 'pickup' ? 'Pickup selected' : 'Delivery selected — free for members');
   }
 
   /* ---------- totals & checkout ---------- */
-  function deliveryFee() { return state.ful === 'pickup' ? 0 : 6; }
 
   function checkout() {
     const items = PNC.Cart.items;
@@ -273,9 +272,14 @@
 
     /* member pricing note */
     const m = member();
-    if (m && m.plan !== 'free') {
+    if (m) {
       const lead = $('#shopLead');
-      if (lead) lead.textContent = 'Club members save 15% on every order — your discount is applied at checkout.';
+      if (lead) {
+        const pct = Math.round((D.PLAN_DISCOUNT[m.plan] || 0) * 100);
+        lead.textContent = pct
+          ? "Club members save " + pct + "% on every order — your discount is applied at checkout."
+          : "Hand-picked products we'd give our own pets. Members get free delivery on every order.";
+      }
     }
 
     /* the checkout button lives in the shared cart modal */
