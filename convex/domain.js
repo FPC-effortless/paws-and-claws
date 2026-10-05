@@ -59,7 +59,7 @@ function hash01(str) {
   let h = 0x811c9dc5;
   for (let i = 0; i < String(str).length; i++) {
     h ^= String(str).charCodeAt(i);
-    h = Math.imul(h, 0x010001f3) >>> 0;
+    h = Math.imul(h, 0x01000193) >>> 0;
   }
   return h / 0x100000000;
 }
@@ -199,7 +199,7 @@ async function bootstrapData(ctx) {
     providers: await ctx.db.query("providers").collect(),
     staffLeave: await ctx.db.query("staffLeave").collect(),
     waitlist: [], messages: [], notifications: [], payments: [],
-    audit: [], admins: [], inquiries: [],
+    audit: [], admins: [], inquiries: [], contactMessages: [],
     cms: (await ctx.db.query("cms").first()) || null,
     inquiryCounter: 0
   };
@@ -219,7 +219,6 @@ async function bootstrapData(ctx) {
       out.waitlist = await ctx.db.query("waitlist").collect();
       out.messages = await ctx.db.query("messages").collect();
       out.notifications = await ctx.db.query("notifications").collect();
-      out.payments = await ctx.db.query("payments").collect();
       out.audit = await ctx.db.query("audit").collect();
       out.inquiries = await ctx.db.query("inquiries").collect();
       out.contactMessages = await ctx.db.query("contactMessages").collect();
@@ -237,6 +236,7 @@ async function bootstrapData(ctx) {
       out.payments = await ctx.db.query("payments").collect();
       out.audit = await ctx.db.query("audit").collect();
       out.inquiries = await ctx.db.query("inquiries").collect();
+      out.contactMessages = await ctx.db.query("contactMessages").collect();
       return out;
     }
     if (admin.role === "retail") {
@@ -270,7 +270,7 @@ async function bootstrapData(ctx) {
     orders: (await ctx.db.query("orders").collect()).filter(o => o.ownerId === owner.id),
     messages: (await ctx.db.query("messages").collect()).filter(m => m.ownerId === owner.id),
     notifications: (await ctx.db.query("notifications").collect()).filter(n => n.ownerId === owner.id),
-    payments: (await ctx.db.query("payments").collect()).filter(p => p.ownerId === owner.id),
+    payments: [],
     waitlist: (await ctx.db.query("waitlist").collect()).filter(w => w.ownerId === owner.id),
     inquiries: (await ctx.db.query("inquiries").collect()).filter(i => i.ownerId === owner.id)
   };
