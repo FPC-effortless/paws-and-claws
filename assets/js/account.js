@@ -254,7 +254,7 @@
     PNC.openModal('petModal');
   }
 
-  function savePet(e) {
+  async function savePet(e) {
     e.preventDefault();
     const name = $('#pfName').value.trim();
     if (name.length < 1) { PNC.toast('Give your pet a name', 'err'); return; }
@@ -269,9 +269,9 @@
       microchip: $('#pfChip').value.trim(),
       notes: $('#pfNotes').value.trim()
     };
-    const res = editingPetId
+    const res = await Promise.resolve(editingPetId
       ? D.updatePet(editingPetId, input)
-      : D.addPet(me().id, input);
+      : D.addPet(me().id, input));
     if (res.error) { PNC.toast(res.error, 'err'); return; }
     PNC.closeModal();
     PNC.toast(editingPetId ? 'Pet profile updated' : name + ' added to your family');
@@ -279,11 +279,12 @@
     renderTab('pets');
   }
 
-  function removePet(id) {
+  async function removePet(id) {
     const p = D.db.pets.find(x => x.id === id);
     if (!p) return;
     if (!window.confirm('Remove ' + p.petName + ' from your family? Any upcoming appointments are cancelled automatically.')) return;
-    D.removePet(id);
+    const res = await Promise.resolve(D.removePet(id));
+    if (res && res.error) { PNC.toast(res.error, 'err'); return; }
     PNC.toast(p.petName + ' removed');
     renderTab('pets');
     renderBellBadge();
@@ -300,12 +301,12 @@
     PNC.openModal('vaxModal');
   }
 
-  function saveVax(e) {
+  async function saveVax(e) {
     e.preventDefault();
     if (!vaxPetId) return;
     const date = $('#vfDate').value;
     if (!date) { PNC.toast('Pick the administration date', 'err'); return; }
-    const res = D.addVaccine(vaxPetId, $('#vfName').value, date, $('#vfLot').value.trim());
+    const res = await Promise.resolve(D.addVaccine(vaxPetId, $('#vfName').value, date, $('#vfLot').value.trim()));
     if (res.error) { PNC.toast(res.error, 'err'); return; }
     PNC.closeModal();
     PNC.toast('Vaccine record submitted for review');
@@ -350,18 +351,18 @@
     '</div>';
   }
 
-  function cancelBooking(id) {
+  async function cancelBooking(id) {
     const b = D.db.bookings.find(x => x.id === id);
     if (!b) return;
     if (!window.confirm('Cancel this appointment? A 30% deposit hold may apply.')) return;
-    const res = D.cancelBooking(id);
+    const res = await Promise.resolve(D.cancelBooking(id));
     if (res.error) { PNC.toast(res.error, 'err'); return; }
     PNC.toast('Appointment cancelled');
     renderTab('bookings');
     renderBellBadge();
   }
 
-  function rescheduleBooking(id) {
+  async function rescheduleBooking(id) {
     const b = D.db.bookings.find(x => x.id === id);
     if (!b) return;
     const d = window.prompt('New date (YYYY-MM-DD):', D.addDays(2));
@@ -369,7 +370,7 @@
     const h = window.prompt('New time (e.g. 9, 9.5, 14):', String(b.hour));
     const hour = Number(h);
     if (!hour) { PNC.toast('Time must be a number like 9 or 9.5', 'err'); return; }
-    const res = D.rescheduleBooking(id, d, hour);
+    const res = await Promise.resolve(D.rescheduleBooking(id, d, hour));
     if (res.error) { PNC.toast(res.error, 'err'); return; }
     PNC.toast('Moved to ' + D.fmtDate(d) + ' at ' + D.fmtTime(hour));
     renderTab('bookings');
@@ -617,9 +618,9 @@
         return;
       }
       const prim = e.target.closest('[data-primary]');
-      if (prim) { D.setPrimaryPayment(prim.dataset.primary); PNC.toast('Primary card updated'); renderTab('payment'); return; }
+      if (prim) { const r = await Promise.resolve(D.setPrimaryPayment(prim.dataset.primary)); if (r && r.error) return PNC.toast(r.error, 'err'); PNC.toast('Primary card updated'); renderTab('payment'); return; }
       const rmc = e.target.closest('[data-rmcard]');
-      if (rmc) { D.removePaymentMethod(rmc.dataset.rmcard); PNC.toast('Card removed'); renderTab('payment'); return; }
+      if (rmc) { const r = await Promise.resolve(D.removePaymentMethod(rmc.dataset.rmcard)); if (r && r.error) return PNC.toast(r.error, 'err'); PNC.toast('Card removed'); renderTab('payment'); return; }
       const so = e.target.closest('#signOutBtn');
       if (so) {
         D.logOut().then(function () {
