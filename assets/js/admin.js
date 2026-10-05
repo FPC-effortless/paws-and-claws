@@ -118,6 +118,10 @@
   function renderCreds() {
     const host = $("#credGrid");
     if (!host) return;
+    if (D.productionMode && D.productionMode()) {
+      host.innerHTML = '<div class="warn-card bad"><div><b>Demo credentials are disabled on hosted deployments.</b><p>Configure Clerk to enable staff sign-in.</p></div></div>';
+      return;
+    }
     const rows = [
       { r: "super", e: "owner@pawsandclaws.example", p: "admin123", n: "Avery Stone" },
       { r: "desk", e: "front@pawsandclaws.example", p: "desk123", n: "Jordan Pike" },
@@ -405,7 +409,9 @@
   function renderWaitlist() {
     const host = $("#waitlistHost");
     if (!host) return;
-    const list = D.db.waitlist || [];
+    let list = D.db.waitlist || [];
+    const a = admin();
+    if (a && a.role === "provider" && a.providerId) list = list.filter(w => w.providerId === a.providerId);
     if (!list.length) {
       host.innerHTML = emptyState("&#128276;", "Nobody on the waitlist", "Offered slots free up here when a booking is cancelled.");
       return;
