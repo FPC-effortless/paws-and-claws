@@ -510,6 +510,11 @@
       const o = D.currentOwner();
       if (!o) { PNC.toast("Sign in to complete this booking", "err"); window.location.href = "membership.html#join"; return; }
       collectIntake();
+      const svcForBook = D.SERVICE_BY_ID[W.serviceId];
+      if (D.productionMode && D.productionMode() && svcForBook && svcForBook.deposit) {
+        PNC.toast("Online booking deposits are not configured yet.", "err");
+        return;
+      }
       const r = await Promise.resolve(D.createBooking({
         serviceId: W.serviceId,
         petId: W.petId,
