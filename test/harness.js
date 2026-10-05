@@ -90,8 +90,11 @@ assert(!order.error, "placeOrder ok" + (order.error ? " -> " + order.error : "")
 const before = D.byId(D.db.orders, order.order.id);
 const stockAfter = D.byId(D.db.products, "p1").stock;
 assert(stockAfter === 36, "stock decremented 38 -> " + stockAfter);
-D.setOrderStage(order.order.id, "packing");
-assert(D.byId(D.db.orders, order.order.id).stage === "packing", "order stage -> packing");
+D.adminLogin("front@pawsandclaws.example", "desk123");
+const stageResult = D.setOrderStage(order.order.id, "packing");
+assert(!stageResult.error && D.byId(D.db.orders, order.order.id).stage === "packing", "authorized order stage -> packing");
+D.adminLogout();
+D.setSession("ow-1");
 
 /* Delivery is free for members on every plan. The $35-minimum / $6-fee
    experiment was reverted in favour of the homepage promise, so a
@@ -118,8 +121,11 @@ D.setSession("ow-1");
 /* listings + inquiry */
 const inq = D.submitInquiry("lt-1");
 assert(!inq.error, "inquiry ok -> " + (inq.ref || inq.error));
-D.setListingStatus("lt-1", "reserved");
-assert(D.byId(D.db.listings, "lt-1").status === "reserved", "listing reserved");
+D.adminLogin("retail@pawsandclaws.example", "retail123");
+const listingResult = D.setListingStatus("lt-1", "reserved");
+assert(!listingResult.error && D.byId(D.db.listings, "lt-1").status === "reserved", "authorized listing reserved");
+D.adminLogout();
+D.setSession("ow-1");
 
 /* CRM */
 D.updatePet("pt-1", { weightKg: 32 });
@@ -127,8 +133,11 @@ assert(D.byId(D.db.pets, "pt-1").weightKg === 32, "pet weight updated");
 D.addVaccine("pt-1", "Leptospirosis", D.todayISO(), "L-1");
 const pend = D.byId(D.db.pets, "pt-1").vaccines.some((v) => v.status === "pending");
 assert(pend, "vaccine uploaded as pending");
-D.setVaccineStatus("pt-1", D.byId(D.db.pets, "pt-1").vaccines.length - 1, "approved");
-assert(D.byId(D.db.pets, "pt-1").vaccines.slice(-1)[0].status === "approved", "vaccine approved");
+D.adminLogin("front@pawsandclaws.example", "desk123");
+const vaxResult = D.setVaccineStatus("pt-1", D.byId(D.db.pets, "pt-1").vaccines.length - 1, "approved");
+assert(!vaxResult.error && D.byId(D.db.pets, "pt-1").vaccines.slice(-1)[0].status === "approved", "authorized vaccine approved");
+D.adminLogout();
+D.setSession("ow-1");
 
 /* RBAC */
 D.adminLogin("owner@pawsandclaws.example", "admin123");
@@ -164,13 +173,28 @@ const li = D.logIn("test@example.com", "password123");
 assert(!li.error, "logIn with new account ok" + (li.error ? " -> " + li.error : ""));
 const bad = D.logIn("test@example.com", "wrongpassword");
 assert(!!bad.error, "bad password rejected");
+D.setSession("ow-1");
+const badQty = D.placeOrder([{ id: "p1", qty: -5 }], "delivery");
+assert(!!badQty.error, "negative order quantities are rejected");
+D.adminLogin("retail@pawsandclaws.example", "retail123");
+const beforeStock = D.byId(D.db.products, "p2").stock;
+const badProduct = D.updateProduct("p2", { price: -1 });
+assert(!!badProduct.error, "negative product price is rejected");
+assert(D.byId(D.db.products, "p2").stock === beforeStock, "rejected product edit leaves stock unchanged");
+D.adminLogout();
+D.setSession("ow-1");
+const inquiryDetail = D.submitInquiry("lt-2", "I would like to meet Mochi this weekend.");
+assert(!inquiryDetail.error && D.db.inquiries.some(i => i.ref === inquiryDetail.ref && i.message.indexOf("meet Mochi") !== -1), "inquiry message is retained");
 
 /* waitlist + leave */
 D.setSession("ow-1");
 const wl = D.joinWaitlist("sv-haircut", "Rosa", "mornings");
 assert(!wl.error, "joined waitlist" + (wl.error ? " -> " + wl.error : ""));
-D.addLeave("Rosa", D.addDays(5), "Vacation");
-assert(D.providerWorking(D.PROVIDER_BY_ID.Rosa, D.addDays(5)) === false, "leave blocks working day");
+D.adminLogin("owner@pawsandclaws.example", "admin123");
+const leaveResult = D.addLeave("Rosa", D.addDays(5), "Vacation");
+assert(!leaveResult.error && D.providerWorking(D.PROVIDER_BY_ID.Rosa, D.addDays(5)) === false, "authorized leave blocks working day");
+D.adminLogout();
+D.setSession("ow-1");
 
 /* removing a pet must not orphan active bookings */
 D.setSession("ow-1");
@@ -308,8 +332,8 @@ sandbox.PNC_CLERK.currentAdmin = function () {
   return { id: "u2", clerkId: "u2", email: "unknown-role@example.com", name: "Mystery", role: "intern", source: "clerk" };
 };
 const fb = D.currentAdmin();
-assert(!!fb && fb.role === "desk", "unknown Clerk role falls back to desk");
-assert(D.can("bookings.manage") === true, "fallback role still gets desk permissions");
+assert(fb === null, "unknown Clerk role is denied");
+assert(D.can("bookings.manage") === false, "unknown Clerk role gets no permissions");
 
 /* logOut() returns a promise in both modes so callers can await it
    without a type error (see the account.js sign-out handlers). */

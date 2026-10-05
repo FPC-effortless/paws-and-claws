@@ -29,7 +29,7 @@
   /* assets/ are always referenced from the site root so the same markup
      works at /index.html and /admin/ (which is one level deeper) */
   function asset(p) {
-    return (location.pathname.indexOf("/admin/") === 0 ? "../" : "/") + "assets/" + p;
+    return (location.pathname.indexOf("/admin/") !== -1 ? "../assets/" : "assets/") + p;
   }
 
   function brandImg(cls) {
@@ -186,17 +186,35 @@
     document.body.appendChild(pop);
     const btn = $("#notifBtn");
     btn.setAttribute("aria-expanded", "true");
-    $("#markAll", pop) && $("#markAll", pop).addEventListener("click", function () {
-      (D.db.notifications || []).forEach(function (n) { if (n.ownerId === (D.currentOwner() || {}).id) n.read = true; });
-      D.persist();
+    $("#markAll", pop) && $("#markAll", pop).addEventListener("click", async function () {
+      if (D.productionMode && D.productionMode()) {
+        if (!global.PNC_CONVEX || !global.PNC_CONVEX.active) return PNC.toast("Secure backend is not available.", "err");
+        const r = await global.PNC_CONVEX.mutate("markNotificationsRead", {});
+        if (r && r.error) return PNC.toast(r.error, "err");
+        await global.PNC_CONVEX.syncBootstrap();
+      } else {
+        (D.db.notifications || []).forEach(function (n) { if (n.ownerId === (D.currentOwner() || {}).id) n.read = true; });
+        D.persist();
+      }
       renderBell();
       closePop();
       PNC.toast("All notifications marked as read");
     });
-    $$("[data-notif]", pop).forEach(function (b) {
-      b.addEventListener("click", function () {
+    $("[data-notif]", pop).forEach(function (b) {
+      b.addEventListener("click", async function () {
         const n = D.byId(D.db.notifications, b.dataset.notif);
-        if (n) { n.read = true; D.persist(); }
+        if (!n) return;
+        if (D.productionMode && D.productionMode()) {
+          const r = await Promise.resolve((D.currentOwner() && global.PNC_CONVEX && global.PNC_CONVEX.active)
+            ? global.PNC_CONVEX.mutate("markNotificationRead", { notificationId: n.id }).then(function (x) {
+                return global.PNC_CONVEX.syncBootstrap().then(function () { return x; });
+              })
+            : { error: "Secure backend is not available." });
+          if (r && r.error) return (global.PNC ? global.PNC.toast(r.error, "err") : undefined);
+        } else {
+          n.read = true;
+          D.persist();
+        }
         renderBell();
         closePop();
       });

@@ -205,7 +205,8 @@
   <script src="assets/js/app.js"></script>
   <script src="assets/js/data.js"></script>
   <script src="assets/js/nav.js"></script>
-  <script src="assets/js/convexClient.js"></script>
+  <script src="assets/js/config.js"></script>
+<script src="assets/js/convexClient.js"></script>
   <!-- Clerk identity layer. The publishable key lives in clerk.js;
        without one the local forms below stay as the demo path. -->
   <script src="assets/js/clerk.js"></script>
@@ -218,13 +219,13 @@
         var plans = [
           { id: "puppy", name: "Puppy Pass", price: "Free", period: "forever", badge: "", featured: false,
             blurb: "Everything you need to get started, on the house.",
-            perks: ["5% off all food and treats", "Free delivery, no minimum", "Welcome treat box", "Member account + pet profiles"] },
+            perks: ["5% off products and services", "Free delivery, no minimum", "Member account + pet profiles"] },
           { id: "adult", name: "Adult Adventurer", price: "$9", period: "per month", badge: "Most popular", featured: true,
             blurb: "For pets with an active routine and a healthy appetite.",
-            perks: ["15% off everything, every day", "Free delivery, no minimum", "Free monthly dental stick", "Priority booking for grooming", "Birthday treat box"] },
+            perks: ["15% off products and services", "Free delivery, no minimum"] },
           { id: "senior", name: "Senior Snuggler", price: "$19", period: "per month", badge: "Best value", featured: false,
             blurb: "Maximum perks for senior pets and multi-pet households.",
-            perks: ["25% off everything, every day", "Free delivery + same-day local", "Unlimited 24/7 vet chat", "Free annual health checkup", "Two birthday boxes per year", "Extra 10% off all services"] }
+            perks: ["25% off products and services", "Free delivery, no minimum"] }
         ];
         grid.innerHTML = plans.map(function (pl) {
           var isCur = pl.id === currentPlan;
@@ -238,8 +239,8 @@
             }).join("") + "</ul>" +
             (isCur
               ? '<button class="btn btn-ghost btn-block" disabled>Your current plan</button>'
-              : '<button class="btn ' + (pl.featured ? "btn-primary" : "btn-teal") + ' btn-block" data-plan="' + pl.id + '">' +
-                (current ? "Switch to " + pl.name : "Choose " + pl.name) + "</button>") +
+              : '<button class="btn ' + (pl.featured ? "btn-primary" : "btn-teal") + ' btn-block" ' + (PNC_DB.productionMode() && pl.id !== "puppy" ? 'disabled' : '') + ' data-plan="' + pl.id + '">' +
+                (PNC_DB.productionMode() && pl.id !== "puppy" ? "Billing setup required" : (current ? "Switch to " + pl.name : "Choose " + pl.name)) + "</button>") +
             "</div>";
         }).join("");
       }
@@ -288,6 +289,21 @@
       }
       bindPlatform(document.getElementById("signupForm"), "signup");
       bindPlatform(document.getElementById("loginForm"), "login");
+      grid && grid.addEventListener("click", async function (e) {
+        var b = e.target.closest("[data-plan]");
+        if (!b || b.disabled) return;
+        var owner = PNC_DB.currentOwner();
+        if (!owner) {
+          show("signup");
+          var radio = document.querySelector('input[name="plan"][value="' + b.dataset.plan + '"]');
+          if (radio) radio.checked = true;
+          return;
+        }
+        var r = await Promise.resolve(PNC_DB.updateOwner(owner.id, { plan: b.dataset.plan }));
+        if (r && r.error) return PNC.toast(r.error, "err");
+        PNC.toast("Plan updated to " + b.dataset.plan);
+        location.reload();
+      });
 
       /* Clerk (REPLACE mode): with a publishable key configured, this
          page mounts Clerk's <SignUp/> and the local forms are hidden.

@@ -36,7 +36,9 @@
         '<div class="svc-foot">' +
           '<span class="svc-price">' + money(s.price) + "</span>" +
           '<span class="svc-dur">' + s.duration + " hr" + (s.duration === 1 ? "" : "s") + "</span>" +
-          '<button class="mini-btn primary" data-book="' + s.id + '">Book now</button>' +
+          (s.duration >= 24
+            ? '<a class="mini-btn" href="contact.html">Contact us</a>'
+            : '<button class="mini-btn primary" data-book="' + s.id + '">Book now</button>') +
         "</div>" +
       "</div>"
     );
@@ -232,11 +234,11 @@
     host.innerHTML = html;
 
     const wl = $("#wlJoin");
-    if (wl) wl.addEventListener("click", function () {
+    if (wl) wl.addEventListener("click", async function () {
       const o = D.currentOwner();
       if (!o) { PNC.toast("Create a free account to join the waitlist", "err"); window.location.href = "membership.html#join"; return; }
       const svc2 = D.SERVICE_BY_ID[W.serviceId];
-      const r = D.joinWaitlist(W.serviceId, svc2.staff[0], "No slot on " + W.date);
+      const r = await Promise.resolve(D.joinWaitlist(W.serviceId, svc2.staff[0], "No slot on " + W.date));
       if (!r.error) { PNC.toast("Added to the waitlist — we'll text you!"); renderBell(); }
     });
   }
@@ -348,7 +350,7 @@
     /* Mirror createBooking: members get their plan discount. */
     const rate = o ? (D.PLAN_DISCOUNT[o.plan] || 0) : 0;
     const net = Math.round(svc.price * (1 - rate) * 100) / 100;
-    const dep = svc.deposit ? Math.round(net * D.DEPOSIT_RATE * 100) / 100 : net;
+    const dep = svc.deposit ? Math.round(net * D.DEPOSIT_RATE * 100) / 100 : 0;
     return { deposit: dep, remainder: Math.round((net - dep) * 100) / 100, net, rate };
   }
 
@@ -371,9 +373,9 @@
       (b.rate
         ? '<div class="row"><span>Member discount (' + Math.round(b.rate * 100) + '%)</span><span style="color:var(--ok)">&minus;' + money(Math.round(svc.price * b.rate * 100) / 100) + "</span></div>"
         : "") +
-      '<div class="row"><span>Deposit today (30%)</span><span><b>' + money(b.deposit) + "</b></span></div>" +
-      '<div class="row"><span>Balance at the visit</span><span>' + money(b.remainder) + "</span></div>" +
-      '<div class="row total"><span>Charged now</span><span>' + money(b.deposit) + "</span></div>" +
+      '<div class="row"><span>' + (svc.deposit ? "Deposit today (30%)" : "Payment due at visit") + '</span><span><b>' + money(b.deposit) + "</b></span></div>" +
+      (svc.deposit ? '<div class="row"><span>Balance at the visit</span><span>' + money(b.remainder) + "</span></div>" : "") +
+      '<div class="row total"><span>' + (svc.deposit ? "Charged now" : "Charged now") + '</span><span>' + money(b.deposit) + "</span></div>" +
       '<p class="tiny muted" style="margin:10px 0 0">Free cancellation up to 24 hours before. Demo checkout — no real card is charged.</p>';
 
     $("#acctGate").innerHTML = o
@@ -504,18 +506,23 @@
       t.classList.toggle("on");
     });
 
-    $("#wizConfirm").addEventListener("click", function () {
+    $("#wizConfirm").addEventListener("click", async function () {
       const o = D.currentOwner();
       if (!o) { PNC.toast("Sign in to complete this booking", "err"); window.location.href = "membership.html#join"; return; }
       collectIntake();
-      const r = D.createBooking({
+      const svcForBook = D.SERVICE_BY_ID[W.serviceId];
+      if (D.productionMode && D.productionMode() && svcForBook && svcForBook.deposit) {
+        PNC.toast("Online booking deposits are not configured yet.", "err");
+        return;
+      }
+      const r = await Promise.resolve(D.createBooking({
         serviceId: W.serviceId,
         petId: W.petId,
         date: W.date,
         hour: W.hour,
         providerId: W.providerId,
         intake: W.intake
-      });
+      }));
       if (r.error) { PNC.toast(r.error, "err"); return; }
       const bk = r.booking;
       const svc = D.SERVICE_BY_ID[bk.serviceId];
@@ -554,18 +561,19 @@
     });
 
     /* quick add-pet modal */
-    $("#quickPetForm").addEventListener("submit", function (e) {
+    $("#quickPetForm").addEventListener("submit", async function (e) {
       e.preventDefault();
       const o = D.currentOwner();
       if (!o) { PNC.toast("Create an account first", "err"); window.location.href = "membership.html#join"; return; }
       const name = $("#qp-name").value.trim();
       if (name.length < 1) { PNC.toast("Give your pet a name", "err"); return; }
-      D.addPet(o.id, {
+      const r = await Promise.resolve(D.addPet(o.id, {
         petName: name,
         species: $("#qp-species").value || "Dog",
         breed: $("#qp-breed").value.trim(),
         dob: $("#qp-dob").value || ""
-      });
+      }));
+      if (r && r.error) { PNC.toast(r.error, "err"); return; }
       PNC.toast(name + " added to your account 🐾");
       PNC.closeModal("petModal");
       e.target.reset();

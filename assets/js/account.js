@@ -254,7 +254,7 @@
     PNC.openModal('petModal');
   }
 
-  function savePet(e) {
+  async function savePet(e) {
     e.preventDefault();
     const name = $('#pfName').value.trim();
     if (name.length < 1) { PNC.toast('Give your pet a name', 'err'); return; }
@@ -269,9 +269,9 @@
       microchip: $('#pfChip').value.trim(),
       notes: $('#pfNotes').value.trim()
     };
-    const res = editingPetId
+    const res = await Promise.resolve(editingPetId
       ? D.updatePet(editingPetId, input)
-      : D.addPet(me().id, input);
+      : D.addPet(me().id, input));
     if (res.error) { PNC.toast(res.error, 'err'); return; }
     PNC.closeModal();
     PNC.toast(editingPetId ? 'Pet profile updated' : name + ' added to your family');
@@ -279,11 +279,12 @@
     renderTab('pets');
   }
 
-  function removePet(id) {
+  async function removePet(id) {
     const p = D.db.pets.find(x => x.id === id);
     if (!p) return;
     if (!window.confirm('Remove ' + p.petName + ' from your family? Any upcoming appointments are cancelled automatically.')) return;
-    D.removePet(id);
+    const res = await Promise.resolve(D.removePet(id));
+    if (res && res.error) { PNC.toast(res.error, 'err'); return; }
     PNC.toast(p.petName + ' removed');
     renderTab('pets');
     renderBellBadge();
@@ -300,12 +301,12 @@
     PNC.openModal('vaxModal');
   }
 
-  function saveVax(e) {
+  async function saveVax(e) {
     e.preventDefault();
     if (!vaxPetId) return;
     const date = $('#vfDate').value;
     if (!date) { PNC.toast('Pick the administration date', 'err'); return; }
-    const res = D.addVaccine(vaxPetId, $('#vfName').value, date, $('#vfLot').value.trim());
+    const res = await Promise.resolve(D.addVaccine(vaxPetId, $('#vfName').value, date, $('#vfLot').value.trim()));
     if (res.error) { PNC.toast(res.error, 'err'); return; }
     PNC.closeModal();
     PNC.toast('Vaccine record submitted for review');
@@ -350,18 +351,18 @@
     '</div>';
   }
 
-  function cancelBooking(id) {
+  async function cancelBooking(id) {
     const b = D.db.bookings.find(x => x.id === id);
     if (!b) return;
     if (!window.confirm('Cancel this appointment? A 30% deposit hold may apply.')) return;
-    const res = D.cancelBooking(id);
+    const res = await Promise.resolve(D.cancelBooking(id));
     if (res.error) { PNC.toast(res.error, 'err'); return; }
     PNC.toast('Appointment cancelled');
     renderTab('bookings');
     renderBellBadge();
   }
 
-  function rescheduleBooking(id) {
+  async function rescheduleBooking(id) {
     const b = D.db.bookings.find(x => x.id === id);
     if (!b) return;
     const d = window.prompt('New date (YYYY-MM-DD):', D.addDays(2));
@@ -369,7 +370,7 @@
     const h = window.prompt('New time (e.g. 9, 9.5, 14):', String(b.hour));
     const hour = Number(h);
     if (!hour) { PNC.toast('Time must be a number like 9 or 9.5', 'err'); return; }
-    const res = D.rescheduleBooking(id, d, hour);
+    const res = await Promise.resolve(D.rescheduleBooking(id, d, hour));
     if (res.error) { PNC.toast(res.error, 'err'); return; }
     PNC.toast('Moved to ' + D.fmtDate(d) + ' at ' + D.fmtTime(hour));
     renderTab('bookings');
@@ -436,7 +437,7 @@
     const cs = cards();
     $('#panelPayment').innerHTML =
       '<div class="panel-head"><h3>Payment methods</h3>' +
-      '<button type="button" class="btn btn-teal btn-sm" id="addCardBtn">&#43; Add a card</button></div>' +
+      '<button type="button" class="btn btn-teal btn-sm" id="addCardBtn" ' + ((D.productionMode && D.productionMode()) ? 'disabled' : '') + '>&#43; Add a card</button></div>' +
       (cs.length ? '<div class="pay-grid">' + cs.map(cardRow).join('') + '</div>'
         : '<div class="empty-card"><h3>No cards on file</h3>' +
           '<p>Add a card for one-tap checkout and automatic member discounts.</p></div>') +
@@ -472,12 +473,13 @@
     '</div>';
   }
 
-  function saveCard(e) {
+  async function saveCard(e) {
     e.preventDefault();
     const last4 = $('#cfLast4').value.trim();
     if (!/^\d{4}$/.test(last4)) { PNC.toast('Enter the last 4 digits', 'err'); return; }
-    D.addPaymentMethod(me().id, $('#cfBrand').value, last4,
-      Number($('#cfM').value), Number($('#cfY').value));
+    const res = await Promise.resolve(D.addPaymentMethod(me().id, $('#cfBrand').value, last4,
+      Number($('#cfM').value), Number($('#cfY').value)));
+    if (res && res.error) { PNC.toast(res.error, 'err'); return; }
     PNC.toast('Card added');
     renderTab('payment');
   }
@@ -493,7 +495,7 @@
             '<div class="field"><label for="stName">Full name</label>' +
               '<input class="input" id="stName" type="text" value="' + D.esc(m.fullName) + '" required></div>' +
             '<div class="field"><label for="stEmail">Email</label>' +
-              '<input class="input" id="stEmail" type="email" value="' + D.esc(m.email) + '" required></div>' +
+              '<input class="input" id="stEmail" type="email" value="' + D.esc(m.email) + '" ' + ((D.productionMode && D.productionMode()) ? 'readonly' : '') + ' required></div>' +
             '<div class="field"><label for="stPhone">Phone</label>' +
               '<input class="input" id="stPhone" type="tel" value="' + D.esc(m.phone || '') + '"></div>' +
             '<div class="field"><label for="stEmerg">Emergency contact</label>' +
@@ -520,15 +522,15 @@
       '</div>';
   }
 
-  function saveProfile(e) {
+  async function saveProfile(e) {
     e.preventDefault();
-    const res = D.updateOwner(me().id, {
+    const res = await Promise.resolve(D.updateOwner(me().id, {
       fullName: $('#stName').value.trim(),
       email: $('#stEmail').value.trim(),
       phone: $('#stPhone').value.trim(),
       emergencyContact: $('#stEmerg').value.trim(),
       address: $('#stAddr').value.trim()
-    });
+    }));
     if (res.error) { PNC.toast(res.error, 'err'); return; }
     PNC.toast('Profile saved');
     window.dispatchEvent(new CustomEvent('pnc:auth'));
@@ -597,7 +599,7 @@
     $('#vaxForm').addEventListener('submit', saveVax);
 
     /* delegated panel clicks */
-    document.addEventListener('click', function (e) {
+    document.addEventListener('click', async function (e) {
       const addBtn = e.target.closest('#addPetBtn, #addPetBtn2');
       if (addBtn) { openPetModal(null); return; }
       const edit = e.target.closest('.pet-edit');
@@ -617,9 +619,9 @@
         return;
       }
       const prim = e.target.closest('[data-primary]');
-      if (prim) { D.setPrimaryPayment(prim.dataset.primary); PNC.toast('Primary card updated'); renderTab('payment'); return; }
+      if (prim) { const r = await Promise.resolve(D.setPrimaryPayment(prim.dataset.primary)); if (r && r.error) return PNC.toast(r.error, 'err'); PNC.toast('Primary card updated'); renderTab('payment'); return; }
       const rmc = e.target.closest('[data-rmcard]');
-      if (rmc) { D.removePaymentMethod(rmc.dataset.rmcard); PNC.toast('Card removed'); renderTab('payment'); return; }
+      if (rmc) { const r = await Promise.resolve(D.removePaymentMethod(rmc.dataset.rmcard)); if (r && r.error) return PNC.toast(r.error, 'err'); PNC.toast('Card removed'); renderTab('payment'); return; }
       const so = e.target.closest('#signOutBtn');
       if (so) {
         D.logOut().then(function () {

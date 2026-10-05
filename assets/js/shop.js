@@ -183,9 +183,13 @@
 
   /* ---------- totals & checkout ---------- */
 
-  function checkout() {
+  async function checkout() {
     const items = PNC.Cart.items;
     if (!items.length) { PNC.toast('Your cart is empty'); return; }
+    if (D.productionMode && D.productionMode()) {
+      PNC.toast('Online checkout is disabled until a payment processor is configured.', 'err');
+      return;
+    }
     const m = member();
     if (!m) {
       PNC.toast('Create a free account to check out');
@@ -197,11 +201,15 @@
       return p ? { id: p.id, qty: Math.min(i.qty, p.stock) } : null;
     }).filter(Boolean);
     if (!lines.length) { PNC.toast('Those items are no longer available'); return; }
-    const res = D.placeOrder(lines, state.ful);
-    if (res.error) { PNC.toast(res.error); return; }
+    const res = await Promise.resolve(D.placeOrder(lines, state.ful));
+    if (res.error) { PNC.toast(res.error, 'err'); return; }
     PNC.Cart.clear();
     PNC.closeModal();
-    PNC.toast('Order ' + res.order.id + ' placed! Track it in your account.');
+    if (res.order && res.order.paymentStatus === 'pending') {
+      PNC.toast('Order ' + res.order.id + ' created. Payment is still pending.');
+    } else {
+      PNC.toast('Order ' + res.order.id + ' placed! Track it in your account.');
+    }
     setTimeout(function () { window.location.href = 'account.html#orders'; }, 1100);
   }
 
