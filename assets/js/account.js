@@ -437,7 +437,7 @@
     const cs = cards();
     $('#panelPayment').innerHTML =
       '<div class="panel-head"><h3>Payment methods</h3>' +
-      '<button type="button" class="btn btn-teal btn-sm" id="addCardBtn">&#43; Add a card</button></div>' +
+      '<button type="button" class="btn btn-teal btn-sm" id="addCardBtn" ' + ((D.productionMode && D.productionMode()) ? 'disabled' : '') + '>&#43; Add a card</button></div>' +
       (cs.length ? '<div class="pay-grid">' + cs.map(cardRow).join('') + '</div>'
         : '<div class="empty-card"><h3>No cards on file</h3>' +
           '<p>Add a card for one-tap checkout and automatic member discounts.</p></div>') +
@@ -495,7 +495,7 @@
             '<div class="field"><label for="stName">Full name</label>' +
               '<input class="input" id="stName" type="text" value="' + D.esc(m.fullName) + '" required></div>' +
             '<div class="field"><label for="stEmail">Email</label>' +
-              '<input class="input" id="stEmail" type="email" value="' + D.esc(m.email) + '" required></div>' +
+              '<input class="input" id="stEmail" type="email" value="' + D.esc(m.email) + '" ' + ((D.productionMode && D.productionMode()) ? 'readonly' : '') + ' required></div>' +
             '<div class="field"><label for="stPhone">Phone</label>' +
               '<input class="input" id="stPhone" type="tel" value="' + D.esc(m.phone || '') + '"></div>' +
             '<div class="field"><label for="stEmerg">Emergency contact</label>' +
