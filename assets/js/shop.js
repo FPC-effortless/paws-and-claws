@@ -186,6 +186,10 @@
   async function checkout() {
     const items = PNC.Cart.items;
     if (!items.length) { PNC.toast('Your cart is empty'); return; }
+    if (D.productionMode && D.productionMode()) {
+      PNC.toast('Online checkout is disabled until a payment processor is configured.', 'err');
+      return;
+    }
     const m = member();
     if (!m) {
       PNC.toast('Create a free account to check out');
