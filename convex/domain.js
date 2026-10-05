@@ -239,7 +239,9 @@ async function bootstrapData(ctx) {
       return out;
     }
     if (admin.role === "retail") {
-      out.owners = await ctx.db.query("owners").collect();
+      out.owners = (await ctx.db.query("owners").collect()).map(o => ({
+        id: o.id, fullName: o.fullName, email: o.email, phone: o.phone || ""
+      }));
       out.orders = await ctx.db.query("orders").collect();
       out.listings = await ctx.db.query("listings").collect();
       out.audit = await ctx.db.query("audit").collect();
@@ -782,6 +784,10 @@ export const mutate = mutation({
         createdAt: today(), status: "new"
       });
       if (matchedOwner) {
+        await ctx.db.insert("messages", {
+          id: uid("msg"), ownerId: matchedOwner.id, direction: "in", channel: "email",
+          subject, body: message, read: false, createdAt: today()
+        });
         await notify(ctx, matchedOwner.id, "contact", "Message received", "We've received your message.");
       }
       return { ok: true };
