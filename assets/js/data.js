@@ -1012,8 +1012,12 @@
     if (!p) return { error: "Product not found." };
     ["name", "cat", "price", "stock", "lowAt", "desc", "icon"].forEach((k) => {
       if (patch[k] !== undefined) p[k] = patch[k];
-    if (!Number.isFinite(Number(p.price)) || Number(p.price) < 0 || !Number.isInteger(Number(p.stock)) || Number(p.stock) < 0) return { error: "Invalid product values." };
     });
+    if (!Number.isFinite(Number(p.price)) || Number(p.price) < 0 ||
+        !Number.isInteger(Number(p.stock)) || Number(p.stock) < 0 ||
+        !Number.isInteger(Number(p.lowAt)) || Number(p.lowAt) < 0) {
+      return { error: "Invalid product values." };
+    }
     p.lowStock = p.stock <= p.lowAt;
     audit("Product edited", p.name);
     persist();
@@ -1213,9 +1217,20 @@
   function searchCRM(q) {
     const t = String(q || "").trim().toLowerCase();
     if (!t) return { owners: [], pets: [], bookings: [] };
-    const owners = db.owners.filter((o) => (o.fullName + " " + o.email + " " + (o.phone || "")).toLowerCase().indexOf(t) !== -1);
-    const pets = db.pets.filter((p) => (p.petName + " " + p.breed + " " + p.microchip).toLowerCase().indexOf(t) !== -1);
-    const bookings = db.bookings.filter((b) => b.id.toLowerCase().indexOf(t) !== -1);
+    let owners = db.owners.slice();
+    let pets = db.pets.slice();
+    let bookings = db.bookings.slice();
+    const a = currentAdmin();
+    if (a && a.role === "provider" && a.providerId) {
+      bookings = bookings.filter(b => b.providerId === a.providerId);
+      const ownerIds = new Set(bookings.map(b => b.ownerId));
+      const petIds = new Set(bookings.map(b => b.petId));
+      owners = owners.filter(o => ownerIds.has(o.id));
+      pets = pets.filter(p => petIds.has(p.id));
+    }
+    owners = owners.filter((o) => (o.fullName + " " + o.email + " " + (o.phone || "")).toLowerCase().indexOf(t) !== -1);
+    pets = pets.filter((p) => (p.petName + " " + p.breed + " " + p.microchip).toLowerCase().indexOf(t) !== -1);
+    bookings = bookings.filter((b) => b.id.toLowerCase().indexOf(t) !== -1);
     return { owners, pets, bookings };
   }
 
