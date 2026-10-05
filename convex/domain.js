@@ -775,7 +775,8 @@ export const mutate = mutation({
     }
 
     if (op === "submitInquiry") {
-      const owner = await ownerFor(ctx, true);
+      const identityValue = await ctx.auth.getUserIdentity();
+      const owner = identityValue ? await ownerFor(ctx, true) : null;
       const listing = await ctx.db.query("listings").filter(q => q.eq(q.field("id"), p.listingId)).first();
       if (!listing || listing.status !== "available") throw new Error("Listing is not available.");
       const message = String(p.message || "").trim().slice(0, 2000);
