@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /* Trusted one-time bootstrap for a Convex deployment.
    Run after "npx convex dev" has generated convex/_generated/api_cjs.cjs.
 
