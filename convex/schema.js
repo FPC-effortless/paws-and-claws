@@ -167,7 +167,7 @@ export default defineSchema({
     .index("by_ownerId", ["ownerId"]),
 
   services: defineTable({
-    id: v.optional(v.string()),
+    id: v.optional(v.string()),: v.optional(v.string()),
     group: v.string(),
     name: v.string(),
     icon: v.optional(v.string()),
