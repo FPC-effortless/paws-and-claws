@@ -373,27 +373,27 @@
         "</tr>";
       }).join("") + "</tbody>";
 
-    $$("[data-bkdone]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        const r = D.setBookingStatus(b.dataset.bkdone, "completed");
+    $("[data-bkdone]").forEach(function (b) {
+      b.addEventListener("click", async function () {
+        const r = await Promise.resolve(D.setBookingStatus(b.dataset.bkdone, "completed"));
         if (r.error) return toast(r.error, "err");
         toast("Booking completed");
         render();
       });
     });
-    $$("[data-bkcancel]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        const r = D.setBookingStatus(b.dataset.bkcancel, "cancelled");
+    $("[data-bkcancel]").forEach(function (b) {
+      b.addEventListener("click", async function () {
+        const r = await Promise.resolve(D.setBookingStatus(b.dataset.bkcancel, "cancelled"));
         if (r.error) return toast(r.error, "err");
         toast("Booking cancelled");
         render();
       });
     });
-    $$("[data-bknote]").forEach(function (b) {
-      b.addEventListener("click", function () {
+    $("[data-bknote]").forEach(function (b) {
+      b.addEventListener("click", async function () {
         const note = window.prompt("Internal note for " + b.dataset.bknote + ":");
         if (!note) return;
-        const r = D.addBookingNote(b.dataset.bknote, note);
+        const r = await Promise.resolve(D.addBookingNote(b.dataset.bknote, note));
         if (r.error) return toast(r.error, "err");
         toast("Internal note added");
       });
@@ -420,9 +420,10 @@
         (w.note ? "<p style='margin-top:3px'>\"" + esc(w.note) + "\"</p>" : "") +
       "</div>";
     }).join("");
-    $$("[data-wlrm]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        D.removeWaitlist(b.dataset.wlrm);
+    $("[data-wlrm]").forEach(function (b) {
+      b.addEventListener("click", async function () {
+        const r = await Promise.resolve(D.removeWaitlist(b.dataset.wlrm));
+        if (r && r.error) return toast(r.error, "err");
         toast("Removed from the waitlist");
         render();
       });
@@ -505,7 +506,7 @@
                 return '<tr class="vax-row"><td>' + esc(v.name) + "</td><td>" + D.fmtDate(v.date) + "</td>" +
                   "<td>" + pill(v.status, v.status === "approved" ? "primary" : v.status === "rejected" ? "danger" : "warn") + "</td>" +
                   "<td>" + (v.status !== "approved"
-                    ? '<button class="mini-btn primary" data-vok="' + p.id + ":" + i + '">Approve</button>'
+                    ? (allowed("crm.edit") ? '<button class="mini-btn primary" data-vok="' + p.id + ":" + i + '">Approve</button>' : "")'
                     : "") + "</td></tr>";
               }).join("") + "</tbody></table>"
             : '<p class="hint" style="margin:8px 0 0">No vaccine records on file.</p>') +
@@ -593,7 +594,7 @@
     });
 
     const form = $("#posForm");
-    if (form) form.addEventListener("submit", function (e) {
+    if (form) form.addEventListener("submit", async function (e) {
       e.preventDefault();
       const ownerId = $("#posOwner").value;
       const lines = posLines.filter(function (l) { return Number(l.amount) > 0; });
@@ -602,7 +603,7 @@
         $("#posMsg").textContent = "Add at least one line with an amount.";
         return toast("Add at least one line with an amount", "err");
       }
-      const r = D.posCharge(ownerId, lines, $("#posMethod").value);
+      const r = await Promise.resolve(D.posCharge(ownerId, lines, $("#posMethod").value));
       if (r.error) {
         $("#posMsg").style.color = "var(--danger)";
         $("#posMsg").textContent = r.error;
@@ -646,7 +647,7 @@
             ? '<button class="mini-btn" data-ostage="' + o.id + ":" + STAGES[idx - 1] + '">&larr; ' + esc(STAGES[idx - 1]) + "</button>" : "") +
           (idx < STAGES.length - 1 && o.status !== "cancelled"
             ? '<button class="mini-btn primary" data-ostage="' + o.id + ":" + STAGES[idx + 1] + '">' + esc(STAGES[idx + 1]) + " &rarr;</button>" : "") +
-          (o.status !== "cancelled" && o.status !== "delivered"
+          (allowed("payments.refund") && o.status !== "cancelled" && o.status !== "delivered"
             ? '<button class="mini-btn danger" data-orefund="' + o.id + '">Refund</button>' : "") +
         "</span></div></div>";
     }).join("");
@@ -660,13 +661,13 @@
         render();
       });
     });
-    $$("[data-orefund]").forEach(function (b) {
-      b.addEventListener("click", function () {
+    $("[data-orefund]").forEach(function (b) {
+      b.addEventListener("click", async function () {
         const o = D.byId(D.db.orders, b.dataset.orefund);
         if (!o) return;
         const amt = window.prompt("Refund amount on " + o.id + " (paid " + money(o.paid) + "):", String(o.paid));
         if (amt === null) return;
-        const r = D.refund(o.id, Number(amt));
+        const r = await Promise.resolve(D.refund(o.id, Number(amt)));
         if (r.error) return toast(r.error, "err");
         toast("Refunded " + money(Number(amt)));
         render();
@@ -703,24 +704,24 @@
         "</tr>";
       }).join("") + "</tbody>";
 
-    $$("[data-stk]").forEach(function (b) {
-      b.addEventListener("click", function () {
+    $("[data-stk]").forEach(function (b) {
+      b.addEventListener("click", async function () {
         const parts = b.dataset.stk.split(":");
-        const r = D.adjustStock(parts[0], Number(parts[1]), "admin adjustment");
+        const r = await Promise.resolve(D.adjustStock(parts[0], Number(parts[1]), "admin adjustment"));
         if (r.error) return toast(r.error, "err");
         toast(r.product.name + " → " + r.product.stock + " in stock");
         render();
       });
     });
-    $$("[data-pedit]").forEach(function (b) {
-      b.addEventListener("click", function () {
+    $("[data-pedit]").forEach(function (b) {
+      b.addEventListener("click", async function () {
         const p = D.byId(D.db.products, b.dataset.pedit);
         if (!p) return;
         const price = window.prompt("Price for " + p.name + ":", String(p.price));
         if (price === null) return;
         const stock = window.prompt("Stock level:", String(p.stock));
         if (stock === null) return;
-        const r = D.updateProduct(p.id, { price: Number(price), stock: Number(stock) });
+        const r = await Promise.resolve(D.updateProduct(p.id, { price: Number(price), stock: Number(stock) }));
         if (r.error) return toast(r.error, "err");
         toast(p.name + " updated");
         render();
@@ -754,10 +755,10 @@
         "</div></div>";
     }).join("") + "</div>";
 
-    $$("[data-lst]").forEach(function (b) {
-      b.addEventListener("click", function () {
+    $("[data-lst]").forEach(function (b) {
+      b.addEventListener("click", async function () {
         const parts = b.dataset.lst.split(":");
-        const r = D.setListingStatus(parts[0], parts[1]);
+        const r = await Promise.resolve(D.setListingStatus(parts[0], parts[1]));
         if (r.error) return toast(r.error, "err");
         toast(r.listing.name + " is now " + parts[1]);
         render();
@@ -807,10 +808,10 @@
 
   function mountCMS() {
     const form = $("#cmsForm");
-    if (form) form.addEventListener("submit", function (e) {
+    if (form) form.addEventListener("submit", async function (e) {
       e.preventDefault();
       const fd = new FormData(form);
-      D.updateCMS({
+      const res = await Promise.resolve(D.updateCMS({
         banner: String(fd.get("banner") || "").trim(),
         heroTitle: String(fd.get("heroTitle") || "").trim(),
         tagline: String(fd.get("tagline") || "").trim(),
@@ -819,23 +820,24 @@
         email: String(fd.get("email") || "").trim(),
         address: String(fd.get("address") || "").trim(),
         emergencyNote: String(fd.get("emergencyNote") || "").trim()
-      });
+      }));
+      if (res && res.error) return toast(res.error, "err");
       $("#cmsMsg").style.color = "var(--ok)";
       $("#cmsMsg").textContent = "Site content saved.";
       toast("Site content saved");
     });
 
     const sf = $("#svcForm");
-    if (sf) sf.addEventListener("submit", function (e) {
+    if (sf) sf.addEventListener("submit", async function (e) {
       e.preventDefault();
       const id = $("#svcPick").value;
-      const r = D.updateService(id, {
+      const r = await Promise.resolve(D.updateService(id, {
         name: $("#svcName").value.trim(),
         price: Number($("#svcPrice").value),
         duration: Number($("#svcDur").value),
         popular: $("#svcPop").value === "1",
         desc: $("#svcDesc").value
-      });
+      }));
       if (r.error) {
         $("#svcMsg").style.color = "var(--danger)";
         $("#svcMsg").textContent = r.error;
@@ -848,9 +850,9 @@
     });
 
     const lf = $("#leaveForm");
-    if (lf) lf.addEventListener("submit", function (e) {
+    if (lf) lf.addEventListener("submit", async function (e) {
       e.preventDefault();
-      const r = D.addLeave($("#lvWho").value, $("#lvDate").value, $("#lvWhy").value);
+      const r = await Promise.resolve(D.addLeave($("#lvWho").value, $("#lvDate").value, $("#lvWhy").value));
       if (r && r.error) {
         $("#lvMsg").style.color = "var(--danger)";
         $("#lvMsg").textContent = r.error;
@@ -891,9 +893,10 @@
           : '<p class="hint" style="margin:6px 0 0">No time off booked.</p>') +
       "</div>";
     }).join("");
-    $$("[data-lvrm]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        D.removeLeave(b.dataset.lvrm);
+    $("[data-lvrm]").forEach(function (b) {
+      b.addEventListener("click", async function () {
+        const r = await Promise.resolve(D.removeLeave(b.dataset.lvrm));
+        if (r && r.error) return toast(r.error, "err");
         toast("Leave removed");
         renderStaff();
       });
