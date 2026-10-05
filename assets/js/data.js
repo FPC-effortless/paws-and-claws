@@ -330,6 +330,7 @@
         email: "hello@pawsandclaws.example"
       },
       inquiries: [],
+      contactMessages: [],
       inquiryCounter: 2,
       createdAt: now
     };
@@ -361,6 +362,7 @@
     x.audit = [];
     x.admins = [];
     x.inquiries = [];
+    x.contactMessages = [];
     return x;
   }
 
