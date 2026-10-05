@@ -327,6 +327,9 @@ export const mutate = mutation({
       if (!admin && patch.plan !== undefined && patch.plan !== target.plan) {
         throw new Error("Membership changes require billing setup.");
       }
+      if (!admin && patch.email !== undefined && String(patch.email).trim().toLowerCase() !== String(target.email).toLowerCase()) {
+        throw new Error("Change your email through your identity provider.");
+      }
       if (patch.email) patch.email = patch.email.trim().toLowerCase();
       if (patch.fullName && patch.fullName.trim().length < 2) throw new Error("Name is too short.");
       await ctx.db.patch(target._id, patch);
@@ -447,11 +450,11 @@ export const mutate = mutation({
       if (!ok) throw new Error("That time slot is no longer available.");
       const rate = PLANS[owner.plan] || 0;
       const total = round2(service.price * (1 - rate));
-      const deposit = service.deposit ? round2(total * 0.30) : total;
+      const deposit = service.deposit ? round2(total * 0.30) : 0;
       const booking = {
         id: uid("bk"), ownerId: owner.id, petId: pet.id, serviceId: service.id,
         providerId: provider.id, date: String(p.date), hour: Number(p.hour), duration: service.duration,
-        status: "confirmed", deposit, total, paid: 0, paymentStatus: "pending",
+        status: "confirmed", deposit, total, paid: 0, paymentStatus: service.deposit ? "pending" : "not_required",
         intake: p.intake || {}, createdAt: today(), createdBy: "self", discountRate: rate
       };
       await ctx.db.insert("bookings", booking);
