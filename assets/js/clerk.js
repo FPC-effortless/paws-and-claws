@@ -42,10 +42,18 @@
   const PUBLISHABLE_KEY = global.PNC_CLERK_PUBLISHABLE_KEY || DEFAULT_KEY;
   const DEMO_FLAG = "pnc_demo";
 
+  function productionHost() {
+    try {
+      const h = String(global.location && global.location.hostname || "").toLowerCase();
+      return !!h && h !== "localhost" && h !== "127.0.0.1" && h !== "::1" && h.indexOf(".local") === -1;
+    } catch { return false; }
+  }
+
   const api = {
     loaded: false,
     clerk: null,
     demo: false,
+    unavailable: false,
   };
 
   /* Announce the identity mode. Every gate subscribes to `pnc:clerk`,
@@ -62,6 +70,7 @@
   function configured() { return typeof PUBLISHABLE_KEY === "string" && PUBLISHABLE_KEY.length > 0; }
 
   function demoRequested() {
+    if (productionHost()) return false;
     try {
       if (global.location && new URLSearchParams(global.location.search).get("demo") === "1") return true;
       if (global.sessionStorage && global.sessionStorage.getItem(DEMO_FLAG) === "1") return true;
@@ -113,14 +122,13 @@
   function toAdmin(user) {
     if (!user) return null;
     const md = user.publicMetadata || {};
-    if (!md.role) return null;
     return {
       id: "clerk-" + user.id,
       clerkId: user.id,
       email: (user.primaryEmailAddress || {}).emailAddress || "",
       name: user.fullName || (user.primaryEmailAddress || {}).emailAddress || "Staff",
-      role: md.role,
-      providerId: md.providerId || null,
+      role: typeof md.role === "string" ? md.role : null,
+      providerId: typeof md.providerId === "string" ? md.providerId : null,
       source: "clerk",
     };
   }
@@ -129,7 +137,10 @@
     get active() { return api.loaded && !!api.clerk; },
     get demo() { return api.demo; },
     get configured() { return configured(); },
-    get mode() { return api.demo ? "demo" : "clerk"; },
+    get mode() {
+      if (api.unavailable) return "unavailable";
+      return api.demo ? "demo" : "clerk";
+    },
 
     async load() {
       if (api.loaded) return api.clerk;
@@ -139,6 +150,12 @@
          short-circuits and the local store provides demo identity.
          No Clerk session is ever minted here. */
       if (!configured() || demoRequested()) {
+        if (productionHost()) {
+          api.unavailable = true;
+          api.loaded = true;
+          announce("unavailable", false);
+          return null;
+        }
         api.demo = true;
         api.loaded = true;
         announce("demo", false);
@@ -155,10 +172,10 @@
         announce("clerk", true);
         return clerk;
       } catch (err) {
-        console.warn("[pnc] Clerk failed to load. Fixing the publishable key will enable sign-in.", err);
-        api.demo = true;
+        console.warn("[pnc] Clerk failed to load.", err);
+        api.unavailable = true;
         api.loaded = true;
-        announce("demo", false);
+        announce("unavailable", false);
         return null;
       }
     },
