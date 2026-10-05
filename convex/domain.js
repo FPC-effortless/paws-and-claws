@@ -233,7 +233,6 @@ async function bootstrapData(ctx) {
       out.waitlist = await ctx.db.query("waitlist").collect();
       out.messages = await ctx.db.query("messages").collect();
       out.notifications = await ctx.db.query("notifications").collect();
-      out.payments = await ctx.db.query("payments").collect();
       out.audit = await ctx.db.query("audit").collect();
       out.inquiries = await ctx.db.query("inquiries").collect();
       out.contactMessages = await ctx.db.query("contactMessages").collect();
