@@ -1,4 +1,5 @@
 {
   "$schema": "https://convex.dev/schema.json",
-  "functions": "convex/"
+  "functions": "convex/",
+  "generateCommonJSApi": true
 }
