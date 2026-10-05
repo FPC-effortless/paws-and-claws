@@ -7,7 +7,14 @@
 (function (global) {
   "use strict";
 
-  const STORE_KEYS = { cart: "pnc_cart", member: "pnc_member", users: "pnc_users" };
+  const STORE_KEYS = { cart: "pnc_cart_guest", member: "pnc_member", users: "pnc_users" };
+  function cartKey() {
+    try {
+      const D = global.PNC_DB;
+      const owner = D && D.currentOwner ? D.currentOwner() : null;
+      return owner ? "pnc_cart_" + owner.id : STORE_KEYS.cart;
+    } catch { return STORE_KEYS.cart; }
+  }
   const CURRENCY = "$";
 
   /* ------------------------------ utils ------------------------------ */
@@ -81,13 +88,24 @@
   const Cart = {
     items: read(STORE_KEYS.cart, []),
 
-    save() { write(STORE_KEYS.cart, this.items); this.render(); },
+    rebind() {
+      this.items = read(cartKey(), []);
+      this.render();
+    },
+
+    save() { write(cartKey(), this.items); this.render(); },
 
     add(id, qty = 1) {
       const p = PRODUCT_BY_ID[id];
       if (!p) return;
+      const D = global.PNC_DB;
+      const serverProduct = D && D.db && D.db.products ? D.db.products.find(x => x.id === id) : null;
+      const stock = serverProduct ? Number(serverProduct.stock) : Infinity;
       const line = this.items.find((i) => i.id === id);
-      if (line) line.qty += qty; else this.items.push({ id, qty });
+      const current = line ? Number(line.qty) : 0;
+      const next = Math.min(stock, current + Math.max(1, Number(qty) || 1));
+      if (!Number.isFinite(next) || next <= current) { toast("That item is sold out or at its stock limit", "err"); return; }
+      if (line) line.qty = next; else this.items.push({ id, qty: next });
       this.save();
       toast(p.name + " added to cart");
     },
@@ -95,7 +113,11 @@
     setQty(id, qty) {
       const line = this.items.find((i) => i.id === id);
       if (!line) return;
-      line.qty = Math.max(0, qty);
+      const D = global.PNC_DB;
+      const p = D && D.db && D.db.products ? D.db.products.find(x => x.id === id) : null;
+      const stock = p ? Number(p.stock) : Infinity;
+      const clean = Number.isInteger(Number(qty)) ? Number(qty) : 0;
+      line.qty = Math.max(0, Math.min(stock, clean));
       if (line.qty === 0) this.items = this.items.filter((i) => i.id !== id);
       this.save();
     },
@@ -222,11 +244,7 @@
   }
 
   function mountCartDrawer() {
-    const checkout = $("#cartCheckout");
-    if (checkout) checkout.addEventListener("click", () => {
-      if (!Cart.items.length) return;
-      toast("Demo store — checkout isn't connected to a payment processor yet.");
-    });
+    /* Checkout is owned by shop.js so there is exactly one handler. */
   }
 
   function mountPasswordStrength() {
@@ -269,6 +287,10 @@
       els.forEach((el, i) => { el.style.transitionDelay = Math.min(i % 6, 5) * 70 + "ms"; io.observe(el); });
     } else els.forEach((el) => el.classList.add("in"));
   }
+
+  document.addEventListener("pnc:auth", () => Cart.rebind());
+  document.addEventListener("pnc:clerk", () => Cart.rebind());
+  document.addEventListener("pnc:data-ready", () => Cart.rebind());
 
   document.addEventListener("DOMContentLoaded", () => {
     mountChrome();
