@@ -92,7 +92,7 @@
   function mountForm() {
     const form = $("#contactForm");
     if (!form) return;
-    form.addEventListener("submit", function (e) {
+    form.addEventListener("submit", async function (e) {
       e.preventDefault();
 
       const fd = new FormData(form);
@@ -126,20 +126,37 @@
         return;
       }
 
-      /* file into the CRM: attach to an existing owner if the email matches */
-      const owner = (D.db.owners || []).find(function (o) {
-        return (o.email || "").toLowerCase() === email.toLowerCase();
-      });
-      if (owner) {
-        D.message(owner.id, "email", subject, body + " — from " + name, "in");
-        D.notify(owner.id, "listing", "Message received", "We've got your note: " + subject);
+      if (D.productionMode && D.productionMode()) {
+        if (!window.PNC_CONVEX || !window.PNC_CONVEX.active) {
+          status.style.color = "var(--danger)";
+          status.textContent = "Messaging is temporarily unavailable. Please call the store.";
+          if (PNC) PNC.toast("Secure messaging is unavailable", "err");
+          return;
+        }
+        const res = await window.PNC_CONVEX.mutate("submitContact", { name, email, subject, body });
+        if (res && res.error) {
+          status.style.color = "var(--danger)";
+          status.textContent = "We could not send your message. Please try again.";
+          if (PNC) PNC.toast(res.error, "err");
+          return;
+        }
+        await window.PNC_CONVEX.syncBootstrap();
       } else {
-        (D.db.contactLog || (D.db.contactLog = [])).push({
-          id: D.uid("ct"),
-          name: name, email: email, subject: subject, body: body,
-          createdAt: D.todayISO()
+        /* Demo/local mode: file into the local CRM log. */
+        const owner = (D.db.owners || []).find(function (o) {
+          return (o.email || "").toLowerCase() === email.toLowerCase();
         });
-        D.persist();
+        if (owner) {
+          D.message(owner.id, "email", subject, body + " — from " + name, "in");
+          D.notify(owner.id, "listing", "Message received", "We've got your note: " + subject);
+        } else {
+          (D.db.contactLog || (D.db.contactLog = [])).push({
+            id: D.uid("ct"),
+            name: name, email: email, subject: subject, body: body,
+            createdAt: D.todayISO()
+          });
+          D.persist();
+        }
       }
 
       status.style.color = "var(--ok)";
