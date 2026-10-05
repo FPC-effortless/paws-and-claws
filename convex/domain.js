@@ -92,9 +92,6 @@ async function ownerFor(ctx, allowCreate = false) {
     };
     await ctx.db.insert("owners", owner);
   }
-  if (owner && owner.clerkId !== id.subject) {
-    await ctx.db.patch(owner._id, { clerkId: id.subject });
-  }
   return owner;
 }
 
@@ -104,7 +101,6 @@ async function adminFor(ctx) {
   if (!admin && id.email) {
     admin = await ctx.db.query("admins").withIndex("by_email", q => q.eq("email", id.email.toLowerCase())).first();
   }
-  if (admin && admin.clerkId !== id.subject) await ctx.db.patch(admin._id, { clerkId: id.subject });
   if (!admin || !ROLES.includes(admin.role)) return null;
   return admin;
 }
@@ -256,7 +252,7 @@ async function bootstrapData(ctx) {
     }
   }
 
-  const owner = await ownerFor(ctx, true);
+  const owner = await ownerFor(ctx, false);
   if (!owner) return publicData;
   return {
     ...publicData,
