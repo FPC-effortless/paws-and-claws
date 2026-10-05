@@ -280,10 +280,21 @@ export const bootstrap = query({
   handler: async (ctx) => bootstrapData(ctx)
 });
 
+const OPS = new Set([
+  "ensureOwner","markNotificationRead","markNotificationsRead","updateOwner","addPet","updatePet",
+  "removePet","addVaccine","setVaccineStatus","createBooking","rescheduleBooking","cancelBooking",
+  "setBookingStatus","addBookingNote","placeOrder","setOrderStage","refund","setListingStatus",
+  "adjustStock","updateProduct","updateCMS","updateService","addLeave","removeLeave",
+  "joinWaitlist","removeWaitlist","posCharge","addPaymentMethod","removePaymentMethod",
+  "setPrimaryPayment","submitContact","submitInquiry"
+]);
+
 export const mutate = mutation({
   args: { op: v.string(), payload: v.any() },
   handler: async (ctx, { op, payload }) => {
-    const p = payload || {};
+    if (!OPS.has(op)) throw new Error("Unknown operation.");
+    if (payload == null || typeof payload !== "object" || Array.isArray(payload)) throw new Error("Invalid operation payload.");
+    const p = payload;
 
     if (op === "ensureOwner") {
       const id = await identity(ctx);
