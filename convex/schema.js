@@ -240,6 +240,19 @@ export default defineSchema({
     at: v.string(),
   }),
 
+  contactMessages: defineTable({
+    id: v.optional(v.string()),
+    name: v.string(),
+    email: v.string(),
+    subject: v.string(),
+    body: v.string(),
+    ownerId: v.optional(v.string()),
+    createdAt: v.string(),
+    status: v.string(),
+  })
+    .index("by_id", ["id"])
+    .index("by_email", ["email"]),
+
   inquiries: defineTable({
     id: v.optional(v.string()),
     ref: v.string(),
