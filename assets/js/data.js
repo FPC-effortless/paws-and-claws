@@ -821,10 +821,13 @@
 
   function rescheduleBooking(bookingId, date, hour, providerId) {
     if (remoteEnabled()) return remoteMutation("rescheduleBooking", { bookingId, date, hour, providerId });
+
     const bk = byId(db.bookings, bookingId);
     if (!bk) return { error: "Booking not found." };
     const owner = currentOwner();
     if (!owner || (bk.ownerId !== owner.id && !can("bookings.manage"))) return { error: "Not authorized." };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date)) || String(date) < todayISO()) return { error: "Bookings cannot be moved into the past." };
+    if (!["confirmed","pending"].includes(bk.status)) return { error: "This booking cannot be rescheduled." };
     const svc = byId(db.services, bk.serviceId);
     const pid = providerId || bk.providerId;
     const slots = slotsFor(db, bk.serviceId, date).filter((s) => s.providerId === pid);
@@ -844,8 +847,9 @@
     if (!bk) return { error: "Booking not found." };
     const owner = currentOwner();
     if (!owner || (bk.ownerId !== owner.id && !can("bookings.manage"))) return { error: "Not authorized." };
+    if (bk.status === "completed" || bk.status === "cancelled") return { error: "Booking is already closed." };
     bk.status = "cancelled";
-    notify(bk.ownerId, "booking", "Appointment cancelled", "Your " + (byId(db.services, bk.serviceId) || {}).name + " on " + fmtDate(bk.date) + " was cancelled. Deposits are refunded within 3 business days.");
+    notify(bk.ownerId, "booking", "Appointment cancelled", "Your " + (byId(db.services, bk.serviceId) || {}).name + " on " + fmtDate(bk.date) + " was cancelled. Any eligible refund will be handled by the payment provider.");
     audit("Booking cancelled", bk.id);
     persist();
     return { booking: bk };
@@ -922,6 +926,12 @@
     if (!admin || !can("payments.take")) return { error: "Not authorized." };
     const o = byId(db.orders, orderId);
     if (!o) return { error: "Order not found." };
+    const stages = ["pending","packing","ready","shipped","done"];
+    if (stage === "cancelled") return { error: "Order cancellation requires a refund workflow." };
+    if (stages.indexOf(stage) === -1) return { error: "Invalid order stage." };
+    const current = stages.indexOf(o.stage || "pending");
+    const next = stages.indexOf(stage);
+    if (Math.abs(next - current) > 1) return { error: "Invalid order transition." };
     o.stage = stage;
     if (stage === "done") o.status = "delivered";
     if (stage === "cancelled") o.status = "cancelled";
@@ -937,7 +947,10 @@
     if (!admin || !can("payments.refund")) return { error: "Not authorized." };
     const o = byId(db.orders, orderId);
     if (!o) return { error: "Order not found." };
-    const amt = Math.min(Number(amount) || 0, o.paid);
+    const requested = Number(amount);
+    if (!Number.isFinite(requested) || requested <= 0) return { error: "Refund amount must be greater than zero." };
+    const amt = Math.min(requested, o.paid);
+    if (amt <= 0) return { error: "There is no refundable balance." };
     o.paid = Math.max(0, o.paid - amt);
     o.refunded = (o.refunded || 0) + amt;
     notify(o.ownerId, "order", "Refund issued", money(amt) + " refunded on order " + o.id + ".");
@@ -1026,6 +1039,7 @@
     ["name", "price", "duration", "desc", "popular"].forEach((k) => {
       if (patch[k] !== undefined) s[k] = patch[k];
     });
+    if (!s.name || !Number.isFinite(Number(s.price)) || Number(s.price) < 0 || !Number.isFinite(Number(s.duration)) || Number(s.duration) <= 0 || Number(s.duration) > 24) return { error: "Invalid service values." };
     audit("Service edited", s.name + " — " + money(s.price));
     persist();
     return { service: s };
@@ -1083,8 +1097,15 @@
     if (a ? !can("crm.edit") : ownerId !== actor.id) return { error: "Not authorized." };
     const o = byId(db.owners, ownerId);
     if (!o) return { error: "Owner not found." };
+    if (patch && patch.plan !== undefined && !Object.prototype.hasOwnProperty.call(PLAN_DISCOUNT, patch.plan)) return { error: "Invalid membership plan." };
+    if (patch && patch.email !== undefined) {
+      const email = String(patch.email).trim().toLowerCase();
+      if (!isValidEmail(email)) return { error: "Enter a valid email address." };
+      if (db.owners.some(x => x.id !== ownerId && x.email === email)) return { error: "An account with this email already exists." };
+      patch.email = email;
+    }
     ["fullName", "email", "phone", "emergencyContact", "address", "notes", "plan"].forEach((k) => {
-      if (patch[k] !== undefined) o[k] = patch[k];
+      if (patch[k] !== undefined) o[k] = String(patch[k]);
     });
     audit("Owner updated", o.fullName);
     persist();
@@ -1207,11 +1228,13 @@
     if (!admin || !can("payments.take")) return { error: "Not authorized." };
     if (!byId(db.owners, ownerId)) return { error: "Owner not found." };
     if (!Array.isArray(lines) || !lines.length) return { error: "No POS lines." };
-    const total = Math.round(lines.reduce((n, l) => n + Number(l.amount || 0), 0) * 100) / 100;
+    const normalized = lines.map(l => ({ label: String(l.label || l.productId || "POS item").trim().slice(0, 120), amount: Number(l.amount) }));
+    if (!normalized.length || normalized.some(l => !l.label || !Number.isFinite(l.amount) || l.amount <= 0)) return { error: "Invalid POS line." };
+    const total = Math.round(normalized.reduce((n, l) => n + l.amount, 0) * 100) / 100;
     const o = {
       id: "or-" + (2000 + db.orders.length + 1),
       ownerId, placedAt: todayISO(),
-      items: lines.map((l) => ({ productId: l.label || l.productId || "pos", qty: 1, price: Number(l.amount || 0) })),
+      items: normalized.map((l) => ({ productId: "pos", qty: 1, price: l.amount })),
       fulfillment: "pos", address: "", status: "delivered", stage: "done",
       total, paid: total, method: method || "Cash"
     };
