@@ -29,7 +29,7 @@
   /* assets/ are always referenced from the site root so the same markup
      works at /index.html and /admin/ (which is one level deeper) */
   function asset(p) {
-    return (location.pathname.indexOf("/admin/") === 0 ? "../" : "/") + "assets/" + p;
+    return (location.pathname.indexOf("/admin/") !== -1 ? "../assets/" : "assets/") + p;
   }
 
   function brandImg(cls) {
