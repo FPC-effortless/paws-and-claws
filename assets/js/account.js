@@ -473,12 +473,13 @@
     '</div>';
   }
 
-  function saveCard(e) {
+  async function saveCard(e) {
     e.preventDefault();
     const last4 = $('#cfLast4').value.trim();
     if (!/^\d{4}$/.test(last4)) { PNC.toast('Enter the last 4 digits', 'err'); return; }
-    D.addPaymentMethod(me().id, $('#cfBrand').value, last4,
-      Number($('#cfM').value), Number($('#cfY').value));
+    const res = await Promise.resolve(D.addPaymentMethod(me().id, $('#cfBrand').value, last4,
+      Number($('#cfM').value), Number($('#cfY').value)));
+    if (res && res.error) { PNC.toast(res.error, 'err'); return; }
     PNC.toast('Card added');
     renderTab('payment');
   }
@@ -521,15 +522,15 @@
       '</div>';
   }
 
-  function saveProfile(e) {
+  async function saveProfile(e) {
     e.preventDefault();
-    const res = D.updateOwner(me().id, {
+    const res = await Promise.resolve(D.updateOwner(me().id, {
       fullName: $('#stName').value.trim(),
       email: $('#stEmail').value.trim(),
       phone: $('#stPhone').value.trim(),
       emergencyContact: $('#stEmerg').value.trim(),
       address: $('#stAddr').value.trim()
-    });
+    }));
     if (res.error) { PNC.toast(res.error, 'err'); return; }
     PNC.toast('Profile saved');
     window.dispatchEvent(new CustomEvent('pnc:auth'));
@@ -598,7 +599,7 @@
     $('#vaxForm').addEventListener('submit', saveVax);
 
     /* delegated panel clicks */
-    document.addEventListener('click', function (e) {
+    document.addEventListener('click', async function (e) {
       const addBtn = e.target.closest('#addPetBtn, #addPetBtn2');
       if (addBtn) { openPetModal(null); return; }
       const edit = e.target.closest('.pet-edit');
