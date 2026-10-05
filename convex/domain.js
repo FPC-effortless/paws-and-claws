@@ -278,6 +278,24 @@ export const mutate = mutation({
   handler: async (ctx, { op, payload }) => {
     const p = payload || {};
 
+    if (op === "ensureOwner") {
+      const owner = await ownerFor(ctx, true);
+      return { ok: true, ownerId: owner.id };
+    }
+
+    if (op === "markNotificationRead" || op === "markNotificationsRead") {
+      const owner = await ownerFor(ctx, false);
+      if (!owner) throw new Error("Not authorized.");
+      const ids = op === "markNotificationRead" ? [p.notificationId] : (Array.isArray(p.notificationIds) ? p.notificationIds : []);
+      const rows = await ctx.db.query("notifications").filter(q => q.eq(q.field("ownerId"), owner.id)).collect();
+      for (const row of rows) {
+        if (ids.includes(row.id) || (op === "markNotificationsRead" && !ids.length)) {
+          await ctx.db.patch(row._id, { read: true });
+        }
+      }
+      return { ok: true };
+    }
+
     if (op === "updateOwner") {
       const owner = await ownerFor(ctx, true);
       const admin = await adminFor(ctx);
