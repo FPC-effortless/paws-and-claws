@@ -219,14 +219,14 @@
     PNC.openModal('inqModal');
   }
 
-  function submitInquiry(e) {
+  async function submitInquiry(e) {
     e.preventDefault();
     if (!inqId) return;
     const name = $('#inqName').value.trim();
     const email = $('#inqEmail').value.trim();
     if (name.length < 2) { PNC.toast('Please tell us your name', 'err'); $('#inqName').focus(); return; }
     if (!D.isValidEmail(email)) { PNC.toast('Enter a valid email address', 'err'); $('#inqEmail').focus(); return; }
-    const res = D.submitInquiry(inqId, $('#inqMsg').value.trim());
+    const res = await Promise.resolve(D.submitInquiry(inqId, $('#inqMsg').value.trim()));
     if (res.error) { PNC.toast(res.error, 'err'); return; }
     const l = listings().find(x => x.id === inqId);
     PNC.closeModal();
