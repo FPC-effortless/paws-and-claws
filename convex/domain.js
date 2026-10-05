@@ -73,6 +73,12 @@ async function identity(ctx) {
 
 async function ownerFor(ctx, allowCreate = false) {
   const id = await identity(ctx);
+  const staffByClerk = await ctx.db.query("admins").withIndex("by_clerkId", q => q.eq("clerkId", id.subject)).first();
+  const staffByEmail = !staffByClerk && id.email
+    ? await ctx.db.query("admins").withIndex("by_email", q => q.eq("email", id.email.toLowerCase())).first()
+    : null;
+  if (staffByClerk || staffByEmail) return null;
+
   let owner = await ctx.db.query("owners").withIndex("by_clerkId", q => q.eq("clerkId", id.subject)).first();
   if (!owner && id.email) {
     owner = await ctx.db.query("owners").withIndex("by_email", q => q.eq("email", id.email.toLowerCase())).first();
@@ -216,6 +222,7 @@ async function bootstrapData(ctx) {
       out.payments = await ctx.db.query("payments").collect();
       out.audit = await ctx.db.query("audit").collect();
       out.inquiries = await ctx.db.query("inquiries").collect();
+      out.contactMessages = await ctx.db.query("contactMessages").collect();
       return out;
     }
     if (admin.role === "desk") {
@@ -238,6 +245,7 @@ async function bootstrapData(ctx) {
       out.listings = await ctx.db.query("listings").collect();
       out.audit = await ctx.db.query("audit").collect();
       out.inquiries = await ctx.db.query("inquiries").collect();
+      out.contactMessages = await ctx.db.query("contactMessages").collect();
       return out;
     }
     if (admin.role === "provider") {
@@ -279,8 +287,16 @@ export const mutate = mutation({
     const p = payload || {};
 
     if (op === "ensureOwner") {
+      const id = await identity(ctx);
+      const staff = await adminFor(ctx);
+      if (staff) {
+        if (staff.clerkId !== id.subject) await ctx.db.patch(staff._id, { clerkId: id.subject });
+        return { ok: true, kind: "admin" };
+      }
       const owner = await ownerFor(ctx, true);
-      return { ok: true, ownerId: owner.id };
+      if (!owner) throw new Error("Not authorized.");
+      if (owner.clerkId !== id.subject) await ctx.db.patch(owner._id, { clerkId: id.subject });
+      return { ok: true, kind: "owner", ownerId: owner.id };
     }
 
     if (op === "markNotificationRead" || op === "markNotificationsRead") {
@@ -308,6 +324,9 @@ export const mutate = mutation({
         if (p.patch?.[k] !== undefined) patch[k] = String(p.patch[k]);
       }
       if (patch.plan && !Object.prototype.hasOwnProperty.call(PLANS, patch.plan)) throw new Error("Invalid membership plan.");
+      if (!admin && patch.plan !== undefined && patch.plan !== target.plan) {
+        throw new Error("Membership changes require billing setup.");
+      }
       if (patch.email) patch.email = patch.email.trim().toLowerCase();
       if (patch.fullName && patch.fullName.trim().length < 2) throw new Error("Name is too short.");
       await ctx.db.patch(target._id, patch);
@@ -415,6 +434,7 @@ export const mutate = mutation({
       const pet = await getPet(ctx, p.petId);
       if (!owner || !service || !pet || pet.ownerId !== owner.id) throw new Error("Invalid booking request.");
       if (service.duration >= 24) throw new Error("This service requires overnight scheduling; please contact the store.");
+      if (service.deposit && process.env.PNC_PAYMENTS_ENABLED !== "true") throw new Error("This booking requires a payment processor that is not configured yet.");
       const required = pet.species === "Cat" ? ["Rabies","FVRCP"] : ["Rabies","DHPP","Bordetella"];
       if (service.requiresVaccine) {
         const have = (pet.vaccines || []).filter(v => v.status === "approved").map(v => v.name);
@@ -510,6 +530,7 @@ export const mutate = mutation({
     if (op === "placeOrder") {
       const owner = await ownerFor(ctx, true);
       if (!owner) throw new Error("Please sign in to checkout.");
+      if (process.env.PNC_PAYMENTS_ENABLED !== "true") throw new Error("Online checkout is disabled until a payment processor is configured.");
       const rawLines = Array.isArray(p.items) ? p.items : [];
       if (!rawLines.length) throw new Error("Your cart is empty.");
       const lines = [];
@@ -731,6 +752,26 @@ export const mutate = mutation({
 
     if (op === "addPaymentMethod" || op === "removePaymentMethod" || op === "setPrimaryPayment") {
       throw new Error("Payment methods are managed by the payment provider and are not stored by this application.");
+    }
+
+    if (op === "submitContact") {
+      const identityValue = await ctx.auth.getUserIdentity();
+      const name = String(p.name || "").trim();
+      const email = String(p.email || "").trim().toLowerCase();
+      const subject = String(p.subject || "").trim().slice(0, 200);
+      const message = String(p.body || "").trim().slice(0, 4000);
+      if (name.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || message.length < 10) {
+        throw new Error("Invalid contact message.");
+      }
+      const matchedOwner = identityValue ? await ownerFor(ctx, false) : null;
+      await ctx.db.insert("contactMessages", {
+        id: uid("ct"), name, email, subject, body: message, ownerId: matchedOwner?.id,
+        createdAt: today(), status: "new"
+      });
+      if (matchedOwner) {
+        await notify(ctx, matchedOwner.id, "contact", "Message received", "We've received your message.");
+      }
+      return { ok: true };
     }
 
     if (op === "submitInquiry") {
