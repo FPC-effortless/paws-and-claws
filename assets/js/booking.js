@@ -37,8 +37,8 @@
           '<span class="svc-price">' + money(s.price) + "</span>" +
           '<span class="svc-dur">' + s.duration + " hr" + (s.duration === 1 ? "" : "s") + "</span>" +
           (s.duration >= 24
-          ? '<a class="mini-btn" href="contact.html">Contact us</a>'
-          : '<button class="mini-btn primary" data-book="' + s.id + '">Book now</button>')' +
+            ? '<a class="mini-btn" href="contact.html">Contact us</a>'
+            : '<button class="mini-btn primary" data-book="' + s.id + '">Book now</button>') +
         "</div>" +
       "</div>"
     );
