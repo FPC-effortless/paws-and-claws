@@ -25,8 +25,20 @@
 
       try {
         if (!api.client) {
-          const mod = await import("https://cdn.jsdelivr.net/npm/convex@1.46.0/dist/client.mjs");
-          const ConvexClient = mod.ConvexClient || mod.default;
+          if (!global.convex || !global.convex.ConvexClient) {
+            if (!global.__PNC_CONVEX_BUNDLE_PROMISE) {
+              global.__PNC_CONVEX_BUNDLE_PROMISE = new Promise(function (resolve, reject) {
+                const script = document.createElement("script");
+                script.src = "/assets/js/convex.browser.bundle.js";
+                script.onload = resolve;
+                script.onerror = function () { reject(new Error("Unable to load the local Convex client bundle.")); };
+                document.head.appendChild(script);
+              });
+            }
+            await global.__PNC_CONVEX_BUNDLE_PROMISE;
+          }
+          const ConvexClient = global.convex && global.convex.ConvexClient;
+          if (!ConvexClient) throw new Error("Convex client bundle did not expose ConvexClient.");
           api.client = new ConvexClient(url);
         }
 
