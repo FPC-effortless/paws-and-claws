@@ -547,14 +547,73 @@
   }
 
   function openOwner(id) {
-    const o = ownerOfId(id);
-    if (!o) return;
-    state.ownerFilter = id;
+    if (!scopeOf("crm.view") && !allowed("crm.edit")) return;
+    state.ownerFilter = id || "new";
     go("crm");
-    const host = $("#globalSearch");
-    if (host) host.value = o.fullName;
-    state.crmQ = o.fullName;
-    renderCRM();
+    const detail = $("#ownerDetail");
+    if (detail) detail.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
+
+  function renderOwnerDetail() {
+    const host = $("#ownerDetail");
+    if (!host) return;
+    const id = state.ownerFilter;
+    const o = id && id !== "new" ? ownerOfId(id) : null;
+    const editable = allowed("crm.edit");
+    host.hidden = !id || (!o && id !== "new") || (id === "new" && !editable);
+    if (host.hidden) return;
+    host.innerHTML = '<div class="panel-head"><h2>' + (o ? esc(o.fullName) : "New customer") + '</h2>' +
+      '<button type="button" class="mini-btn" id="closeOwnerDetail">Close</button></div>' +
+      (editable ? '<form id="ownerForm">' +
+        '<div class="grid2"><div class="field"><label for="ownerName">Full name</label>' +
+        '<input class="input" id="ownerName" required minlength="2" value="' + esc(o ? o.fullName : "") + '"></div>' +
+        '<div class="field"><label for="ownerEmail">Email</label>' +
+        '<input class="input" type="email" id="ownerEmail" required value="' + esc(o ? o.email : "") + '"></div></div>' +
+        '<div class="field"><label for="ownerPhone">Phone</label>' +
+        '<input class="input" id="ownerPhone" type="tel" value="' + esc(o ? o.phone || "" : "") + '"></div>' +
+        '<button class="btn btn-teal" type="submit">Save customer</button>' +
+        '<p class="hint">Creates a customer record; account access is through Clerk, not a temporary password.</p></form>' : '') +
+      (o && scopeOf("messages.send") ? '<form id="ownerMessageForm"><h3>Send a portal message</h3>' +
+        '<p class="hint">Delivered to the member inbox. This does not send an email or SMS.</p>' +
+        '<div class="field"><label for="messageSubject">Subject</label>' +
+        '<input class="input" id="messageSubject" maxlength="200" required></div>' +
+        '<div class="field"><label for="messageBody">Message</label>' +
+        '<textarea class="input" id="messageBody" maxlength="4000" required></textarea></div>' +
+        '<button class="btn btn-teal" type="submit">Send to member inbox</button></form>' : '') +
+      (o ? '<h3>Conversation</h3>' + (D.db.messages || []).filter(m => m.ownerId === o.id)
+        .slice().reverse().map(m => '<article class="panel"><b>' + esc(m.subject) + '</b>' +
+          '<small> · ' + (m.direction === "out" ? "To member" : "From member") + '</small>' +
+          '<p>' + esc(m.body) + '</p></article>').join('') : '');
+    const close = $("#closeOwnerDetail");
+    if (close) close.addEventListener("click", function () {
+      state.ownerFilter = null;
+      renderOwnerDetail();
+    });
+  }
+
+  function renderContactRequests() {
+    const host = $("#contactRequests");
+    if (!host) return;
+    host.hidden = !allowed("crm.edit");
+    if (host.hidden) return;
+    const rows = (D.db.contactMessages || []).slice().reverse();
+    host.innerHTML = '<h2>Contact requests</h2>' + (rows.length ? rows.map(r =>
+      '<article class="panel"><b>' + esc(r.subject || "General inquiry") + '</b>' +
+      '<p>' + esc(r.name) + ' · ' + esc(r.email) + '</p><p>' + esc(r.body) + '</p>' +
+      '<span>' + esc(r.status || "new") + '</span> ' +
+      (r.ownerId ? '<button class="mini-btn" data-contact-owner="' + esc(r.ownerId) + '">Open member</button> ' :
+        '<small class="hint">Guest request: reply using an external email service.</small> ') +
+      '<button class="mini-btn" data-contact="' + esc(r.id) + '" data-status="' +
+      (r.status === "resolved" ? "new" : "resolved") + '">' +
+      (r.status === "resolved" ? "Reopen" : "Mark resolved") + '</button></article>'
+    ).join('') : '<p class="hint">No contact requests yet.</p>');
+    $("[data-contact-owner]", host).forEach(b => b.addEventListener("click", () => openOwner(b.dataset.contactOwner)));
+    $("[data-contact]", host).forEach(b => b.addEventListener("click", async function () {
+      b.disabled = true;
+      const r = await Promise.resolve(D.setContactStatus(b.dataset.contact, b.dataset.status));
+      if (r && r.error) { b.disabled = false; return toast(r.error, "err"); }
+      renderContactRequests();
+    }));
   }
 
   /* ============================== POS =============================== */
@@ -1054,15 +1113,36 @@
     const dr = $("#dashRefresh");
     if (dr) dr.addEventListener("click", function () { render(); toast("Dashboard refreshed"); });
     const nob = $("#newOwnerBtn");
-    if (nob) nob.addEventListener("click", function () {
-      const name = window.prompt("New customer's full name:");
-      if (!name || name.trim().length < 2) return toast("A name is required", "err");
-      const email = window.prompt("Email address:");
-      if (!D.isValidEmail(email)) return toast("Enter a valid email address", "err");
-      const r = D.signUp({ fullName: name.trim(), email: email.trim().toLowerCase(), password: "changeme123" });
-      if (r.error) return toast(r.error, "err");
-      toast(name.trim().split(" ")[0] + " added — temp password changeme123");
-      render();
+    if (nob) nob.addEventListener("click", function () { openOwner(null); });
+
+    document.addEventListener("submit", async function (e) {
+      if (!["ownerForm", "ownerMessageForm"].includes(e.target.id)) return;
+      e.preventDefault();
+      const button = e.target.querySelector('button[type="submit"]');
+      if (button.disabled) return;
+      button.disabled = true;
+      try {
+        let result;
+        if (e.target.id === "ownerForm") {
+          const input = { fullName: $("#ownerName").value.trim(),
+            email: $("#ownerEmail").value.trim(), phone: $("#ownerPhone").value.trim() };
+          result = state.ownerFilter === "new"
+            ? await Promise.resolve(D.createOwner(input))
+            : await Promise.resolve(D.updateOwner(state.ownerFilter, input));
+          if (result && result.owner) state.ownerFilter = result.owner.id;
+          else if (result && result.ownerId) state.ownerFilter = result.ownerId;
+        } else {
+          result = await Promise.resolve(D.sendMessage(state.ownerFilter,
+            $("#messageSubject").value, $("#messageBody").value));
+        }
+        if (result && result.error) return toast(result.error, "err");
+        toast(e.target.id === "ownerForm" ? "Customer saved" : "Message sent to member inbox");
+        renderCRM();
+      } catch (err) {
+        toast("Could not save. Please retry.", "err");
+      } finally {
+        button.disabled = false;
+      }
     });
   }
 
