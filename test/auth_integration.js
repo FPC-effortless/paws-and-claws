@@ -9,10 +9,13 @@ let signedIn = { id: "user_first", primaryEmailAddress: { emailAddress: "first@e
 let clerkListener;
 const client = { setAuth(callback) { this.tokenCallback = callback; }, query: async () => ({ version: 1, owners: [], admins: [] }),
   mutation: async () => ({ ok: true }), close: async () => {} };
-function Clerk() { this.user = signedIn; this.session = { getToken: async () => "example-jwt" }; }
-Clerk.prototype.load = async function () {};
-Clerk.prototype.addListener = function (fn) { clerkListener = fn; return () => {}; };
-Clerk.prototype.signOut = async function () { this.user = null; this.session = null; clerkListener(); };
+const Clerk = {
+  user: signedIn,
+  session: { getToken: async () => "example-jwt" },
+  async load() {},
+  addListener(fn) { clerkListener = fn; return () => {}; },
+  async signOut() { this.user = null; this.session = null; clerkListener(); }
+};
 const sandbox = {
   console, URLSearchParams, CustomEvent, Promise,
   location: { hostname: "paws.example.test", search: "" },
