@@ -6,7 +6,7 @@
 (function (global) {
   "use strict";
 
-  const DEFAULT_URL = "";
+  const DEFAULT_URL = "https://gallant-lion-490.convex.cloud";
   const SYNCED_KEY = "pnc_convex_seeded";
 
   function configured() {
@@ -29,7 +29,7 @@
             if (!global.__PNC_CONVEX_BUNDLE_PROMISE) {
               global.__PNC_CONVEX_BUNDLE_PROMISE = new Promise(function (resolve, reject) {
                 const script = document.createElement("script");
-                script.src = "/assets/js/convex.browser.bundle.js";
+                script.src = "/assets/js/convex.browser.bundle.js?v=production-20261008";
                 script.onload = resolve;
                 script.onerror = function () { reject(new Error("Unable to load the local Convex client bundle.")); };
                 document.head.appendChild(script);
