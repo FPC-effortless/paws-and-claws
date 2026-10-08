@@ -102,8 +102,8 @@
   }
 
   async function loadClerkUI(domain) {
-    await loadScript("https://" + domain + "/npm/@clerk/ui@1.38.1/dist/ui.browser.js", "the Clerk UI bundle");
-    await loadScript("https://" + domain + "/npm/@clerk/clerk-js@6.36.0/dist/clerk.browser.js", "ClerkJS", {
+    await loadScript("https://" + domain + "/npm/@clerk/ui@1/dist/ui.browser.js", "the Clerk UI bundle");
+    await loadScript("https://" + domain + "/npm/@clerk/clerk-js@6/dist/clerk.browser.js", "ClerkJS", {
       "data-clerk-publishable-key": PUBLISHABLE_KEY,
     });
     return global.__internal_ClerkUICtor;
