@@ -86,12 +86,15 @@
     catch { return null; }
   }
 
-  async function loadScript(src, label) {
+  async function loadScript(src, label, attributes) {
     await new Promise(function (resolve, reject) {
       const s = document.createElement("script");
       s.src = src;
       s.async = true;
       s.crossOrigin = "anonymous";
+      Object.entries(attributes || {}).forEach(function (entry) {
+        s.setAttribute(entry[0], entry[1]);
+      });
       s.onload = function () { resolve(); };
       s.onerror = function () { reject(new Error("Failed to load " + label)); };
       document.head.appendChild(s);
@@ -100,7 +103,9 @@
 
   async function loadClerkUI(domain) {
     await loadScript("https://" + domain + "/npm/@clerk/ui@1.38.1/dist/ui.browser.js", "the Clerk UI bundle");
-    await loadScript("https://" + domain + "/npm/@clerk/clerk-js@6.36.0/dist/clerk.browser.js", "ClerkJS");
+    await loadScript("https://" + domain + "/npm/@clerk/clerk-js@6.36.0/dist/clerk.browser.js", "ClerkJS", {
+      "data-clerk-publishable-key": PUBLISHABLE_KEY,
+    });
     return global.__internal_ClerkUICtor;
   }
 
