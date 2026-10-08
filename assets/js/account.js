@@ -34,6 +34,7 @@
   function showApp() {
     $('#acctGate').style.display = 'none';
     $('#acctApp').style.display = '';
+    setTab(tab);
     renderAll();
   }
 
@@ -117,6 +118,7 @@
 
   /* ================= tabs ================= */
   function setTab(t) {
+    if (!['overview', 'pets', 'bookings', 'orders', 'inbox', 'payment', 'settings'].includes(t)) t = 'overview';
     tab = t;
     $$('.acct-tab').forEach(b => {
       const on = b.dataset.tab === t;
@@ -134,9 +136,10 @@
   /* ================= overview ================= */
   function renderOverview() {
     const m = me();
-    const up = bookings().filter(b => b.status !== 'cancelled' && b.date >= D.todayISO());
+    const up = bookings().slice().sort((a, b) => a.date.localeCompare(b.date) || a.hour - b.hour)
+      .filter(b => ['pending', 'confirmed'].includes(b.status) && b.date >= D.todayISO());
     const open = orders().filter(o => o.status === 'open');
-    const inbox = messages().filter(x => !x.read && x.direction === 'in');
+    const inbox = messages().filter(x => !x.read && x.direction === 'out');
     const ps = pets();
 
     $('#panelOverview').innerHTML =
@@ -144,7 +147,7 @@
         '<div class="avatar">' + D.initials(m.fullName) + '</div>' +
         '<div><h2>' + D.esc(m.fullName) + '</h2><p>' + D.esc(m.email) + '</p></div>' +
         '<span class="status-pill available" style="margin-left:auto;align-self:center">' +
-          PLAN_LABEL[m.plan] || 'Member' + '</span>' +
+          (PLAN_LABEL[m.plan] || 'Member') + '</span>' +
       '</div>' +
       '<div class="stat-row">' +
         statBox(D.speciesIcon(ps[0] ? ps[0].species : 'Dog'), ps.length, 'pets in your family') +
@@ -316,7 +319,7 @@
 
   /* ================= bookings ================= */
   function renderBookings() {
-    const all = bookings().slice().sort((a, b) => (b.date + b.hour) - (a.date + a.hour));
+    const all = bookings().slice().sort((a, b) => b.date.localeCompare(a.date) || b.hour - a.hour);
     $('#panelBookings').innerHTML =
       '<div class="panel-head"><h3>Appointments</h3>' +
       '<a class="btn btn-teal btn-sm" href="services.html">&#43; Book a visit</a></div>' +
@@ -336,14 +339,14 @@
         '</small></div>' +
       '<div class="timeline-main">' +
         '<h4>' + D.esc(s.name || 'Appointment') + ' &middot; <span class="muted">' +
-          D.money(s.price || 0) + '</span></h4>' +
+          D.money(b.total || 0) + '</span></h4>' +
         '<p class="muted small">' + D.esc(p ? p.petName : 'No pet') + ' &middot; ' +
           D.esc(prov.name || 'Any available provider') + ' &middot; ' + D.esc(b.id) + '</p>' +
         (b.notes ? '<p class="small">' + D.esc(b.notes) + '</p>' : '') +
         '<div class="timeline-actions">' +
           '<span class="status-pill ' + (st === 'cancelled' ? 'sold' : st === 'completed' ? 'reserved' : 'available') +
             '">' + D.titleCase(st) + '</span>' +
-          (past || st === 'cancelled' ? '' :
+          (past || !['pending', 'confirmed'].includes(st) ? '' :
             '<button type="button" class="btn btn-ghost btn-sm" data-resched="' + b.id + '">Reschedule</button>' +
             '<button type="button" class="btn btn-ghost btn-sm" data-cancel="' + b.id + '">Cancel</button>') +
         '</div>' +
@@ -423,12 +426,14 @@
 
   function msgRow(m) {
     return '<div class="msg-row' + (m.read ? '' : ' unread') + '">' +
-      '<span class="msg-ico">' + (m.direction === 'in' ? '&#128172;' : '&#128233;') + '</span>' +
+      '<span class="msg-ico">' + (m.direction === 'out' ? '&#128172;' : '&#128233;') + '</span>' +
       '<div class="msg-main"><b>' + D.esc(m.subject || '(no subject)') + '</b>' +
         '<small>' + D.titleCase(m.channel || 'email') + ' &middot; ' + D.fmtDate(m.createdAt) + '</small>' +
         '<p>' + D.esc(m.body) + '</p></div>' +
       '<span class="status-pill ' + (m.read ? 'sold' : 'available') + '">' +
-        (m.read ? 'Read' : 'New') + '</span>' +
+        (m.direction === 'in' ? 'Sent' : m.read ? 'Read' : 'New') + '</span>' +
+      (m.direction === 'out' && !m.read ? '<button type="button" class="btn btn-ghost btn-sm" data-read-message="' +
+        D.esc(m.id) + '">Mark read</button>' : '') +
     '</div>';
   }
 
@@ -440,7 +445,8 @@
       '<button type="button" class="btn btn-teal btn-sm" id="addCardBtn" ' + ((D.productionMode && D.productionMode()) ? 'disabled' : '') + '>&#43; Add a card</button></div>' +
       (cs.length ? '<div class="pay-grid">' + cs.map(cardRow).join('') + '</div>'
         : '<div class="empty-card"><h3>No cards on file</h3>' +
-          '<p>Add a card for one-tap checkout and automatic member discounts.</p></div>') +
+          '<p>' + (D.productionMode() ? 'Online payments and saved cards are unavailable until a payment provider is configured.' :
+          'Demo-only card details for local testing, not a real payment method.') + '</p></div>') +
       '<form id="cardForm" class="pay-form" style="display:none;margin-top:18px" novalidate>' +
         '<div class="grid2">' +
           '<div class="field"><label for="cfBrand">Brand</label>' +
@@ -563,7 +569,7 @@
     $('#acctHello').textContent = 'Hi, ' + m.fullName.split(' ')[0];
     $('#acctSub').textContent = pets().length + ' pet' + (pets().length === 1 ? '' : 's') +
       ' · ' + bookings().length + ' appointments · ' + PLAN_LABEL[m.plan];
-    const unread = messages().filter(x => !x.read && x.direction === 'in').length;
+    const unread = messages().filter(x => !x.read && x.direction === 'out').length;
     const badge = $('#inboxBadge');
     badge.hidden = !unread;
     badge.textContent = String(unread);
@@ -600,6 +606,13 @@
 
     /* delegated panel clicks */
     document.addEventListener('click', async function (e) {
+      const readButton = e.target.closest('[data-read-message]');
+      if (readButton) {
+        const result = await Promise.resolve(D.markMessageRead(readButton.dataset.readMessage));
+        if (result && result.error) return PNC.toast(result.error, 'err');
+        renderAll();
+        return;
+      }
       const addBtn = e.target.closest('#addPetBtn, #addPetBtn2');
       if (addBtn) { openPetModal(null); return; }
       const edit = e.target.closest('.pet-edit');
@@ -639,6 +652,10 @@
       else if (e.target.id === 'cardForm') saveCard(e);
     });
 
+    window.addEventListener('pnc:data-ready', syncView);
+    window.addEventListener('hashchange', function () {
+      if (me()) setTab(window.location.hash.replace('#', ''));
+    });
     window.addEventListener('pnc:auth', function () {
       if (me()) { showApp(); } else { showGate(); }
     });
