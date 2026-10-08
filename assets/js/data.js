@@ -372,12 +372,26 @@
   }
 
   function applyRemoteSnapshot(snapshot) {
-    if (!snapshot || typeof snapshot !== "object" || snapshot.version !== 1) return false;
+    if (!productionMode() || !snapshot || typeof snapshot !== "object" || snapshot.version !== 1) return false;
     db = snapshot;
-    try { localStorage.setItem(KEY, JSON.stringify(db)); } catch {}
+    // Keep authenticated records in memory, not persistent browser storage.
+    try { localStorage.removeItem(KEY); } catch {}
     try { if (global.PNC && global.PNC.onDbChange) global.PNC.onDbChange(); } catch {}
     global.dispatchEvent(new CustomEvent("pnc:data-ready", { detail: { db: db } }));
     return true;
+  }
+
+  function clearRemoteSnapshot() {
+    if (!productionMode()) return;
+    db = publicSnapshot(seed());
+    try {
+      localStorage.removeItem(KEY);
+      localStorage.removeItem("pnc_convex_seeded");
+      localStorage.removeItem(MEMBER_KEY);
+      localStorage.removeItem(SESSION_KEY);
+    } catch {}
+    try { if (global.PNC && global.PNC.onDbChange) global.PNC.onDbChange(); } catch {}
+    global.dispatchEvent(new CustomEvent("pnc:data-ready", { detail: { db: db } }));
   }
 
   async function remoteMutation(op, payload) {
@@ -404,7 +418,7 @@
     if (db) return db;
     if (productionMode()) {
       db = publicSnapshot(seed());
-      try { localStorage.setItem(KEY, JSON.stringify(db)); } catch {}
+      try { localStorage.removeItem(KEY); } catch {}
       return db;
     }
     try {
@@ -417,11 +431,15 @@
   }
 
   function persist() {
+    if (productionMode()) return;
     try { localStorage.setItem(KEY, JSON.stringify(db)); } catch {}
     if (global.PNC && global.PNC.onDbChange) { try { global.PNC.onDbChange(); } catch {} }
   }
 
-  function reset() { db = seed(); persist(); return db; }
+  function reset() {
+    if (productionMode()) { clearRemoteSnapshot(); return db; }
+    db = seed(); persist(); return db;
+  }
 
   /* --------------------------- derived lookups ------------------------ */
   const byId = (arr, id) => arr.find((x) => x.id === id);
@@ -613,8 +631,13 @@
   function logOut() {
     clearSession();
     const c = clerk();
-    if (!c || !c.active) return Promise.resolve();
-    return Promise.resolve(c.signOut()).catch(function () {});
+    if (!c || !c.active) {
+      if (productionMode()) clearRemoteSnapshot();
+      return Promise.resolve();
+    }
+    return Promise.resolve(c.signOut()).finally(function () {
+      if (productionMode()) clearRemoteSnapshot();
+    });
   }
   function clearSession() { try { localStorage.removeItem(MEMBER_KEY); } catch {} }
   function localOwner() {
@@ -724,10 +747,9 @@
   }
   function adminLogout() {
     try { localStorage.removeItem(SESSION_KEY); } catch {}
-    /* Also end the Clerk staff session when it is in charge, so
-       leaving the console can't leave a live session behind. */
     const c = clerk();
-    if (c && c.active) c.signOut();
+    if (productionMode()) clearRemoteSnapshot();
+    if (c && c.active) return c.signOut();
   }
   function session() {
     try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch { return null; }
@@ -782,6 +804,7 @@
   /* --------------------------- bookings API --------------------------- */
   function createBooking(input) {
     if (remoteEnabled()) return remoteMutation("createBooking", input);
+    if (productionMode()) return { error: "Secure backend is not available." };
     const owner = currentOwner();
     if (!owner) return { error: "Please sign in to book an appointment." };
     const svc = byId(db.services, input.serviceId);
@@ -823,6 +846,7 @@
 
   function rescheduleBooking(bookingId, date, hour, providerId) {
     if (remoteEnabled()) return remoteMutation("rescheduleBooking", { bookingId, date, hour, providerId });
+    if (productionMode()) return { error: "Secure backend is not available." };
 
     const bk = byId(db.bookings, bookingId);
     if (!bk) return { error: "Booking not found." };
@@ -845,6 +869,7 @@
 
   function cancelBooking(bookingId) {
     if (remoteEnabled()) return remoteMutation("cancelBooking", { bookingId });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const bk = byId(db.bookings, bookingId);
     if (!bk) return { error: "Booking not found." };
     const owner = currentOwner();
@@ -859,6 +884,7 @@
 
   function setBookingStatus(bookingId, status) {
     if (remoteEnabled()) return remoteMutation("setBookingStatus", { bookingId, status });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const admin = currentAdmin();
     if (!admin || !can("bookings.manage")) return { error: "Not authorized." };
     const bk = byId(db.bookings, bookingId);
@@ -873,6 +899,7 @@
 
   function addBookingNote(bookingId, note) {
     if (remoteEnabled()) return remoteMutation("addBookingNote", { bookingId, note });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const admin = currentAdmin();
     if (!admin || !can("bookings.notes")) return { error: "Not authorized." };
     const bk = byId(db.bookings, bookingId);
@@ -886,6 +913,7 @@
   /* ---------------------------- orders API ---------------------------- */
   function placeOrder(items, fulfillment, address) {
     if (remoteEnabled()) return remoteMutation("placeOrder", { items, fulfillment, address });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const owner = currentOwner();
     if (!owner) return { error: "Please sign in to checkout." };
     const lines = items.map((i) => {
@@ -924,6 +952,7 @@
 
   function setOrderStage(orderId, stage) {
     if (remoteEnabled()) return remoteMutation("setOrderStage", { orderId, stage });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const admin = currentAdmin();
     if (!admin || !can("payments.take")) return { error: "Not authorized." };
     const o = byId(db.orders, orderId);
@@ -945,6 +974,7 @@
 
   function refund(orderId, amount) {
     if (remoteEnabled()) return remoteMutation("refund", { orderId, amount });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const admin = currentAdmin();
     if (!admin || !can("payments.refund")) return { error: "Not authorized." };
     const o = byId(db.orders, orderId);
@@ -964,6 +994,7 @@
   /* ---------------------------- listings ------------------------------ */
   function submitInquiry(listingId, message2) {
     if (remoteEnabled()) return remoteMutation("submitInquiry", { listingId, message: message2 });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const owner = currentOwner();
     const l = byId(db.listings, listingId);
     if (!l) return { error: "Listing not found." };
@@ -980,6 +1011,7 @@
 
   function setListingStatus(listingId, status) {
     if (remoteEnabled()) return remoteMutation("setListingStatus", { listingId, status });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const admin = currentAdmin();
     if (!admin || !can("listings.edit")) return { error: "Not authorized." };
     const l = byId(db.listings, listingId);
@@ -994,6 +1026,7 @@
   /* --------------------------- inventory ------------------------------ */
   function adjustStock(productId, delta, note) {
     if (remoteEnabled()) return remoteMutation("adjustStock", { productId, delta, note });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const admin = currentAdmin();
     if (!admin || !can("inventory.edit")) return { error: "Not authorized." };
     const p = byId(db.products, productId);
@@ -1008,6 +1041,7 @@
   }
   function updateProduct(productId, patch) {
     if (remoteEnabled()) return remoteMutation("updateProduct", { productId, patch });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const admin = currentAdmin();
     if (!admin || !can("inventory.edit")) return { error: "Not authorized." };
     const p = byId(db.products, productId);
@@ -1029,6 +1063,7 @@
   /* ----------------------------- CMS ---------------------------------- */
   function updateCMS(patch) {
     if (remoteEnabled()) return remoteMutation("updateCMS", { patch });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const admin = currentAdmin();
     if (!admin || !can("cms.edit")) return { error: "Not authorized." };
     Object.assign(db.cms, patch);
@@ -1038,6 +1073,7 @@
   }
   function updateService(serviceId, patch) {
     if (remoteEnabled()) return remoteMutation("updateService", { serviceId, patch });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const admin = currentAdmin();
     if (!admin || !can("cms.edit")) return { error: "Not authorized." };
     const s = byId(db.services, serviceId);
@@ -1054,6 +1090,7 @@
   /* ------------------------- staff & waitlist ------------------------- */
   function addLeave(providerId, date, reason) {
     if (remoteEnabled()) return remoteMutation("addLeave", { providerId, date, reason });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const admin = currentAdmin();
     if (!admin || !can("staff.manage")) return { error: "Not authorized." };
     if (!PROVIDER_BY_ID[providerId] || !/^\d{4}-\d{2}-\d{2}$/.test(String(date)) || String(date) < todayISO()) return { error: "Invalid leave date." };
@@ -1065,6 +1102,7 @@
   }
   function removeLeave(leaveId) {
     if (remoteEnabled()) return remoteMutation("removeLeave", { leaveId });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const admin = currentAdmin();
     if (!admin || !can("staff.manage")) return { error: "Not authorized." };
     db.staffLeave = db.staffLeave.filter((l) => l.id !== leaveId);
@@ -1073,6 +1111,7 @@
   }
   function joinWaitlist(serviceId, providerId, note) {
     if (remoteEnabled()) return remoteMutation("joinWaitlist", { serviceId, providerId, note });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const owner = currentOwner();
     if (!owner) return { error: "Please sign in to join the waitlist." };
     db.waitlist.push({ id: uid("wl"), ownerId: owner.id, serviceId, providerId, note: note || "", createdAt: todayISO() });
@@ -1083,6 +1122,7 @@
   }
   function removeWaitlist(waitlistId) {
     if (remoteEnabled()) return remoteMutation("removeWaitlist", { waitlistId });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const owner = currentOwner();
     const admin = currentAdmin();
     const row = db.waitlist.find(w => w.id === waitlistId);
@@ -1097,6 +1137,7 @@
   /* ----------------------------- CRM ---------------------------------- */
   function updateOwner(ownerId, patch) {
     if (remoteEnabled()) return remoteMutation("updateOwner", { ownerId, patch });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const actor = currentOwner();
     const a = currentAdmin();
     if (!actor && !a) return { error: "Not authorized." };
@@ -1120,6 +1161,7 @@
 
   function addPet(ownerId, input) {
     if (remoteEnabled()) return remoteMutation("addPet", { ownerId, input });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const actor = currentOwner();
     const a = currentAdmin();
     if (!actor && !a) return { error: "Not authorized." };
@@ -1146,6 +1188,7 @@
 
   function updatePet(petId, patch) {
     if (remoteEnabled()) return remoteMutation("updatePet", { petId, patch });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const actor = currentOwner();
     const a = currentAdmin();
     const p = byId(db.pets, petId);
@@ -1164,6 +1207,7 @@
 
   function removePet(petId) {
     if (remoteEnabled()) return remoteMutation("removePet", { petId });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const actor = currentOwner();
     const a = currentAdmin();
     const p = byId(db.pets, petId);
@@ -1194,6 +1238,7 @@
 
   function addVaccine(petId, name, date, lot) {
     if (remoteEnabled()) return remoteMutation("addVaccine", { petId, name, date, lot });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const actor = currentOwner();
     const p = byId(db.pets, petId);
     if (!p) return { error: "Pet not found." };
@@ -1205,6 +1250,7 @@
   }
   function setVaccineStatus(petId, index, status) {
     if (remoteEnabled()) return remoteMutation("setVaccineStatus", { petId, index, status });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const admin = currentAdmin();
     if (!admin || !can("crm.edit")) return { error: "Not authorized." };
     const p = byId(db.pets, petId);
@@ -1241,6 +1287,7 @@
      single transaction — the "integrated checkout". */
   function posCharge(ownerId, lines, method) {
     if (remoteEnabled()) return remoteMutation("posCharge", { ownerId, lines, method });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const admin = currentAdmin();
     if (!admin || !can("payments.take")) return { error: "Not authorized." };
     if (!byId(db.owners, ownerId)) return { error: "Owner not found." };
@@ -1264,6 +1311,7 @@
   /* ---------------------------- payments ------------------------------ */
   function addPaymentMethod(ownerId, brand, last4, expMonth, expYear) {
     if (remoteEnabled()) return remoteMutation("addPaymentMethod", { ownerId, brand, last4, expMonth, expYear });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const actor = currentOwner();
     if (!actor || actor.id !== ownerId) return false;
     db.payments = (db.payments || []).filter((p) => !(p.ownerId === ownerId && p.last4 === last4));
@@ -1274,6 +1322,7 @@
   }
   function removePaymentMethod(payId) {
     if (remoteEnabled()) return remoteMutation("removePaymentMethod", { payId });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const actor = currentOwner();
     const pm = byId(db.payments || [], payId);
     if (!actor || !pm || pm.ownerId !== actor.id) return false;
@@ -1283,6 +1332,7 @@
   }
   function setPrimaryPayment(payId) {
     if (remoteEnabled()) return remoteMutation("setPrimaryPayment", { payId });
+    if (productionMode()) return { error: "Secure backend is not available." };
     const actor = currentOwner();
     const pm = byId(db.payments || [], payId);
     if (!actor || !pm || pm.ownerId !== actor.id) return;
@@ -1298,7 +1348,7 @@
     PROVIDERS, PROVIDER_BY_ID, DAY_START, DAY_END, STEP,
     /* helpers */
     esc, money, uid, isoDate, todayISO, addDays, fmtDate, fmtTime, fmtDT, daysBetween,
-    isValidEmail, clone, titleCase, speciesIcon, initials, parseD, productionMode, applyRemoteSnapshot,
+    isValidEmail, clone, titleCase, speciesIcon, initials, parseD, productionMode, applyRemoteSnapshot, clearRemoteSnapshot,
     /* store */
     load, persist, reset, seed,
     /* lookups */
