@@ -94,7 +94,7 @@ In the Vercel project, add these environment variables for Production (and Previ
 | `CLERK_PUBLISHABLE_KEY` | Clerk production publishable key beginning `pk_live_` |
 | `CONVEX_URL` | Production Convex deployment URL ending in `.convex.cloud` |
 
-Vercel runs `npm run build`, which writes `assets/js/config.js` from these values and fails if either value is missing or invalid. Both values are public in the shipped browser bundle; the Clerk secret key is not needed by this client or by Convex's Clerk JWT verification. Never put a Clerk secret key or bootstrap secret in the frontend config.
+The static client reads its public configuration from `assets/js/config.js`. Keep that file in sync with the Production values above when rotating either value. Both values are public in the shipped browser bundle; the Clerk secret key is not needed by this client or by Convex's Clerk JWT verification. Never put a Clerk secret key or bootstrap secret in the frontend config. `npm run build` copies the pinned Convex browser SDK into the deployed assets so the site does not depend on a third-party CDN at runtime.
 
 ### 3. Deploy Convex
 
@@ -111,7 +111,7 @@ For production, deploy the Convex backend after setting the production issuer:
 npx convex deploy
 ```
 
-The Vercel production build requires both environment variables. Clerk must also allow the website's production origin and redirect URLs. The initial production Convex database should be populated with reviewed real data; do not run the demo snapshot bootstrap against production.
+Keep the Vercel values above aligned with `assets/js/config.js`. Clerk must also allow the website's production origin and redirect URLs. The initial production Convex database should be populated with reviewed real data; do not run the demo snapshot bootstrap against production.
 
 ### 4. Bootstrap a non-production/demo deployment
 
