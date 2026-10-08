@@ -98,8 +98,11 @@
     await loadScript("/assets/js/vendor/clerk-js/clerk.browser.js", "ClerkJS", {
       "data-clerk-publishable-key": PUBLISHABLE_KEY,
     });
-    if (typeof global.Clerk !== "function" || typeof global.__internal_ClerkUICtor !== "function") {
-      throw new Error("Local Clerk browser bundles did not initialize their constructors.");
+    // The Clerk browser bundle creates window.Clerk as an SDK *instance*,
+    // not a constructor. The UI bundle exposes its UI constructor separately.
+    if (!global.Clerk || typeof global.Clerk.load !== "function" ||
+        typeof global.__internal_ClerkUICtor !== "function") {
+      throw new Error("Local Clerk browser bundles did not initialize.");
     }
     return global.__internal_ClerkUICtor;
   }
@@ -185,7 +188,7 @@
         const domain = clerkDomain(PUBLISHABLE_KEY);
         if (!domain) throw new Error("Could not derive a Clerk domain from the publishable key.");
         const ClerkUI = await loadClerkUI();
-        const clerk = new global.Clerk(PUBLISHABLE_KEY);
+        const clerk = global.Clerk;
         await clerk.load({ ui: { ClerkUI } });
         api.clerk = clerk;
         api.loaded = true;
