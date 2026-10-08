@@ -8,6 +8,8 @@
 
   const DEFAULT_URL = "https://gallant-lion-490.convex.cloud";
   const SYNCED_KEY = "pnc_convex_seeded";
+  let authBound = false;
+  let boundClerk = null;
 
   function configured() {
     return String(global.__PNC_CONVEX_URL__ || DEFAULT_URL).trim() || null;
@@ -45,6 +47,10 @@
         const clerk = global.PNC_CLERK;
         if (!clerk || !clerk.active || !clerk.clerk) return false;
 
+        if (authBound && boundClerk === clerk.clerk) {
+          api.enabled = true;
+          return true;
+        }
         api.client.setAuth(
           async function () {
             try {
@@ -60,6 +66,8 @@
           }
         );
 
+        authBound = true;
+        boundClerk = clerk.clerk;
         api.enabled = true;
         return true;
       } catch (err) {
@@ -77,7 +85,7 @@
         const snapshot = await api.client.query("domain:bootstrap", {});
         if (snapshot && global.PNC_DB && global.PNC_DB.applyRemoteSnapshot) {
           global.PNC_DB.applyRemoteSnapshot(snapshot);
-          try { global.localStorage.setItem(SYNCED_KEY, "1"); } catch {}
+          // No persistent flag or data is needed for authenticated snapshots.
           global.dispatchEvent(new CustomEvent("pnc:convex-ready", { detail: { snapshot } }));
           return true;
         }
@@ -108,18 +116,30 @@
       }
       api.client = null;
       api.enabled = false;
+      authBound = false;
+      boundClerk = null;
     }
   };
 
   global.PNC_CONVEX = api;
 
+  let binding = null;
   async function bindClerk() {
-    const on = await api.connect();
-    if (!on) return;
-    if (global.PNC_CLERK && global.PNC_CLERK.active) {
-      try { await api.mutate("ensureOwner", {}); } catch {}
-    }
-    await api.syncBootstrap();
+    if (binding) return binding;
+    binding = (async function () {
+      const on = await api.connect();
+      if (!on) return;
+      const identity = global.PNC_CLERK && global.PNC_CLERK.currentOwner();
+      if (!identity) {
+        if (global.PNC_DB && global.PNC_DB.clearRemoteSnapshot) global.PNC_DB.clearRemoteSnapshot();
+        return;
+      }
+      const result = await api.mutate("ensureOwner", {});
+      if (result && result.error) return;
+      await api.syncBootstrap();
+    })();
+    try { return await binding; }
+    finally { binding = null; }
   }
 
   global.addEventListener("pnc:clerk", bindClerk);

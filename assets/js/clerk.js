@@ -3,31 +3,21 @@
    ------------------------------------------------------------
    Clerk is the sole identity provider for members and staff.
 
-   Zero build step: @clerk/clerk-js is fetched from Clerk's own
-   CDN the same way convexClient.js fetches the Convex client. The
-   only thing that has to be present in the repo is a PUBLISHABLE
-   key (pk_test_/pk_live_), which is safe to ship in a static
-   deploy — the secret key stays out of the repo entirely and is
-   set in the Convex dashboard for the backend.
+   Clerk browser SDKs are deployed alongside the static site.
+   The publishable key is public; private credentials must never
+   be embedded in frontend assets.
 
-   Role model
-   ----------
-   Staff roles live in the Clerk user's `publicMetadata.role`
-   (super | desk | provider | retail), which maps onto the existing
-   PNC_DB RBAC table. publicMetadata is readable by the browser,
-   which is exactly what the admin console needs. The role is
-   provisioned in the Clerk dashboard, not written from the client.
-
-   Members carry no role; `publicMetadata.plan` mirrors the
-   membership plan so discounts still resolve server-side.
+   Staff permissions and membership entitlements are enforced by
+   Convex database records, never by browser-supplied metadata.
+   Clerk publicMetadata is presentation-only.
 
    Demo mode
    ---------
    With no key configured the site runs in DEMO MODE. This is NOT
    an authentication fallback — Clerk is still the only thing that
    can issue a real session. It is a documented escape hatch
-   (?demo=1 or a missing key) that keeps the deployed demo and the
-   test harness usable while the Clerk project is being created.
+   (?demo=1 or a missing key) available on local development hosts
+   only. Hosted deployments never fall back to demo authentication.
    ============================================================ */
 
 (function (global) {
@@ -39,7 +29,9 @@
      window.PNC_CLERK_PUBLISHABLE_KEY, but there is no reason to:
      one place, one deploy target. The SECRET key never goes here. */
   const DEFAULT_KEY = "pk_live_Y2xlcmsucGF3c2FuZGNsYXdzY29ubmVjdGh1Yi5jb20k";
-  const PUBLISHABLE_KEY = global.PNC_CLERK_PUBLISHABLE_KEY || DEFAULT_KEY;
+  const PUBLISHABLE_KEY = typeof global.PNC_CLERK_PUBLISHABLE_KEY === "string"
+    ? global.PNC_CLERK_PUBLISHABLE_KEY
+    : DEFAULT_KEY;
   const DEMO_FLAG = "pnc_demo";
 
   function productionHost() {
@@ -106,7 +98,26 @@
     await loadScript("/assets/js/vendor/clerk-js/clerk.browser.js", "ClerkJS", {
       "data-clerk-publishable-key": PUBLISHABLE_KEY,
     });
+    // The Clerk browser bundle creates window.Clerk as an SDK *instance*,
+    // not a constructor. The UI bundle exposes its UI constructor separately.
+    if (!global.Clerk || typeof global.Clerk.load !== "function" ||
+        typeof global.__internal_ClerkUICtor !== "function") {
+      throw new Error("Local Clerk browser bundles did not initialize.");
+    }
     return global.__internal_ClerkUICtor;
+  }
+
+  // Clerk sessions can change without a page reload (sign-in, sign-out,
+  // switching accounts). Drop any previous user's cached Convex data first.
+  let lastUserId = null;
+  function identityChanged() {
+    const nextId = api.clerk && api.clerk.user ? api.clerk.user.id : null;
+    if (nextId === lastUserId) return;
+    lastUserId = nextId;
+    if (global.PNC_DB && typeof global.PNC_DB.clearRemoteSnapshot === "function") {
+      global.PNC_DB.clearRemoteSnapshot();
+    }
+    announce("clerk", true);
   }
 
   /* --------------------------- public API --------------------------- */
@@ -145,6 +156,8 @@
 
   const bridge = {
     get active() { return api.loaded && !!api.clerk; },
+    // Exposed for the existing admin/member UI listeners and Convex bridge.
+    get clerk() { return api.clerk; },
     get demo() { return api.demo; },
     get configured() { return configured(); },
     get mode() {
@@ -175,10 +188,14 @@
         const domain = clerkDomain(PUBLISHABLE_KEY);
         if (!domain) throw new Error("Could not derive a Clerk domain from the publishable key.");
         const ClerkUI = await loadClerkUI();
-        const clerk = new global.Clerk(PUBLISHABLE_KEY);
+        const clerk = global.Clerk;
         await clerk.load({ ui: { ClerkUI } });
         api.clerk = clerk;
         api.loaded = true;
+        lastUserId = clerk.user ? clerk.user.id : null;
+        if (typeof clerk.addListener === "function") {
+          clerk.addListener(identityChanged);
+        }
         announce("clerk", true);
         return clerk;
       } catch (err) {
@@ -229,6 +246,7 @@
     async signOut() {
       if (!bridge.active) return;
       await api.clerk.signOut();
+      identityChanged();
     },
   };
 

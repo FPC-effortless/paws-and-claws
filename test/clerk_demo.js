@@ -23,6 +23,7 @@ const sandbox = {
   CustomEvent, URLSearchParams,
   atob: (s) => Buffer.from(s, "base64").toString("ascii"),
 };
+sandbox.PNC_CLERK_PUBLISHABLE_KEY = ""; // Exercise missing-key local demo mode.
 sandbox.window = sandbox;
 sandbox.globalThis = sandbox;
 vm.createContext(sandbox);

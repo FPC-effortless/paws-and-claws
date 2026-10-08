@@ -45,6 +45,38 @@ assert(!!D.setBookingStatus("synthetic-booking","completed").error, "admin statu
 assert(!!D.updateOwner("synthetic-owner",{plan:"senior"}).error, "owner mutation cannot run without authenticated authorization");
 assert(!!D.updateProduct("p1",{price:0.01,stock:999}).error, "inventory mutation cannot run without authenticated authorization");
 
+// A valid Clerk identity and cached records must not enable local mutations
+// when the authoritative Convex backend is disconnected.
+sandbox.PNC_CLERK = {
+  active: true,
+  currentOwner() { return { clerkId: "user-test", email: "owner@example.test" }; },
+  currentAdmin() { return null; }
+};
+D.applyRemoteSnapshot({
+  ...D.seed(),
+  owners: [{
+    id: "ow-local", clerkId: "user-test", email: "owner@example.test",
+    fullName: "Test Owner", plan: "puppy", createdAt: "2026-01-01"
+  }],
+  pets: [{
+    id: "pet-local", ownerId: "ow-local", petName: "Test Pet",
+    species: "Dog", vaccines: [], createdAt: "2026-01-01"
+  }],
+  admins: []
+});
+assert(D.currentOwner() !== null, "cached signed-in member is present for disconnect test");
+const before = D.db.bookings.length;
+const blocked = D.createBooking({
+  serviceId: "sv-nails", petId: "pet-local", date: "2099-01-01", hour: 9, providerId: "Rosa"
+});
+assert(!!blocked.error && D.db.bookings.length === before,
+  "signed-in hosted members cannot create local-only bookings");
+assert(!!D.updateOwner("ow-local", { fullName: "Not persisted" }).error,
+  "signed-in hosted members cannot modify cached profiles offline");
+D.clearRemoteSnapshot();
+assert(D.currentOwner() === null && D.db.owners.length === 0,
+  "session change clears the authenticated snapshot");
+
 console.log("\n== done ==");
 if (failures) { process.exitCode = 1; console.error(failures + " failure(s)"); }
 else console.log("ALL PRODUCTION GUARDS PASSED");

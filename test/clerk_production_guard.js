@@ -19,6 +19,7 @@ const sandbox = {
   atob: (s) => Buffer.from(s, "base64").toString("ascii"),
   dispatchEvent(ev) { dispatched.push(ev); },
 };
+sandbox.PNC_CLERK_PUBLISHABLE_KEY = ""; // Exercise missing-key hosted failure.
 sandbox.window = sandbox;
 sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
