@@ -714,7 +714,7 @@
       "staff.manage": false, "roles.edit": false
     },
     provider: {
-      "crm.view": "own", "bookings.view": "own", "bookings.notes": true, "messages.send": "own",
+      "crm.view": "own", "bookings.view": "own", "bookings.notes": "own", "messages.send": "own",
       "payments.take": false, "payments.refund": false, "cms.edit": false,
       "inventory.edit": false, "listings.edit": false, "reports.view": false,
       "staff.manage": false, "roles.edit": false
@@ -745,11 +745,11 @@
     audit("Admin sign-in", a.email + " signed in as " + ADMIN_ROLES[a.role].name);
     return { admin: a };
   }
-  function adminLogout() {
+  async function adminLogout() {
     try { localStorage.removeItem(SESSION_KEY); } catch {}
     const c = clerk();
     if (productionMode()) clearRemoteSnapshot();
-    if (c && c.active) return c.signOut();
+    if (c && c.active) await c.signOut();
   }
   function session() {
     try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch { return null; }
@@ -851,13 +851,14 @@
     const bk = byId(db.bookings, bookingId);
     if (!bk) return { error: "Booking not found." };
     const owner = currentOwner();
-    if (!owner || (bk.ownerId !== owner.id && !can("bookings.manage"))) return { error: "Not authorized." };
+    if ((!owner || bk.ownerId !== owner.id) && !can("bookings.manage")) return { error: "Not authorized." };
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date)) || String(date) < todayISO()) return { error: "Bookings cannot be moved into the past." };
     if (!["confirmed","pending"].includes(bk.status)) return { error: "This booking cannot be rescheduled." };
     const svc = byId(db.services, bk.serviceId);
     const pid = providerId || bk.providerId;
-    const slots = slotsFor(db, bk.serviceId, date).filter((s) => s.providerId === pid);
-    const slot = slots.find((s) => s.hour === Number(hour));
+    const availability = { ...db, bookings: db.bookings.filter(b => b.id !== bookingId) };
+    const slots = slotsFor(availability, bk.serviceId, date).filter((s) => s.providerId === pid);
+    const slot = slots.find((s) => s.available && s.hour === Number(hour));
     if (!slot) return { error: "That slot was just taken — please choose another." };
     bk.date = date; bk.hour = slot.hour; bk.providerId = pid;
     notify(bk.ownerId, "booking", "Appointment rescheduled",
@@ -889,7 +890,8 @@
     if (!admin || !can("bookings.manage")) return { error: "Not authorized." };
     const bk = byId(db.bookings, bookingId);
     if (!bk) return { error: "Booking not found." };
-    if (!STAGES.includes(status) && !["completed","no-show"].includes(status)) return { error: "Invalid booking status." };
+    if (!["pending", "confirmed", "completed", "cancelled", "no-show"].includes(status)) return { error: "Invalid booking status." };
+    if (!["pending", "confirmed"].includes(bk.status) && bk.status !== status) return { error: "Closed bookings cannot be changed." };
     bk.status = status;
     notify(bk.ownerId, "booking", "Appointment updated", (byId(db.services, bk.serviceId) || {}).name + " for " + (byId(db.pets, bk.petId) || {}).petName + " is now " + status + ".");
     audit("Booking status", bk.id + " -> " + status);
@@ -904,6 +906,7 @@
     if (!admin || !can("bookings.notes")) return { error: "Not authorized." };
     const bk = byId(db.bookings, bookingId);
     if (!bk) return { error: "Booking not found." };
+    if (scopeOf("bookings.notes") === "own" && bk.providerId !== admin.providerId) return { error: "Not authorized." };
     bk.internalNotes = (bk.internalNotes || []).concat([{ by: (currentAdmin() || {}).name || "Staff", note, at: todayISO() }]);
     audit("Internal note added", bk.id);
     persist();
@@ -1134,6 +1137,66 @@
     return true;
   }
 
+  /* ------------------------- CRM & portal messages ------------------------- */
+  function createOwner(input) {
+    if (remoteEnabled()) return remoteMutation("createOwner", { input });
+    if (productionMode()) return { error: "Secure backend is not available." };
+    if (!can("crm.edit")) return { error: "Not authorized." };
+    const fullName = String(input.fullName || "").trim();
+    const email = String(input.email || "").trim().toLowerCase();
+    if (fullName.length < 2 || !isValidEmail(email)) return { error: "Enter a full name and valid email." };
+    if (db.owners.some(o => o.email === email)) return { error: "An account with this email already exists." };
+    const owner = { id: uid("ow"), fullName, email, phone: String(input.phone || ""), address: "",
+      emergencyContact: "", notes: "", plan: "puppy", createdAt: todayISO() };
+    db.owners.push(owner);
+    audit("Customer created", owner.id);
+    persist();
+    return { owner };
+  }
+
+  function sendMessage(ownerId, subject, body) {
+    if (remoteEnabled()) return remoteMutation("sendMessage", { ownerId, subject, body });
+    if (productionMode()) return { error: "Secure backend is not available." };
+    const a = currentAdmin();
+    if (!a || !scopeOf("messages.send") || !byId(db.owners, ownerId)) return { error: "Not authorized." };
+    if (scopeOf("messages.send") === "own" &&
+        !db.bookings.some(b => b.ownerId === ownerId && b.providerId === a.providerId)) {
+      return { error: "Not authorized." };
+    }
+    subject = String(subject || "").trim();
+    body = String(body || "").trim();
+    if (!subject || !body || subject.length > 200 || body.length > 4000) {
+      return { error: "Enter a subject and message (maximum 4,000 characters)." };
+    }
+    message(ownerId, "portal", subject, body, "out");
+    notify(ownerId, "message", subject, "You have a new message in your member inbox.");
+    audit("Portal message sent", ownerId);
+    return { ok: true };
+  }
+
+  function markMessageRead(messageId) {
+    if (remoteEnabled()) return remoteMutation("markMessageRead", { messageId });
+    if (productionMode()) return { error: "Secure backend is not available." };
+    const owner = currentOwner();
+    const msg = byId(db.messages, messageId);
+    if (!owner || !msg || msg.ownerId !== owner.id || msg.direction !== "out") return { error: "Not authorized." };
+    msg.read = true;
+    persist();
+    return { ok: true };
+  }
+
+  function setContactStatus(contactId, status) {
+    if (remoteEnabled()) return remoteMutation("setContactStatus", { contactId, status });
+    if (productionMode()) return { error: "Secure backend is not available." };
+    if (!can("crm.edit")) return { error: "Not authorized." };
+    const row = byId(db.contactMessages || [], contactId);
+    if (!row || !["new", "resolved"].includes(status)) return { error: "Invalid contact request." };
+    row.status = status;
+    audit("Contact request " + status, contactId);
+    persist();
+    return { ok: true };
+  }
+
   /* ----------------------------- CRM ---------------------------------- */
   function updateOwner(ownerId, patch) {
     if (remoteEnabled()) return remoteMutation("updateOwner", { ownerId, patch });
@@ -1144,6 +1207,7 @@
     if (a ? !can("crm.edit") : ownerId !== actor.id) return { error: "Not authorized." };
     const o = byId(db.owners, ownerId);
     if (!o) return { error: "Owner not found." };
+    if (patch.fullName !== undefined && String(patch.fullName).trim().length < 2) return { error: "Name is too short." };
     if (patch && patch.plan !== undefined && !Object.prototype.hasOwnProperty.call(PLAN_DISCOUNT, patch.plan)) return { error: "Invalid membership plan." };
     if (patch && patch.email !== undefined) {
       const email = String(patch.email).trim().toLowerCase();
@@ -1159,6 +1223,18 @@
     return { owner: o };
   }
 
+  function petInputError(input) {
+    if (input.petName !== undefined && !String(input.petName).trim()) return "Give your pet a name.";
+    if (input.weightKg !== undefined && (!Number.isFinite(Number(input.weightKg)) || Number(input.weightKg) < 0)) return "Weight must be a non-negative number.";
+    if (input.species !== undefined && !SPECIES.includes(input.species)) return "Choose a valid species.";
+    if (input.dob) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(input.dob))) return "Enter a valid birth date.";
+      const d = parseD(input.dob);
+      if (Number.isNaN(d.getTime()) || isoDate(d) !== input.dob || input.dob > todayISO()) return "Enter a valid past birth date.";
+    }
+    return null;
+  }
+
   function addPet(ownerId, input) {
     if (remoteEnabled()) return remoteMutation("addPet", { ownerId, input });
     if (productionMode()) return { error: "Secure backend is not available." };
@@ -1168,6 +1244,8 @@
     if (a ? !can("crm.edit") : ownerId !== actor.id) return { error: "Not authorized." };
     const o = byId(db.owners, ownerId);
     if (!o) return { error: "Owner not found." };
+    const error = petInputError(input);
+    if (error) return { error };
     const pet = {
       id: uid("pt"), ownerId, petName: String(input.petName || "").trim() || "New pet",
       species: SPECIES.indexOf(input.species) !== -1 ? input.species : "Dog",
@@ -1195,11 +1273,13 @@
     if (!p) return { error: "Pet not found." };
     if (!actor && !a) return { error: "Not authorized." };
     if (a ? !can("crm.edit") : p.ownerId !== actor.id) return { error: "Not authorized." };
+    const error = petInputError(patch);
+    if (error) return { error };
     ["petName", "species", "breed", "dob", "sex", "altered", "weightKg", "microchip", "coat", "notes"].forEach((k) => {
       if (patch[k] !== undefined) p[k] = patch[k];
     });
     if (Array.isArray(patch.tags)) p.tags = patch.tags.filter((t) => TEMPERAMENTS.indexOf(t) !== -1);
-    if (Array.isArray(patch.vaccines)) p.vaccines = patch.vaccines;
+    // Vaccine review status is changed only through the staff approval operation.
     audit("Pet updated", p.petName);
     persist();
     return { pet: p };
@@ -1243,6 +1323,10 @@
     const p = byId(db.pets, petId);
     if (!p) return { error: "Pet not found." };
     if (!actor || p.ownerId !== actor.id) return { error: "Not authorized." };
+    if (!VACCINES.includes(name) || !/^\d{4}-\d{2}-\d{2}$/.test(String(date)) ||
+        Number.isNaN(parseD(date).getTime()) || isoDate(parseD(date)) !== date || date > todayISO()) {
+      return { error: "Enter a valid vaccine and administration date." };
+    }
     p.vaccines = (p.vaccines || []).concat([{ name, date, lot: lot || "", status: "pending" }]);
     audit("Vaccine uploaded", p.petName + " — " + name + " (pending review)");
     persist();
@@ -1313,7 +1397,13 @@
     if (remoteEnabled()) return remoteMutation("addPaymentMethod", { ownerId, brand, last4, expMonth, expYear });
     if (productionMode()) return { error: "Secure backend is not available." };
     const actor = currentOwner();
-    if (!actor || actor.id !== ownerId) return false;
+    if (!actor || actor.id !== ownerId) return { error: "Not authorized." };
+    const now = new Date();
+    if (!/^\d{4}$/.test(String(last4)) || !Number.isInteger(expMonth) || expMonth < 1 || expMonth > 12 ||
+        !Number.isInteger(expYear) || expYear < now.getFullYear() ||
+        (expYear === now.getFullYear() && expMonth < now.getMonth() + 1)) {
+      return { error: "Enter a valid, unexpired demo card." };
+    }
     db.payments = (db.payments || []).filter((p) => !(p.ownerId === ownerId && p.last4 === last4));
     db.payments.push({ id: uid("pm"), ownerId, brand, last4, expMonth, expYear, primary: db.payments.filter((p) => p.ownerId === ownerId).length === 0 });
     audit("Payment method added", brand + " ending " + last4);
@@ -1325,7 +1415,7 @@
     if (productionMode()) return { error: "Secure backend is not available." };
     const actor = currentOwner();
     const pm = byId(db.payments || [], payId);
-    if (!actor || !pm || pm.ownerId !== actor.id) return false;
+    if (!actor || !pm || pm.ownerId !== actor.id) return { error: "Not authorized." };
     db.payments = (db.payments || []).filter((p) => p.id !== payId);
     persist();
     return true;
@@ -1335,9 +1425,10 @@
     if (productionMode()) return { error: "Secure backend is not available." };
     const actor = currentOwner();
     const pm = byId(db.payments || [], payId);
-    if (!actor || !pm || pm.ownerId !== actor.id) return;
-    (db.payments || []).forEach((p) => { p.primary = p.id === payId; });
+    if (!actor || !pm || pm.ownerId !== actor.id) return { error: "Not authorized." };
+    (db.payments || []).forEach((p) => { if (p.ownerId === actor.id) p.primary = p.id === payId; });
     persist();
+    return { ok: true };
   }
 
   /* ------------------------------ export ------------------------------ */
@@ -1378,6 +1469,7 @@
     /* staff */
     addLeave, removeLeave, joinWaitlist, removeWaitlist,
     /* crm */
+    createOwner, sendMessage, markMessageRead, setContactStatus,
     updateOwner, addPet, updatePet, removePet, addVaccine, setVaccineStatus, searchCRM,
     /* pos + payments */
     posCharge, addPaymentMethod, removePaymentMethod, setPrimaryPayment,
