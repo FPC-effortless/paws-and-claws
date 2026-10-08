@@ -42,7 +42,7 @@ export default defineSchema({
     notes: v.optional(v.string()),
     createdAt: v.string(),
   })
-    .index("by_id", ["id"])
+    .index("by_external_id", ["id"])
     .index("by_ownerId", ["ownerId"]),
 
   bookings: defineTable({
@@ -67,7 +67,7 @@ export default defineSchema({
     discountRate: v.optional(v.number()),
     createdAt: v.string(),
   })
-    .index("by_id", ["id"])
+    .index("by_external_id", ["id"])
     .index("by_ownerId", ["ownerId"])
     .index("by_providerId_date", ["providerId", "date"]),
 
@@ -78,7 +78,7 @@ export default defineSchema({
     reason: v.string(),
     createdAt: v.optional(v.string()),
   })
-    .index("by_id", ["id"])
+    .index("by_external_id", ["id"])
     .index("by_providerId_date", ["providerId", "date"]),
 
   waitlist: defineTable({
@@ -90,7 +90,7 @@ export default defineSchema({
     note: v.optional(v.string()),
     createdAt: v.string(),
   })
-    .index("by_id", ["id"])
+    .index("by_external_id", ["id"])
     .index("by_ownerId", ["ownerId"]),
 
   products: defineTable({
@@ -110,7 +110,7 @@ export default defineSchema({
     lowAt: v.number(),
     cost: v.optional(v.number()),
     lowStock: v.optional(v.boolean()),
-  }).index("by_id", ["id"]),
+  }).index("by_external_id", ["id"]),
 
   orders: defineTable({
     id: v.optional(v.string()),
@@ -132,7 +132,7 @@ export default defineSchema({
     method: v.optional(v.string()),
     discountRate: v.optional(v.number()),
   })
-    .index("by_id", ["id"])
+    .index("by_external_id", ["id"])
     .index("by_ownerId", ["ownerId"]),
 
   listings: defineTable({
@@ -152,7 +152,7 @@ export default defineSchema({
     temperament: v.optional(v.array(v.string())),
     bio: v.optional(v.string()),
     listedAt: v.string(),
-  }).index("by_id", ["id"]),
+  }).index("by_external_id", ["id"]),
 
   payments: defineTable({
     id: v.optional(v.string()),
@@ -163,7 +163,7 @@ export default defineSchema({
     expYear: v.number(),
     primary: v.boolean(),
   })
-    .index("by_id", ["id"])
+    .index("by_external_id", ["id"])
     .index("by_ownerId", ["ownerId"]),
 
   services: defineTable({
@@ -178,14 +178,14 @@ export default defineSchema({
     staff: v.array(v.string()),
     desc: v.string(),
     popular: v.optional(v.boolean()),
-  }).index("by_id", ["id"]),
+  }).index("by_external_id", ["id"]),
 
   serviceGroups: defineTable({
     id: v.string(),
     name: v.string(),
     icon: v.optional(v.string()),
     blurb: v.string(),
-  }).index("by_id", ["id"]),
+  }).index("by_external_id", ["id"]),
 
   providers: defineTable({
     id: v.string(),
@@ -198,7 +198,7 @@ export default defineSchema({
     end: v.number(),
     off: v.array(v.number()),
     bio: v.string(),
-  }).index("by_id", ["id"]),
+  }).index("by_external_id", ["id"]),
 
   messages: defineTable({
     id: v.optional(v.string()),
@@ -250,7 +250,7 @@ export default defineSchema({
     createdAt: v.string(),
     status: v.string(),
   })
-    .index("by_id", ["id"])
+    .index("by_external_id", ["id"])
     .index("by_email", ["email"]),
 
   inquiries: defineTable({
@@ -262,7 +262,7 @@ export default defineSchema({
     status: v.string(),
     createdAt: v.string(),
   })
-    .index("by_id", ["id"])
+    .index("by_external_id", ["id"])
     .index("by_ownerId", ["ownerId"]),
 
   cms: defineTable({
@@ -278,5 +278,5 @@ export default defineSchema({
     address: v.string(),
     phone: v.string(),
     email: v.string(),
-  }).index("by_id", ["id"]),
+  }).index("by_external_id", ["id"]),
 });

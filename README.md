@@ -65,36 +65,36 @@ npm test
 
 The suite covers the data layer, Clerk demo-mode behavior, and production fail-closed guards.
 
-CI executes the same suite for pull requests and before GitHub Pages deployment.
+GitHub Actions runs the same regression and production-safety suite for pushes to `main` and pull requests. Vercel builds and deploys the project from the connected GitHub repository.
 
 ## Clerk + Convex production setup
 
 ### 1. Create Clerk
 
-Create a Clerk application and configure the users/staff you want to allow.
+Create a Clerk application and configure the sign-in methods and users you want to allow. Use the production Clerk instance for the hosted site; development keys (`pk_test_...`) are not production credentials.
 
 Staff authorization is determined from the server-side Convex `admins` table. Do not treat browser-visible metadata as an authorization boundary.
 
-Create a Clerk JWT template named **`convex`** for the Convex application.
+Activate Clerk's Convex integration in the Clerk Dashboard. The application requests a Clerk token using the template name **`convex`**. Use the integration's recommended template/configuration and make sure its audience is `convex`.
 
 Set the Convex deployment environment variable:
 
 ```bash
-npx convex env set CLERK_JWT_ISSUER_DOMAIN
+npx convex env set --prod CLERK_JWT_ISSUER_DOMAIN "https://clerk.<your-domain>.com"
 ```
 
-Use the issuer domain for your Clerk instance.
+Use the full HTTPS Frontend API URL shown by Clerk for the production instance. For local development, configure the development issuer separately with `npx convex env set --deployment local CLERK_JWT_ISSUER_DOMAIN "https://<your-instance>.clerk.accounts.dev"`.
 
-### 2. Configure the public runtime values
+### 2. Configure the Vercel production project
 
-Edit `assets/js/config.js`:
+In the Vercel project, add these environment variables for Production (and Preview if you want authenticated previews):
 
-```js
-window.PNC_CLERK_PUBLISHABLE_KEY = "pk_...";
-window.__PNC_CONVEX_URL__ = "https://....convex.cloud";
-```
+| Variable | Value |
+|---|---|
+| `CLERK_PUBLISHABLE_KEY` | Clerk production publishable key beginning `pk_live_` |
+| `CONVEX_URL` | Production Convex deployment URL ending in `.convex.cloud` |
 
-The Clerk publishable key and Convex URL are public configuration values. Never put a Clerk secret key or bootstrap secret in this file.
+Vercel runs `npm run build`, which writes `assets/js/config.js` from these values and fails if either value is missing or invalid. Both values are public in the shipped browser bundle; the Clerk secret key is not needed by this client or by Convex's Clerk JWT verification. Never put a Clerk secret key or bootstrap secret in the frontend config.
 
 ### 3. Deploy Convex
 
@@ -103,11 +103,15 @@ npm install
 npx convex dev
 ```
 
-When the backend is ready:
+These commands configure the development deployment. Set `CLERK_JWT_ISSUER_DOMAIN` on the production deployment separately before deploying.
+
+For production, deploy the Convex backend after setting the production issuer:
 
 ```bash
 npx convex deploy
 ```
+
+The Vercel production build requires both environment variables. Clerk must also allow the website's production origin and redirect URLs. The initial production Convex database should be populated with reviewed real data; do not run the demo snapshot bootstrap against production.
 
 ### 4. Bootstrap a non-production/demo deployment
 
@@ -181,16 +185,14 @@ Overnight boarding is intentionally not represented as a normal one-day appointm
 
 ## Deployment
 
-GitHub Pages deployment is test-gated:
+Vercel production deploys are test-gated by GitHub Actions:
 
-1. checkout
-2. install test tooling
-3. run `npm test`
-4. only then deploy the static tree
+1. pushes to `main` start the GitHub Actions regression and production-safety suite;
+2. Vercel automatically builds and deploys the connected `main` branch.
 
-Pull requests run the same test job without deploying.
+Pull requests run the same test job without updating the Vercel production deployment.
 
-Vercel configuration is retained for deployments that prefer Vercel, with short-lived asset caching and basic browser security headers.
+Vercel serves the static site with short-lived asset caching and basic browser security headers.
 
 ## Important limitations
 

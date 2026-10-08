@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "description": "Pet care platform: bookings, shop, marketplace, member portal and admin panel.",
   "scripts": {
+    "build": "node scripts/build.js",
     "test": "node test/harness.js && node test/clerk_demo.js && node test/clerk_production_guard.js && node test/production_guard.js",
     "test:unit": "node test/harness.js",
     "test:production": "node test/production_guard.js",
