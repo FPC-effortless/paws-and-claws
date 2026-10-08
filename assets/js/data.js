@@ -43,6 +43,11 @@
   const todayISO = () => isoDate(new Date());
   const addDays = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return isoDate(d); };
   const parseD = (s) => { const p = String(s).split("-").map(Number); return new Date(p[0], (p[1] || 1) - 1, p[2] || 1); };
+  const validDateOnly = (s) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s))) return false;
+    const p = parseD(s);
+    return p.getFullYear() === Number(s.slice(0, 4)) && p.getMonth() + 1 === Number(s.slice(5, 7)) && p.getDate() === Number(s.slice(8, 10));
+  };
   const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const fmtDate = (s) => {
@@ -394,12 +399,19 @@
     global.dispatchEvent(new CustomEvent("pnc:data-ready", { detail: { db: db } }));
   }
 
+  function clearRemoteSession() {
+    try { localStorage.removeItem(MEMBER_KEY); } catch {}
+    try { localStorage.removeItem(SESSION_KEY); } catch {}
+    if (db && productionMode()) clearRemoteSnapshot();
+  }
+
   async function remoteMutation(op, payload) {
     const cv = global.PNC_CONVEX;
     if (!cv || !cv.active) return { error: "Secure backend is not available." };
     try {
       const res = await cv.mutate(op, payload || {});
-      if (cv.syncBootstrap) await cv.syncBootstrap();
+      if (res && res.error) return res;
+      if (cv.syncBootstrap && !(await cv.syncBootstrap())) return { error: "The change was saved, but the latest data could not be loaded. Refresh and check its status before retrying." };
       const out = res || { ok: true };
       if (out.bookingId) out.booking = byId(db.bookings || [], out.bookingId);
       if (out.orderId) out.order = byId(db.orders || [], out.orderId);
@@ -714,7 +726,7 @@
       "staff.manage": false, "roles.edit": false
     },
     provider: {
-      "crm.view": "own", "bookings.view": "own", "bookings.notes": true, "messages.send": "own",
+      "crm.view": "own", "bookings.view": "own", "bookings.notes": "own", "messages.send": "own",
       "payments.take": false, "payments.refund": false, "cms.edit": false,
       "inventory.edit": false, "listings.edit": false, "reports.view": false,
       "staff.manage": false, "roles.edit": false
@@ -745,11 +757,11 @@
     audit("Admin sign-in", a.email + " signed in as " + ADMIN_ROLES[a.role].name);
     return { admin: a };
   }
-  function adminLogout() {
+  async function adminLogout() {
     try { localStorage.removeItem(SESSION_KEY); } catch {}
     const c = clerk();
     if (productionMode()) clearRemoteSnapshot();
-    if (c && c.active) return c.signOut();
+    if (c && c.active) await c.signOut();
   }
   function session() {
     try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch { return null; }
@@ -766,7 +778,7 @@
       ) || null;
       if (productionMode()) {
         if (!known || !ADMIN_ROLES[known.role]) return null;
-        return Object.assign({}, known, {
+        return Object.assign({}, known, cAdmin, {
           role: known.role,
           roleObj: ADMIN_ROLES[known.role]
         });
@@ -820,7 +832,7 @@
 
     const slots = slotsFor(db, svc.id, input.date);
     if (String(input.date) < todayISO()) return { error: "Bookings cannot be made in the past." };
-    const slot = slots.find((s) => s.hour === Number(input.hour) && s.providerId === provider.id);
+    const slot = slots.find((s) => s.available && s.hour === Number(input.hour) && s.providerId === provider.id);
     if (!slot) return { error: "That time slot is no longer available. Please pick another." };
 
     /* Members get their plan discount on the service total. */
@@ -851,13 +863,13 @@
     const bk = byId(db.bookings, bookingId);
     if (!bk) return { error: "Booking not found." };
     const owner = currentOwner();
-    if (!owner || (bk.ownerId !== owner.id && !can("bookings.manage"))) return { error: "Not authorized." };
+    if ((!owner || bk.ownerId !== owner.id) && !can("bookings.manage")) return { error: "Not authorized." };
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date)) || String(date) < todayISO()) return { error: "Bookings cannot be moved into the past." };
     if (!["confirmed","pending"].includes(bk.status)) return { error: "This booking cannot be rescheduled." };
     const svc = byId(db.services, bk.serviceId);
     const pid = providerId || bk.providerId;
-    const slots = slotsFor(db, bk.serviceId, date).filter((s) => s.providerId === pid);
-    const slot = slots.find((s) => s.hour === Number(hour));
+    const slots = slotsFor({ ...db, bookings: db.bookings.filter(b => b.id !== bookingId) }, bk.serviceId, date).filter((s) => s.providerId === pid);
+    const slot = slots.find((s) => s.available && s.hour === Number(hour));
     if (!slot) return { error: "That slot was just taken — please choose another." };
     bk.date = date; bk.hour = slot.hour; bk.providerId = pid;
     notify(bk.ownerId, "booking", "Appointment rescheduled",
@@ -873,8 +885,8 @@
     const bk = byId(db.bookings, bookingId);
     if (!bk) return { error: "Booking not found." };
     const owner = currentOwner();
-    if (!owner || (bk.ownerId !== owner.id && !can("bookings.manage"))) return { error: "Not authorized." };
-    if (bk.status === "completed" || bk.status === "cancelled") return { error: "Booking is already closed." };
+    if ((!owner || bk.ownerId !== owner.id) && !can("bookings.manage")) return { error: "Not authorized." };
+    if (!["pending", "confirmed"].includes(bk.status)) return { error: "Booking is already closed." };
     bk.status = "cancelled";
     notify(bk.ownerId, "booking", "Appointment cancelled", "Your " + (byId(db.services, bk.serviceId) || {}).name + " on " + fmtDate(bk.date) + " was cancelled. Any eligible refund will be handled by the payment provider.");
     audit("Booking cancelled", bk.id);
@@ -889,7 +901,8 @@
     if (!admin || !can("bookings.manage")) return { error: "Not authorized." };
     const bk = byId(db.bookings, bookingId);
     if (!bk) return { error: "Booking not found." };
-    if (!STAGES.includes(status) && !["completed","no-show"].includes(status)) return { error: "Invalid booking status." };
+    if (!["pending", "confirmed", "cancelled", "completed", "no-show"].includes(status)) return { error: "Invalid booking status." };
+    if (!["pending", "confirmed"].includes(bk.status) && bk.status !== status) return { error: "Closed bookings cannot be changed." };
     bk.status = status;
     notify(bk.ownerId, "booking", "Appointment updated", (byId(db.services, bk.serviceId) || {}).name + " for " + (byId(db.pets, bk.petId) || {}).petName + " is now " + status + ".");
     audit("Booking status", bk.id + " -> " + status);
@@ -904,6 +917,7 @@
     if (!admin || !can("bookings.notes")) return { error: "Not authorized." };
     const bk = byId(db.bookings, bookingId);
     if (!bk) return { error: "Booking not found." };
+    if (scopeOf("bookings.notes") === "own" && bk.providerId !== admin.providerId) return { error: "Not authorized." };
     bk.internalNotes = (bk.internalNotes || []).concat([{ by: (currentAdmin() || {}).name || "Staff", note, at: todayISO() }]);
     audit("Internal note added", bk.id);
     persist();
@@ -963,6 +977,7 @@
     const current = stages.indexOf(o.stage || "pending");
     const next = stages.indexOf(stage);
     if (Math.abs(next - current) > 1) return { error: "Invalid order transition." };
+    if (o.status === "cancelled" || o.status === "refunded" || o.stage === "done") return { error: "Closed orders cannot be changed." };
     o.stage = stage;
     if (stage === "done") o.status = "delivered";
     if (stage === "cancelled") o.status = "cancelled";
@@ -1003,7 +1018,7 @@
     const ref = "INQ-" + String(db.inquiryCounter).padStart(4, "0");
     db.inquiries = db.inquiries || [];
     db.inquiries.unshift({ id: uid("inq"), ref, ownerId: owner ? owner.id : null, listingId: l.id, message: String(message2 || "").trim().slice(0, 2000), status: "new", createdAt: todayISO() });
-    if (owner) notify(owner.id, "listing", "Inquiry " + ref + " sent", "We'll contact you about " + l.name + " within one business day.");
+    if (owner) notify(owner.id, "listing", "Inquiry " + ref + " sent", "Your inquiry about " + l.name + " was recorded for the listing provider.");
     audit("Purchase inquiry", ref + " — " + l.name);
     persist();
     return { ref };
@@ -1033,7 +1048,8 @@
     if (!p) return { error: "Product not found." };
     const d = Number(delta);
     if (!Number.isInteger(d)) return { error: "Invalid stock adjustment." };
-    p.stock = Math.max(0, p.stock + d);
+    if (p.stock + d < 0) return { error: "Stock cannot go below zero." };
+    p.stock += d;
     p.lowStock = p.stock <= p.lowAt;
     audit("Stock adjusted", p.name + " " + (delta >= 0 ? "+" : "") + delta + (note ? " — " + note : ""));
     persist();
@@ -1046,14 +1062,13 @@
     if (!admin || !can("inventory.edit")) return { error: "Not authorized." };
     const p = byId(db.products, productId);
     if (!p) return { error: "Product not found." };
-    ["name", "cat", "price", "stock", "lowAt", "desc", "icon"].forEach((k) => {
-      if (patch[k] !== undefined) p[k] = patch[k];
-    });
-    if (!Number.isFinite(Number(p.price)) || Number(p.price) < 0 ||
-        !Number.isInteger(Number(p.stock)) || Number(p.stock) < 0 ||
-        !Number.isInteger(Number(p.lowAt)) || Number(p.lowAt) < 0) {
+    const values = { ...p, ...patch };
+    if (!Number.isFinite(Number(values.price)) || Number(values.price) < 0 || !Number.isInteger(Number(values.stock)) || Number(values.stock) < 0 || !Number.isInteger(Number(values.lowAt)) || Number(values.lowAt) < 0 || !String(values.name || "").trim()) {
       return { error: "Invalid product values." };
     }
+    ["name", "cat", "price", "stock", "lowAt", "desc", "icon"].forEach((k) => {
+      if (patch[k] !== undefined) p[k] = ["name", "cat", "desc", "icon"].includes(k) ? String(patch[k]).trim() : Number(patch[k]);
+    });
     p.lowStock = p.stock <= p.lowAt;
     audit("Product edited", p.name);
     persist();
@@ -1066,6 +1081,7 @@
     if (productionMode()) return { error: "Secure backend is not available." };
     const admin = currentAdmin();
     if (!admin || !can("cms.edit")) return { error: "Not authorized." };
+    if (patch.email && !isValidEmail(patch.email)) return { error: "Enter a valid store email." };
     Object.assign(db.cms, patch);
     audit("CMS update", Object.keys(patch).join(", "));
     persist();
@@ -1078,10 +1094,11 @@
     if (!admin || !can("cms.edit")) return { error: "Not authorized." };
     const s = byId(db.services, serviceId);
     if (!s) return { error: "Service not found." };
+    const values = { ...s, ...patch };
+    if (!String(values.name || "").trim() || !Number.isFinite(Number(values.price)) || Number(values.price) < 0 || !Number.isFinite(Number(values.duration)) || Number(values.duration) <= 0 || Number(values.duration) > 12) return { error: "Invalid service values." };
     ["name", "price", "duration", "desc", "popular"].forEach((k) => {
-      if (patch[k] !== undefined) s[k] = patch[k];
+      if (patch[k] !== undefined) s[k] = ["price", "duration"].includes(k) ? Number(patch[k]) : ["name", "desc"].includes(k) ? String(patch[k]).trim() : patch[k];
     });
-    if (!s.name || !Number.isFinite(Number(s.price)) || Number(s.price) < 0 || !Number.isFinite(Number(s.duration)) || Number(s.duration) <= 0 || Number(s.duration) > 24) return { error: "Invalid service values." };
     audit("Service edited", s.name + " — " + money(s.price));
     persist();
     return { service: s };
@@ -1093,7 +1110,7 @@
     if (productionMode()) return { error: "Secure backend is not available." };
     const admin = currentAdmin();
     if (!admin || !can("staff.manage")) return { error: "Not authorized." };
-    if (!PROVIDER_BY_ID[providerId] || !/^\d{4}-\d{2}-\d{2}$/.test(String(date)) || String(date) < todayISO()) return { error: "Invalid leave date." };
+    if (!PROVIDER_BY_ID[providerId] || !validDateOnly(String(date)) || String(date) < todayISO()) return { error: "Invalid leave date." };
     if (db.staffLeave.some(l => l.providerId === providerId && l.date === date)) return { error: "Leave is already booked for that day." };
     db.staffLeave.push({ id: uid("lv"), providerId, date, reason: String(reason || "Blocked").slice(0, 240) });
     audit("Staff leave", providerId + " on " + fmtDate(date));
@@ -1135,6 +1152,43 @@
   }
 
   /* ----------------------------- CRM ---------------------------------- */
+  function createOwner(input) {
+    if (remoteEnabled()) return remoteMutation("createOwner", { input });
+    if (productionMode()) return { error: "Secure backend is not available." };
+    if (!can("crm.edit")) return { error: "Not authorized." };
+    const fullName = String(input.fullName || "").trim(), email = String(input.email || "").trim().toLowerCase();
+    if (fullName.length < 2 || !isValidEmail(email)) return { error: "Enter a full name and valid email." };
+    if (db.owners.some(o => o.email === email)) return { error: "An account with this email already exists." };
+    const owner = { id: uid("ow"), fullName, email, phone: String(input.phone || ""), address: "", emergencyContact: "", notes: "", plan: "puppy", createdAt: todayISO() };
+    db.owners.push(owner); audit("Customer created", owner.id); persist(); return { owner };
+  }
+  function sendMessage(ownerId, subject, body) {
+    if (remoteEnabled()) return remoteMutation("sendMessage", { ownerId, subject, body });
+    if (productionMode()) return { error: "Secure backend is not available." };
+    const a = currentAdmin();
+    if (!a || !can("messages.send") || !byId(db.owners, ownerId)) return { error: "Not authorized." };
+    if (scopeOf("messages.send") === "own" && !db.bookings.some(b => b.ownerId === ownerId && b.providerId === a.providerId)) return { error: "Not authorized." };
+    subject = String(subject || "").trim(); body = String(body || "").trim();
+    if (!subject || !body || subject.length > 200 || body.length > 4000) return { error: "Enter a subject and message (maximum 4,000 characters)." };
+    message(ownerId, "portal", subject, body, "out"); notify(ownerId, "message", subject, "You have a new message in your member inbox.");
+    audit("Portal message sent", ownerId); persist(); return { ok: true };
+  }
+  function markMessageRead(messageId) {
+    if (remoteEnabled()) return remoteMutation("markMessageRead", { messageId });
+    if (productionMode()) return { error: "Secure backend is not available." };
+    const owner = currentOwner(), row = byId(db.messages, messageId);
+    if (!owner || !row || row.ownerId !== owner.id || row.direction !== "out") return { error: "Not authorized." };
+    row.read = true; persist(); return { ok: true };
+  }
+  function setContactStatus(contactId, status) {
+    if (remoteEnabled()) return remoteMutation("setContactStatus", { contactId, status });
+    if (productionMode()) return { error: "Secure backend is not available." };
+    if (!can("crm.edit")) return { error: "Not authorized." };
+    const row = byId(db.contactMessages || [], contactId);
+    if (!row || !["new", "resolved"].includes(status)) return { error: "Invalid contact request." };
+    row.status = status; audit("Contact request " + status, contactId); persist(); return { ok: true };
+  }
+
   function updateOwner(ownerId, patch) {
     if (remoteEnabled()) return remoteMutation("updateOwner", { ownerId, patch });
     if (productionMode()) return { error: "Secure backend is not available." };
@@ -1144,6 +1198,7 @@
     if (a ? !can("crm.edit") : ownerId !== actor.id) return { error: "Not authorized." };
     const o = byId(db.owners, ownerId);
     if (!o) return { error: "Owner not found." };
+    if (patch.fullName !== undefined && String(patch.fullName).trim().length < 2) return { error: "Name is too short." };
     if (patch && patch.plan !== undefined && !Object.prototype.hasOwnProperty.call(PLAN_DISCOUNT, patch.plan)) return { error: "Invalid membership plan." };
     if (patch && patch.email !== undefined) {
       const email = String(patch.email).trim().toLowerCase();
@@ -1159,6 +1214,13 @@
     return { owner: o };
   }
 
+  function petInputError(input) {
+    if (input.petName !== undefined && !String(input.petName).trim()) return "Give your pet a name.";
+    if (input.weightKg !== undefined && (!Number.isFinite(Number(input.weightKg)) || Number(input.weightKg) < 0)) return "Weight must be a non-negative number.";
+    if (input.species !== undefined && !SPECIES.includes(input.species)) return "Choose a valid species.";
+    if (input.dob && (!validDateOnly(input.dob) || input.dob > todayISO())) return "Enter a valid birth date that is not in the future.";
+    return null;
+  }
   function addPet(ownerId, input) {
     if (remoteEnabled()) return remoteMutation("addPet", { ownerId, input });
     if (productionMode()) return { error: "Secure backend is not available." };
@@ -1168,6 +1230,8 @@
     if (a ? !can("crm.edit") : ownerId !== actor.id) return { error: "Not authorized." };
     const o = byId(db.owners, ownerId);
     if (!o) return { error: "Owner not found." };
+    const inputError = petInputError(input);
+    if (inputError) return { error: inputError };
     const pet = {
       id: uid("pt"), ownerId, petName: String(input.petName || "").trim() || "New pet",
       species: SPECIES.indexOf(input.species) !== -1 ? input.species : "Dog",
@@ -1195,11 +1259,13 @@
     if (!p) return { error: "Pet not found." };
     if (!actor && !a) return { error: "Not authorized." };
     if (a ? !can("crm.edit") : p.ownerId !== actor.id) return { error: "Not authorized." };
+    const inputError = petInputError(patch);
+    if (inputError) return { error: inputError };
     ["petName", "species", "breed", "dob", "sex", "altered", "weightKg", "microchip", "coat", "notes"].forEach((k) => {
       if (patch[k] !== undefined) p[k] = patch[k];
     });
     if (Array.isArray(patch.tags)) p.tags = patch.tags.filter((t) => TEMPERAMENTS.indexOf(t) !== -1);
-    if (Array.isArray(patch.vaccines)) p.vaccines = patch.vaccines;
+    // Vaccine approvals can only be changed through the staff review action.
     audit("Pet updated", p.petName);
     persist();
     return { pet: p };
@@ -1243,6 +1309,7 @@
     const p = byId(db.pets, petId);
     if (!p) return { error: "Pet not found." };
     if (!actor || p.ownerId !== actor.id) return { error: "Not authorized." };
+    if (!VACCINES.includes(name) || !validDateOnly(date) || date > todayISO()) return { error: "Enter a valid vaccine and administration date." };
     p.vaccines = (p.vaccines || []).concat([{ name, date, lot: lot || "", status: "pending" }]);
     audit("Vaccine uploaded", p.petName + " — " + name + " (pending review)");
     persist();
@@ -1313,7 +1380,9 @@
     if (remoteEnabled()) return remoteMutation("addPaymentMethod", { ownerId, brand, last4, expMonth, expYear });
     if (productionMode()) return { error: "Secure backend is not available." };
     const actor = currentOwner();
-    if (!actor || actor.id !== ownerId) return false;
+    if (!actor || actor.id !== ownerId) return { error: "Not authorized." };
+    const now = new Date();
+    if (!/^\d{4}$/.test(String(last4)) || !Number.isInteger(expMonth) || expMonth < 1 || expMonth > 12 || !Number.isInteger(expYear) || expYear < now.getFullYear() || (expYear === now.getFullYear() && expMonth < now.getMonth() + 1)) return { error: "Enter a valid, unexpired demo card." };
     db.payments = (db.payments || []).filter((p) => !(p.ownerId === ownerId && p.last4 === last4));
     db.payments.push({ id: uid("pm"), ownerId, brand, last4, expMonth, expYear, primary: db.payments.filter((p) => p.ownerId === ownerId).length === 0 });
     audit("Payment method added", brand + " ending " + last4);
@@ -1325,8 +1394,10 @@
     if (productionMode()) return { error: "Secure backend is not available." };
     const actor = currentOwner();
     const pm = byId(db.payments || [], payId);
-    if (!actor || !pm || pm.ownerId !== actor.id) return false;
+    if (!actor || !pm || pm.ownerId !== actor.id) return { error: "Not authorized." };
     db.payments = (db.payments || []).filter((p) => p.id !== payId);
+    const remaining = db.payments.filter(p => p.ownerId === actor.id);
+    if (remaining.length && !remaining.some(p => p.primary)) remaining[0].primary = true;
     persist();
     return true;
   }
@@ -1335,8 +1406,8 @@
     if (productionMode()) return { error: "Secure backend is not available." };
     const actor = currentOwner();
     const pm = byId(db.payments || [], payId);
-    if (!actor || !pm || pm.ownerId !== actor.id) return;
-    (db.payments || []).forEach((p) => { p.primary = p.id === payId; });
+    if (!actor || !pm || pm.ownerId !== actor.id) return { error: "Not authorized." };
+    (db.payments || []).forEach((p) => { if (p.ownerId === actor.id) p.primary = p.id === payId; });
     persist();
   }
 
@@ -1348,7 +1419,7 @@
     PROVIDERS, PROVIDER_BY_ID, DAY_START, DAY_END, STEP,
     /* helpers */
     esc, money, uid, isoDate, todayISO, addDays, fmtDate, fmtTime, fmtDT, daysBetween,
-    isValidEmail, clone, titleCase, speciesIcon, initials, parseD, productionMode, applyRemoteSnapshot, clearRemoteSnapshot,
+    isValidEmail, clone, titleCase, speciesIcon, initials, parseD, productionMode, applyRemoteSnapshot, clearRemoteSnapshot, clearRemoteSession,
     /* store */
     load, persist, reset, seed,
     /* lookups */
@@ -1378,7 +1449,7 @@
     /* staff */
     addLeave, removeLeave, joinWaitlist, removeWaitlist,
     /* crm */
-    updateOwner, addPet, updatePet, removePet, addVaccine, setVaccineStatus, searchCRM,
+    createOwner, sendMessage, markMessageRead, setContactStatus, updateOwner, addPet, updatePet, removePet, addVaccine, setVaccineStatus, searchCRM,
     /* pos + payments */
     posCharge, addPaymentMethod, removePaymentMethod, setPrimaryPayment,
     /* raw accessor for admin views */

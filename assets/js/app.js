@@ -38,6 +38,7 @@
     let stack = $(".toast-stack");
     if (!stack) { stack = document.createElement("div"); stack.className = "toast-stack"; document.body.appendChild(stack); }
     const el = document.createElement("div");
+    el.setAttribute("role", type === "err" ? "alert" : "status");
     el.className = "toast" + (type === "err" ? " err" : "");
     el.innerHTML = (type === "err" ? ICON_ERR : ICON_OK) + "<span>" + esc(msg) + "</span>";
     stack.appendChild(el);
@@ -45,26 +46,45 @@
   }
 
   /* ----------------------------- modals ------------------------------- */
+  const modalTriggers = new WeakMap();
   function openModal(id) {
     const m = document.getElementById(id);
-    if (!m) return;
+    if (!m || m.classList.contains("open")) return;
+    modalTriggers.set(m, document.activeElement);
     m.classList.add("open");
     document.body.style.overflow = "hidden";
     const f = m.querySelector("input,select,textarea,button");
-    if (f) setTimeout(() => f.focus(), 120);
+    if (f) f.focus();
   }
   function closeModal(id) {
-    const m = id ? document.getElementById(id) : $(".modal-backdrop.open");
+    const m = id ? document.getElementById(id) : $$(".modal-backdrop.open").pop();
     if (!m) return;
     m.classList.remove("open");
     if (!$(".modal-backdrop.open")) document.body.style.overflow = "";
+    const trigger = modalTriggers.get(m);
+    if (trigger && trigger.isConnected) trigger.focus();
+    modalTriggers.delete(m);
   }
   document.addEventListener("click", (e) => {
-    if (e.target.classList && e.target.classList.contains("modal-backdrop")) closeModal();
+    if (e.target.classList && e.target.classList.contains("modal-backdrop")) closeModal(e.target.id);
     const c = e.target.closest("[data-close-modal]");
     if (c) closeModal(c.getAttribute("data-close-modal"));
   });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+  document.addEventListener("keydown", (e) => {
+    const modal = $$(".modal-backdrop.open").pop();
+    if (!modal) return;
+    if (e.key === "Escape") { e.preventDefault(); closeModal(modal.id); return; }
+    if (e.key !== "Tab") return;
+    const focusable = $$("a[href],button,input,select,textarea,[tabindex]", modal)
+      .filter(el => !el.disabled && el.tabIndex >= 0 && el.getClientRects().length);
+    const first = focusable[0], last = focusable[focusable.length - 1];
+    if (!first) { e.preventDefault(); return; }
+    if (e.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) {
+      e.preventDefault(); last.focus();
+    } else if (!e.shiftKey && (document.activeElement === last || !modal.contains(document.activeElement))) {
+      e.preventDefault(); first.focus();
+    }
+  });
 
   /* --------------------------- product data --------------------------- */
   /* data.js is loaded before app.js on every page, so the catalog has
@@ -136,6 +156,7 @@
       if (!drawer) return;
       const body = $("#cartBody");
       if (!body) return;
+      drawer.hidden = !this.items.length;
 
       if (!this.items.length) {
         body.innerHTML =
@@ -172,13 +193,17 @@
       const totalEl = $("#cartTotal");
       if (totalEl) totalEl.textContent = money(this.total);
       const checkoutBtn = $("#cartCheckout");
-      if (checkoutBtn) checkoutBtn.disabled = !this.items.length;
+      if (checkoutBtn) {
+        const unavailable = !!(window.PNC_DB && PNC_DB.productionMode && PNC_DB.productionMode());
+        checkoutBtn.disabled = !this.items.length || unavailable;
+        if (unavailable) checkoutBtn.textContent = "Online checkout unavailable";
+      }
 
       /* Show the member discount as its own line so the total is
          not a surprise at checkout. */
       const dl = $("#cartDiscount");
       if (dl) {
-        const rate = this.discountRate;
+        const rate = window.PNC_DB && PNC_DB.productionMode && PNC_DB.productionMode() ? 0 : this.discountRate;
         dl.hidden = !rate;
         if (rate) {
           dl.innerHTML = '<span>Member discount (' + Math.round(rate * 100) + '%)</span>' +
@@ -187,7 +212,7 @@
       }
       const st = $("#cartSubtotal");
       if (st) {
-        const rate = this.discountRate;
+        const rate = window.PNC_DB && PNC_DB.productionMode && PNC_DB.productionMode() ? 0 : this.discountRate;
         st.hidden = !rate;
         if (rate) st.innerHTML = '<span>Subtotal</span><b>' + money(this.subtotal) + "</b>";
       }
@@ -196,7 +221,7 @@
 
   document.addEventListener("click", (e) => {
     const add = e.target.closest("[data-add]");
-    if (add) { Cart.add(add.dataset.add); return; }
+    if (add && !add.disabled) { Cart.add(add.dataset.add); return; }
     const inc = e.target.closest("[data-inc]");
     if (inc) { const l = Cart.items.find((i) => i.id === inc.dataset.inc); if (l) Cart.setQty(l.id, l.qty + 1); return; }
     const dec = e.target.closest("[data-dec]");
@@ -275,15 +300,20 @@
     } else els.forEach((el) => el.classList.add("in"));
   }
 
-  document.addEventListener("pnc:auth", () => Cart.rebind());
-  document.addEventListener("pnc:clerk", () => Cart.rebind());
-  document.addEventListener("pnc:data-ready", () => Cart.rebind());
+  window.addEventListener("pnc:auth", () => Cart.rebind());
+  window.addEventListener("pnc:clerk", () => Cart.rebind());
+  window.addEventListener("pnc:data-ready", () => Cart.rebind());
 
   document.addEventListener("DOMContentLoaded", () => {
+    // Initialize the data facade before page listeners receive pnc:ready.
+    // Some pages read the current member while rendering their first view.
+    if (window.PNC_DB && typeof PNC_DB.load === "function") PNC_DB.load();
     mountChrome();
     mountCartDrawer();
     mountPasswordStrength();
     mountReveal();
+    // Page controllers insert cards during their DOMContentLoaded listeners.
+    setTimeout(mountReveal, 0);
     document.dispatchEvent(new CustomEvent("pnc:ready"));
   });
 

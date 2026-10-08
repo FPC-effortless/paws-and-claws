@@ -16,7 +16,7 @@
     status: new Set(),
     sex: new Set(),
     temps: new Set(),
-    maxPrice: 0,
+    maxPrice: null,
     sort: 'new'
   };
 
@@ -37,7 +37,7 @@
     state.status.forEach(v => out.push({ k: 'status', v: v, label: D.titleCase(v) }));
     state.sex.forEach(v => out.push({ k: 'sex', v: v, label: v }));
     state.temps.forEach(v => out.push({ k: 'temps', v: v, label: v }));
-    if (state.maxPrice) out.push({ k: 'price', v: state.maxPrice, label: 'Under ' + D.money(state.maxPrice) });
+    if (state.maxPrice !== null) out.push({ k: 'price', v: state.maxPrice, label: 'Up to ' + D.money(state.maxPrice) });
     return out;
   }
 
@@ -65,10 +65,10 @@
       '<button type="button" class="f-chip" data-f="temps" data-v="' + D.esc(t) + '">' +
       D.esc(t) + '</button>').join('');
 
-    const top = Math.max.apply(null, listings().map(l => l.price));
+    const top = Math.max(1, ...listings().map(l => l.price));
     const r = $('#petPriceRange');
     if (r) { r.max = String(top); r.value = String(top); }
-    state.maxPrice = 0;
+    state.maxPrice = null;
     const ro = $('#petPriceReadout');
     if (ro) ro.textContent = 'Any price';
   }
@@ -154,7 +154,7 @@
       if (state.status.size && !state.status.has(l.status)) return false;
       if (state.sex.size && !state.sex.has(l.sex)) return false;
       if (state.temps.size && !(l.temperament || []).some(t => state.temps.has(t))) return false;
-      if (state.maxPrice && l.price > state.maxPrice) return false;
+      if (state.maxPrice !== null && l.price > state.maxPrice) return false;
       return true;
     });
     const s = state.sort;
@@ -182,7 +182,7 @@
     state.status.clear();
     state.sex.clear();
     state.temps.clear();
-    state.maxPrice = 0;
+    state.maxPrice = null;
     const r = $('#petPriceRange');
     if (r) r.value = r.max;
     const ro = $('#petPriceReadout');
@@ -233,7 +233,7 @@
     PNC.toast('Inquiry ' + res.ref + ' sent — check your inbox');
     if (member()) {
       D.message(member().id, 'email', 'Inquiry ' + res.ref + ' about ' + l.name,
-        'Thanks for your interest in ' + l.name + '! A care coordinator will reply within one business day.', 'out');
+        'Your inquiry about ' + l.name + ' has been recorded for the listing provider.', 'out');
     }
     inqId = null;
   }
@@ -263,7 +263,7 @@
       if (!c) return;
       const k = c.dataset.rk;
       if (k === 'price') {
-        state.maxPrice = 0;
+        state.maxPrice = null;
         const r = $('#petPriceRange');
         if (r) r.value = r.max;
         const ro = $('#petPriceReadout');
@@ -278,9 +278,9 @@
     if (range) {
       range.addEventListener('input', function (e) {
         const v = Number(e.target.value), max = Number(e.target.max);
-        state.maxPrice = v >= max ? 0 : v;
+        state.maxPrice = v >= max ? null : v;
         const ro = $('#petPriceReadout');
-        if (ro) ro.textContent = state.maxPrice ? 'Up to ' + D.money(state.maxPrice) : 'Any price';
+        if (ro) ro.textContent = state.maxPrice !== null ? 'Up to ' + D.money(state.maxPrice) : 'Any price';
         render();
       });
     }

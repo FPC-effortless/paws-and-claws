@@ -8,8 +8,11 @@
 
   const DEFAULT_URL = "https://gallant-lion-490.convex.cloud";
   const SYNCED_KEY = "pnc_convex_seeded";
-  let authBound = false;
-  let boundClerk = null;
+  let authConfigured = false;
+  let syncPromise = null;
+  let observedClerk = null;
+  let boundSession = undefined;
+  let sessionVersion = 0;
 
   function configured() {
     return String(global.__PNC_CONVEX_URL__ || DEFAULT_URL).trim() || null;
@@ -22,6 +25,7 @@
     get active() { return api.enabled && !!api.client; },
 
     async connect() {
+      if (!global.PNC_CLERK || global.PNC_CLERK.demo) return false;
       const url = configured();
       if (!url) return false;
 
@@ -47,11 +51,7 @@
         const clerk = global.PNC_CLERK;
         if (!clerk || !clerk.active || !clerk.clerk) return false;
 
-        if (authBound && boundClerk === clerk.clerk) {
-          api.enabled = true;
-          return true;
-        }
-        api.client.setAuth(
+        if (!authConfigured) api.client.setAuth(
           async function () {
             try {
               const session = clerk.clerk.session;
@@ -66,8 +66,7 @@
           }
         );
 
-        authBound = true;
-        boundClerk = clerk.clerk;
+        authConfigured = true;
         api.enabled = true;
         return true;
       } catch (err) {
@@ -78,24 +77,26 @@
     },
 
     async syncBootstrap() {
-      if (!(await api.connect())) return false;
-      if (api.syncing) return false;
-      api.syncing = true;
-      try {
-        const snapshot = await api.client.query("domain:bootstrap", {});
-        if (snapshot && global.PNC_DB && global.PNC_DB.applyRemoteSnapshot) {
-          global.PNC_DB.applyRemoteSnapshot(snapshot);
-          // No persistent flag or data is needed for authenticated snapshots.
-          global.dispatchEvent(new CustomEvent("pnc:convex-ready", { detail: { snapshot } }));
-          return true;
-        }
-        return false;
-      } catch (err) {
-        console.warn("[pnc] Convex bootstrap failed.", err);
-        return false;
-      } finally {
-        api.syncing = false;
-      }
+      if (syncPromise) return syncPromise;
+      const version = sessionVersion;
+      syncPromise = (async () => {
+        if (!(await api.connect())) return false;
+        api.syncing = true;
+        try {
+          const snapshot = await api.client.query("domain:bootstrap", {});
+          if (version !== sessionVersion) return false;
+          if (snapshot && global.PNC_DB && global.PNC_DB.applyRemoteSnapshot) {
+            global.PNC_DB.applyRemoteSnapshot(snapshot);
+            global.dispatchEvent(new CustomEvent("pnc:convex-ready", { detail: { snapshot } }));
+            return true;
+          }
+          return false;
+        } catch (err) {
+          console.warn("[pnc] Convex bootstrap failed.", err);
+          return false;
+        } finally { api.syncing = false; }
+      })();
+      try { return await syncPromise; } finally { syncPromise = null; }
     },
 
     async mutate(op, payload) {
@@ -116,30 +117,38 @@
       }
       api.client = null;
       api.enabled = false;
-      authBound = false;
-      boundClerk = null;
+      authConfigured = false;
+      boundSession = undefined;
+      sessionVersion++;
     }
   };
 
   global.PNC_CONVEX = api;
 
-  let binding = null;
   async function bindClerk() {
-    if (binding) return binding;
-    binding = (async function () {
-      const on = await api.connect();
-      if (!on) return;
-      const identity = global.PNC_CLERK && global.PNC_CLERK.currentOwner();
-      if (!identity) {
-        if (global.PNC_DB && global.PNC_DB.clearRemoteSnapshot) global.PNC_DB.clearRemoteSnapshot();
-        return;
+    const ck = global.PNC_CLERK;
+    if (ck && ck.demo) { await api.close(); return; }
+    if (!(await api.connect())) return;
+    async function refreshSession() {
+      const session = ck && ck.clerk && ck.clerk.session ? ck.clerk.session.id : null;
+      if (session === boundSession) return;
+      boundSession = session;
+      sessionVersion++;
+      if (global.PNC_DB && global.PNC_DB.productionMode && global.PNC_DB.productionMode()) {
+        if (global.PNC_DB.clearRemoteSnapshot) global.PNC_DB.clearRemoteSnapshot();
       }
-      const result = await api.mutate("ensureOwner", {});
-      if (result && result.error) return;
+      if (syncPromise) await syncPromise;
+      if (session) {
+        const result = await api.mutate("ensureOwner", {});
+        if (result && result.error) return;
+      }
       await api.syncBootstrap();
-    })();
-    try { return await binding; }
-    finally { binding = null; }
+    }
+    if (ck && ck.active && ck.clerk && observedClerk !== ck.clerk) {
+      observedClerk = ck.clerk;
+      if (typeof ck.clerk.addListener === "function") ck.clerk.addListener(refreshSession);
+    }
+    await refreshSession();
   }
 
   global.addEventListener("pnc:clerk", bindClerk);

@@ -46,7 +46,7 @@
     const page = here();
     const links = NAV.map(function (n) {
       const isMe = n.match ? n.match.indexOf(page + ".html") !== -1 : n.href === page + ".html";
-      return '<a href="' + n.href + '"' + (isMe ? ' class="active"' : "") + ">" + n.label + "</a>";
+      return '<a href="' + n.href + '"' + (isMe ? ' class="active" aria-current="page"' : "") + ">" + n.label + "</a>";
     }).join("");
 
     const cart = '<button class="cart-btn" id="cartBtn" aria-label="Open cart">' +
@@ -65,14 +65,14 @@
           brandImg("brand-mark brand-img") +
           "<span>Paws &amp; Claws<small>Pet Co.</small></span>" +
         "</a>" +
-        '<div class="nav-links">' + links +
+        '<div class="nav-links" id="primaryNav">' + links +
           '<a href="account.html" data-member-only hidden>My pets</a>' +
           '<a class="btn btn-teal" href="services.html">Book a visit</a>' +
         "</div>" +
         '<div class="nav-actions">' +
           '<div id="memberZone"></div>' +
           bell + cart +
-          '<button class="burger" aria-label="Toggle menu" aria-expanded="false"><span></span></button>' +
+          '<button class="burger" aria-label="Open menu" aria-controls="primaryNav" aria-expanded="false"><span></span></button>' +
         "</div>" +
       "</nav></div>"
     );
@@ -200,7 +200,7 @@
       closePop();
       PNC.toast("All notifications marked as read");
     });
-    $("[data-notif]", pop).forEach(function (b) {
+    $$("[data-notif]", pop).forEach(function (b) {
       b.addEventListener("click", async function () {
         const n = D.byId(D.db.notifications, b.dataset.notif);
         if (!n) return;
@@ -268,10 +268,35 @@
       if (!e.target.closest("#notifPop") && !e.target.closest("#notifBtn")) closePop();
     });
 
+    const main = $("main");
+    if (main) {
+      main.id = main.id || "main-content";
+      main.tabIndex = -1;
+      const skip = document.createElement("a");
+      skip.className = "skip-link";
+      skip.href = "#" + main.id;
+      skip.textContent = "Skip to main content";
+      document.body.prepend(skip);
+    }
     const burger = $(".burger");
-    if (burger) burger.addEventListener("click", function () { document.body.classList.toggle("menu-open"); });
+    function setMenu(open) {
+      document.body.classList.toggle("menu-open", open);
+      burger.setAttribute("aria-expanded", String(open));
+      burger.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+    }
+    if (burger) burger.addEventListener("click", function () { setMenu(!document.body.classList.contains("menu-open")); });
     $$(".nav-links a").forEach(function (a) {
-      a.addEventListener("click", function () { document.body.classList.remove("menu-open"); });
+      a.addEventListener("click", function () { setMenu(false); });
+    });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape") return;
+      if ($("#notifPop")) { closePop(); bell.focus(); }
+      if (document.body.classList.contains("menu-open")) { setMenu(false); burger.focus(); }
+    });
+    const checkout = $("#cartCheckout");
+    if (checkout && here() !== "shop") checkout.addEventListener("click", function () {
+      location.href = "shop.html";
     });
 
     const onScroll = function () { header.classList.toggle("scrolled", window.scrollY > 8); };
@@ -283,7 +308,8 @@
 
     /* sync member zone: prefer the new DB session */
     syncMemberZone();
-    document.addEventListener("pnc:auth", function () { syncMemberZone(); renderBell(); });
+    window.addEventListener("pnc:data-ready", function () { syncMemberZone(); renderBell(); });
+    window.addEventListener("pnc:auth", function () { syncMemberZone(); renderBell(); });
     window.addEventListener("storage", function () { renderBell(); syncMemberZone(); });
   }
 

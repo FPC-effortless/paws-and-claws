@@ -143,26 +143,19 @@
         await window.PNC_CONVEX.syncBootstrap();
       } else {
         /* Demo/local mode: file into the local CRM log. */
-        const owner = (D.db.owners || []).find(function (o) {
-          return (o.email || "").toLowerCase() === email.toLowerCase();
+        const owner = D.currentOwner();
+        (D.db.contactMessages || (D.db.contactMessages = [])).push({
+          id: D.uid("ct"), name, email, subject, body, ownerId: owner ? owner.id : undefined,
+          createdAt: D.todayISO(), status: "new"
         });
-        if (owner) {
-          D.message(owner.id, "email", subject, body + " — from " + name, "in");
-          D.notify(owner.id, "listing", "Message received", "We've got your note: " + subject);
-        } else {
-          (D.db.contactLog || (D.db.contactLog = [])).push({
-            id: D.uid("ct"),
-            name: name, email: email, subject: subject, body: body,
-            createdAt: D.todayISO()
-          });
-          D.persist();
-        }
+        if (owner) D.message(owner.id, "portal", subject, body, "in");
+        D.persist();
       }
 
       status.style.color = "var(--ok)";
-      status.textContent = "Thanks, " + name.split(" ")[0] + "! We'll reply within one business day.";
+      status.textContent = "Thanks, " + name.split(" ")[0] + "! Your message has been saved for our team.";
       form.reset();
-      if (PNC) PNC.toast("Message sent — talk soon!");
+      if (PNC) PNC.toast("Message saved for the team.");
     });
   }
 

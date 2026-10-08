@@ -93,13 +93,15 @@
   }
 
   function go(id) {
+    if (!visibleSections().some(s => s.id === id)) id = "dashboard";
     state.section = id;
+    $("#adminSide").classList.remove("open");
     $$(".admin-view").forEach(function (v) { v.classList.toggle("active", v.id === "view-" + id); });
     $$("[data-section]").forEach(function (b) { b.classList.toggle("active", b.dataset.section === id); });
     render();
     const sc = $("#adminScroll");
     if (sc) sc.scrollTop = 0;
-    try { history.replaceState(null, "", "# " + id); } catch (e) {}
+    try { history.replaceState(null, "", "#" + id); } catch (e) {}
   }
 
   function renderTopbar() {
@@ -204,6 +206,7 @@
 
   function enter() {
     const a = admin();
+    if (!a) return;
     $("#adminGate").hidden = true;
     $("#adminShell").hidden = false;
     document.body.classList.remove("admin-body");
@@ -212,8 +215,8 @@
     go(state.section);
   }
 
-  function leave() {
-    D.adminLogout();
+  async function leave() {
+    await D.adminLogout();
     $("#adminShell").hidden = true;
     $("#adminGate").hidden = false;
     document.body.classList.add("admin-body");
@@ -367,17 +370,17 @@
           "<td>" + pill(b.status, b.status === "completed" ? "primary" : b.status === "cancelled" ? "danger" : "") + "</td>" +
           '<td class="num">' + money(b.paid) + " / " + money(b.total) + "</td>" +
           '<td><div style="display:flex;gap:5px;flex-wrap:wrap">' +
-            (canManage && b.status !== "completed"
+            (canManage && ["pending", "confirmed"].includes(b.status)
               ? '<button class="mini-btn primary" data-bkdone="' + b.id + '">Complete</button>' : "") +
-            (canManage && b.status !== "cancelled"
+            (allowed("bookings.notes")
               ? '<button class="mini-btn warn" data-bknote="' + b.id + '">Note</button>' : "") +
-            (canManage && b.status !== "cancelled"
+            (canManage && ["pending", "confirmed"].includes(b.status)
               ? '<button class="mini-btn danger" data-bkcancel="' + b.id + '">Cancel</button>' : "") +
           "</div></td>" +
         "</tr>";
       }).join("") + "</tbody>";
 
-    $("[data-bkdone]").forEach(function (b) {
+    $$("[data-bkdone]").forEach(function (b) {
       b.addEventListener("click", async function () {
         const r = await Promise.resolve(D.setBookingStatus(b.dataset.bkdone, "completed"));
         if (r.error) return toast(r.error, "err");
@@ -385,7 +388,7 @@
         render();
       });
     });
-    $("[data-bkcancel]").forEach(function (b) {
+    $$("[data-bkcancel]").forEach(function (b) {
       b.addEventListener("click", async function () {
         const r = await Promise.resolve(D.setBookingStatus(b.dataset.bkcancel, "cancelled"));
         if (r.error) return toast(r.error, "err");
@@ -393,7 +396,7 @@
         render();
       });
     });
-    $("[data-bknote]").forEach(function (b) {
+    $$("[data-bknote]").forEach(function (b) {
       b.addEventListener("click", async function () {
         const note = window.prompt("Internal note for " + b.dataset.bknote + ":");
         if (!note) return;
@@ -426,7 +429,7 @@
         (w.note ? "<p style='margin-top:3px'>\"" + esc(w.note) + "\"</p>" : "") +
       "</div>";
     }).join("");
-    $("[data-wlrm]").forEach(function (b) {
+    $$("[data-wlrm]").forEach(function (b) {
       b.addEventListener("click", async function () {
         const r = await Promise.resolve(D.removeWaitlist(b.dataset.wlrm));
         if (r && r.error) return toast(r.error, "err");
@@ -481,6 +484,9 @@
     });
 
     renderPets();
+    renderOwnerDetail();
+    renderContactRequests();
+    $("#newOwnerBtn").hidden = !allowed("crm.edit");
   }
 
   function renderPets() {
@@ -520,7 +526,7 @@
         "</div></div>";
     }).join("") + "</div>";
 
-    $("[data-vok]").forEach(function (b) {
+    $$("[data-vok]").forEach(function (b) {
       b.addEventListener("click", async function () {
         const parts = b.dataset.vok.split(":");
         const r = await Promise.resolve(D.setVaccineStatus(parts[0], Number(parts[1]), "approved"));
@@ -532,14 +538,50 @@
   }
 
   function openOwner(id) {
-    const o = ownerOfId(id);
-    if (!o) return;
-    state.ownerFilter = id;
+    state.ownerFilter = id || "new";
     go("crm");
-    const host = $("#globalSearch");
-    if (host) host.value = o.fullName;
-    state.crmQ = o.fullName;
-    renderCRM();
+    renderOwnerDetail();
+    $("#ownerDetail").scrollIntoView({ block: "start", behavior: "smooth" });
+  }
+
+  function renderOwnerDetail() {
+    const host = $("#ownerDetail");
+    if (!host) return;
+    const o = ownerOfId(state.ownerFilter);
+    host.hidden = !state.ownerFilter;
+    if (host.hidden) return;
+    const edit = allowed("crm.edit");
+    host.innerHTML = '<h2>' + (o ? esc(o.fullName) : "New customer") + '</h2>' +
+      (edit ? '<form id="ownerForm"><div class="field"><label for="ownerName">Full name</label><input class="input" id="ownerName" required minlength="2" value="' + esc(o?.fullName || "") + '"></div>' +
+      '<div class="field"><label for="ownerEmail">Email</label><input class="input" id="ownerEmail" type="email" required value="' + esc(o?.email || "") + '"></div>' +
+      '<div class="field"><label for="ownerPhone">Phone</label><input class="input" id="ownerPhone" type="tel" value="' + esc(o?.phone || "") + '"></div>' +
+      '<button class="btn btn-teal" type="submit">Save customer</button><p class="hint">Creates a customer record. Account access uses the customer’s own sign-in.</p></form>' : '') +
+      (o && allowed("messages.send") ? '<form id="ownerMessageForm"><h3>Send a portal message</h3><p class="hint">Delivered to the member inbox; no email or SMS is sent.</p>' +
+      '<div class="field"><label for="messageSubject">Subject</label><input class="input" id="messageSubject" required maxlength="200"></div>' +
+      '<div class="field"><label for="messageBody">Message</label><textarea class="input" id="messageBody" required maxlength="4000"></textarea></div>' +
+      '<button class="btn btn-teal" type="submit">Send to member inbox</button></form>' : '') +
+      (o ? '<h3>Conversation</h3>' + (D.db.messages || []).filter(m => m.ownerId === o.id).slice().reverse().map(m =>
+        '<article class="panel"><b>' + esc(m.subject) + '</b><small> · ' + (m.direction === "out" ? 'To member' : 'From member') + '</small><p>' + esc(m.body) + '</p></article>').join('') : '');
+  }
+
+  function renderContactRequests() {
+    const host = $("#contactRequests");
+    if (!host) return;
+    host.hidden = !allowed("crm.edit");
+    if (host.hidden) return;
+    const rows = (D.db.contactMessages || []).slice().reverse();
+    host.innerHTML = '<h2>Contact requests</h2>' + (rows.length ? rows.map(r =>
+      '<article class="panel"><b>' + esc(r.subject || 'General inquiry') + '</b><p>' + esc(r.name) + ' · ' + esc(r.email) + '</p><p>' + esc(r.body) + '</p>' +
+      '<span>' + esc(r.status || 'new') + '</span> ' +
+      (r.ownerId ? '<button class="mini-btn" data-own="' + esc(r.ownerId) + '">Open customer to reply</button> ' : '<p class="hint">Guest request — reply using your email service.</p>') +
+      '<button class="mini-btn" data-contact="' + esc(r.id) + '" data-status="' + (r.status === 'resolved' ? 'new' : 'resolved') + '">' + (r.status === 'resolved' ? 'Reopen' : 'Mark resolved') + '</button></article>').join('') : '<p class="hint">No contact requests yet.</p>');
+    $$('[data-own]', host).forEach(b => b.addEventListener('click', () => openOwner(b.dataset.own)));
+    $$('[data-contact]', host).forEach(b => b.addEventListener('click', async function () {
+      b.disabled = true;
+      const r = await D.setContactStatus(b.dataset.contact, b.dataset.status);
+      if (r?.error) { b.disabled = false; return toast(r.error, 'err'); }
+      renderContactRequests();
+    }));
   }
 
   /* ============================== POS =============================== */
@@ -616,8 +658,8 @@
         return toast(r.error, "err");
       }
       $("#posMsg").style.color = "var(--ok)";
-      $("#posMsg").textContent = "Charged " + money(r.total) + " — order " + r.order.id;
-      toast("Charged " + money(r.total));
+      $("#posMsg").textContent = "Recorded payment " + money(r.total) + " — order " + r.order.id;
+      toast("Recorded payment " + money(r.total));
       posLines = [{ label: "", amount: "" }];
       renderPOS();
     });
@@ -631,10 +673,11 @@
     });
     $("#posOrderCount").textContent = list.length + " order" + (list.length === 1 ? "" : "s");
     if (!list.length) {
-      host.innerHTML = emptyState("&#128722;", "No orders yet", "Online orders and POS charges land here.");
+      host.innerHTML = emptyState("&#128722;", "No orders yet", "Orders recorded in this system will appear here.");
       return;
     }
-    host.innerHTML = list.map(function (o) {
+    const production = D.productionMode && D.productionMode();
+    host.innerHTML = (production ? '<p class="hint">Online payments and refunds cannot be processed from this app because no payment provider is connected.</p>' : '') + list.map(function (o) {
       const own = ownerOfId(o.ownerId) || {};
       const items = (o.items || []).map(function (it) {
         const p = D.PRODUCT_BY_ID[it.productId];
@@ -653,21 +696,21 @@
             ? '<button class="mini-btn" data-ostage="' + o.id + ":" + STAGES[idx - 1] + '">&larr; ' + esc(STAGES[idx - 1]) + "</button>" : "") +
           (idx < STAGES.length - 1 && o.status !== "cancelled"
             ? '<button class="mini-btn primary" data-ostage="' + o.id + ":" + STAGES[idx + 1] + '">' + esc(STAGES[idx + 1]) + " &rarr;</button>" : "") +
-          (allowed("payments.refund") && o.status !== "cancelled" && o.status !== "delivered"
+          (allowed("payments.refund") && !production && o.status !== "cancelled" && o.status !== "delivered"
             ? '<button class="mini-btn danger" data-orefund="' + o.id + '">Refund</button>' : "") +
         "</span></div></div>";
     }).join("");
 
     $$("[data-ostage]").forEach(function (b) {
-      b.addEventListener("click", function () {
+      b.addEventListener("click", async function () {
         const parts = b.dataset.ostage.split(":");
-        const r = D.setOrderStage(parts[0], parts[1]);
+        const r = await Promise.resolve(D.setOrderStage(parts[0], parts[1]));
         if (r.error) return toast(r.error, "err");
         toast("Order moved to " + parts[1]);
         render();
       });
     });
-    $("[data-orefund]").forEach(function (b) {
+    $$("[data-orefund]").forEach(function (b) {
       b.addEventListener("click", async function () {
         const o = D.byId(D.db.orders, b.dataset.orefund);
         if (!o) return;
@@ -710,7 +753,7 @@
         "</tr>";
       }).join("") + "</tbody>";
 
-    $("[data-stk]").forEach(function (b) {
+    $$("[data-stk]").forEach(function (b) {
       b.addEventListener("click", async function () {
         const parts = b.dataset.stk.split(":");
         const r = await Promise.resolve(D.adjustStock(parts[0], Number(parts[1]), "admin adjustment"));
@@ -719,7 +762,7 @@
         render();
       });
     });
-    $("[data-pedit]").forEach(function (b) {
+    $$("[data-pedit]").forEach(function (b) {
       b.addEventListener("click", async function () {
         const p = D.byId(D.db.products, b.dataset.pedit);
         if (!p) return;
@@ -761,7 +804,7 @@
         "</div></div>";
     }).join("") + "</div>";
 
-    $("[data-lst]").forEach(function (b) {
+    $$("[data-lst]").forEach(function (b) {
       b.addEventListener("click", async function () {
         const parts = b.dataset.lst.split(":");
         const r = await Promise.resolve(D.setListingStatus(parts[0], parts[1]));
@@ -899,7 +942,7 @@
           : '<p class="hint" style="margin:6px 0 0">No time off booked.</p>') +
       "</div>";
     }).join("");
-    $("[data-lvrm]").forEach(function (b) {
+    $$("[data-lvrm]").forEach(function (b) {
       b.addEventListener("click", async function () {
         const r = await Promise.resolve(D.removeLeave(b.dataset.lvrm));
         if (r && r.error) return toast(r.error, "err");
@@ -1029,6 +1072,7 @@
     const lo = $("#adLogout");
     if (lo) lo.addEventListener("click", leave);
     const rs = $("#adReset");
+    if (rs) rs.hidden = D.productionMode();
     if (rs) rs.addEventListener("click", function () {
       if (!window.confirm("Reset all demo data to its seeded state? This cannot be undone.")) return;
       D.reset();
@@ -1038,30 +1082,33 @@
     const dr = $("#dashRefresh");
     if (dr) dr.addEventListener("click", function () { render(); toast("Dashboard refreshed"); });
     const nob = $("#newOwnerBtn");
-    if (nob) nob.addEventListener("click", function () {
-      const name = window.prompt("New customer's full name:");
-      if (!name || name.trim().length < 2) return toast("A name is required", "err");
-      const email = window.prompt("Email address:");
-      if (!D.isValidEmail(email)) return toast("Enter a valid email address", "err");
-      const r = D.signUp({ fullName: name.trim(), email: email.trim().toLowerCase(), password: "changeme123" });
-      if (r.error) return toast(r.error, "err");
-      toast(name.trim().split(" ")[0] + " added — temp password changeme123");
-      render();
+    if (nob) nob.addEventListener("click", function () { openOwner(null); });
+    document.addEventListener("submit", async function (e) {
+      if (!["ownerForm", "ownerMessageForm"].includes(e.target.id)) return;
+      e.preventDefault();
+      const button = e.target.querySelector('button[type="submit"]');
+      if (button.disabled) return;
+      button.disabled = true;
+      try {
+        let result;
+        if (e.target.id === "ownerForm") {
+          const input = { fullName: $("#ownerName").value, email: $("#ownerEmail").value, phone: $("#ownerPhone").value };
+          result = state.ownerFilter === "new" ? await D.createOwner(input) : await D.updateOwner(state.ownerFilter, input);
+          if (result?.owner) state.ownerFilter = result.owner.id;
+        } else {
+          result = await D.sendMessage(state.ownerFilter, $("#messageSubject").value, $("#messageBody").value);
+        }
+        if (result?.error) return toast(result.error, "err");
+        toast(e.target.id === "ownerForm" ? "Customer saved" : "Message sent to member inbox");
+        renderCRM();
+      } catch (err) { toast("Could not save. Please try again.", "err"); }
+      finally { button.disabled = false; }
     });
   }
 
   /* ============================== boot ============================= */
   function start() {
     try { D.load(); } catch (e) { try { D.reset(); } catch (e2) {} }
-
-    /* password reveal on the gate */
-    $$(".pw-toggle").forEach(function (t) {
-      t.addEventListener("click", function () {
-        const input = t.parentElement.querySelector(".input");
-        if (!input) return;
-        input.type = input.type === "password" ? "text" : "password";
-      });
-    });
 
     renderCreds();
     mountLogin();
@@ -1078,6 +1125,13 @@
       if (admin()) enter();
     });
 
+    window.addEventListener("pnc:data-ready", function () {
+      if (admin()) enter();
+      else { $("#adminShell").hidden = true; $("#adminGate").hidden = false; }
+    });
+    window.addEventListener("storage", function () {
+      if (!admin()) { $("#adminShell").hidden = true; $("#adminGate").hidden = false; }
+    });
     const a = admin();
     if (a) enter();
     else document.body.classList.add("admin-body");

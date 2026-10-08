@@ -16,8 +16,9 @@
     species: new Set(),
     ages: new Set(),
     sizes: new Set(),
-    maxPrice: 0,
+    maxPrice: null,
     sort: 'featured',
+    query: '',
     ful: 'delivery'
   };
 
@@ -34,11 +35,12 @@
 
   function applied() {
     const out = [];
+    if (state.query) out.push({ k: 'query', v: state.query, label: 'Search: ' + state.query });
     state.cats.forEach(v => out.push({ k: 'cats', v: v, label: v }));
     state.species.forEach(v => out.push({ k: 'species', v: v, label: D.speciesIcon(v) + ' ' + v }));
     state.ages.forEach(v => out.push({ k: 'ages', v: v, label: D.titleCase(v) }));
     state.sizes.forEach(v => out.push({ k: 'sizes', v: v, label: 'Size ' + v }));
-    if (state.maxPrice) out.push({ k: 'price', v: state.maxPrice, label: 'Under ' + D.money(state.maxPrice) });
+    if (state.maxPrice !== null) out.push({ k: 'price', v: state.maxPrice, label: 'Up to ' + D.money(state.maxPrice) });
     return out;
   }
 
@@ -65,10 +67,10 @@
       '<button type="button" class="f-chip" data-f="sizes" data-v="' + D.esc(s) + '">' +
       D.esc(s) + '</button>').join('');
 
-    const top = Math.max.apply(null, catalog().map(p => p.price));
+    const top = Math.max(1, ...catalog().map(p => p.price));
     const range = $('#priceRange');
     if (range) { range.max = String(top); range.value = String(top); }
-    state.maxPrice = 0;
+    state.maxPrice = null;
     const readout = $('#priceReadout');
     if (readout) readout.textContent = 'Any price';
   }
@@ -124,11 +126,12 @@
 
   function filtered() {
     const list = catalog().filter(p => {
+      if (state.query && ![p.name, p.desc, p.cat, ...(p.species || [])].join(' ').toLowerCase().includes(state.query)) return false;
       if (state.cats.size && !state.cats.has(p.cat)) return false;
       if (state.species.size && !(p.species || []).some(s => state.species.has(s))) return false;
       if (state.ages.size && !(p.age || []).some(a => state.ages.has(a))) return false;
       if (state.sizes.size && !(p.size || []).some(s => state.sizes.has(s))) return false;
-      if (state.maxPrice && p.price > state.maxPrice) return false;
+      if (state.maxPrice !== null && p.price > state.maxPrice) return false;
       return true;
     });
     const s = state.sort;
@@ -152,11 +155,13 @@
   }
 
   function reset() {
+    state.query = '';
+    $('#productSearch').value = '';
     state.cats.clear();
     state.species.clear();
     state.ages.clear();
     state.sizes.clear();
-    state.maxPrice = 0;
+    state.maxPrice = null;
     const r = $('#priceRange');
     if (r) r.value = r.max;
     const ro = $('#priceReadout');
@@ -170,15 +175,15 @@
     $$('.ful-opt').forEach(b => {
       const on = b.dataset.ful === v;
       b.classList.toggle('active', on);
-      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
     const note = $('#fulNote');
     if (note) {
-      note.textContent = v === 'pickup'
-        ? 'Free pickup at 142 Alder Brook Lane — ready in 2 hours'
-        : 'Same-day delivery within Riverton — order by 2pm';
+      note.textContent = D.productionMode && D.productionMode()
+        ? 'Online ordering and fulfillment are not available yet.'
+        : (v === 'pickup' ? 'Demo pickup at 142 Alder Brook Lane' : 'Demo delivery within Riverton');
     }
-    PNC.toast(v === 'pickup' ? 'Pickup selected' : 'Delivery selected — free for members');
+    PNC.toast((D.productionMode && D.productionMode()) ? 'Online ordering is not available yet' : (v === 'pickup' ? 'Demo pickup selected' : 'Demo delivery selected'));
   }
 
   /* ---------- totals & checkout ---------- */
@@ -215,17 +220,13 @@
 
   /* ---------- init ---------- */
   function init() {
+    $('#toggleFilters').addEventListener('click', function () {
+      const open = $('#shopFilters').classList.toggle('filters-open');
+      this.setAttribute('aria-expanded', String(open));
+      this.textContent = open ? 'Hide filters' : 'Show filters';
+    });
     buildFacets();
     render();
-
-    $('#productGrid').addEventListener('click', function (e) {
-      const b = e.target.closest('.add-btn');
-      if (!b || b.disabled) return;
-      const p = product(b.dataset.add);
-      if (!p) return;
-      if (p.stock <= 0) { PNC.toast('That one is sold out'); return; }
-      PNC.Cart.add(p.id);
-    });
 
     $$('.f-chip').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -241,11 +242,14 @@
       if (!c) return;
       const k = c.dataset.rk;
       if (k === 'price') {
-        state.maxPrice = 0;
+        state.maxPrice = null;
         const r = $('#priceRange');
         if (r) r.value = r.max;
         const ro = $('#priceReadout');
         if (ro) ro.textContent = 'Any price';
+      } else if (k === 'query') {
+        state.query = '';
+        $('#productSearch').value = '';
       } else if (state[k]) {
         state[k].delete(c.dataset.rv);
       }
@@ -256,12 +260,17 @@
     if (range) {
       range.addEventListener('input', function (e) {
         const v = Number(e.target.value), max = Number(e.target.max);
-        state.maxPrice = v >= max ? 0 : v;
+        state.maxPrice = v >= max ? null : v;
         const ro = $('#priceReadout');
-        if (ro) ro.textContent = state.maxPrice ? 'Up to ' + D.money(state.maxPrice) : 'Any price';
+        if (ro) ro.textContent = state.maxPrice !== null ? 'Up to ' + D.money(state.maxPrice) : 'Any price';
         render();
       });
     }
+
+    $('#productSearch').addEventListener('input', function (e) {
+      state.query = e.target.value.trim().toLowerCase();
+      render();
+    });
 
     $('#clearFilters').addEventListener('click', reset);
     $('#resetEmpty').addEventListener('click', reset);
@@ -280,13 +289,17 @@
 
     /* member pricing note */
     const m = member();
+    if (D.productionMode && D.productionMode()) {
+      const lead = $('#shopLead');
+      if (lead) lead.textContent = 'Browse products and check local availability. Online checkout is not available yet.';
+    }
     if (m) {
       const lead = $('#shopLead');
-      if (lead) {
+      if (lead && !(D.productionMode && D.productionMode())) {
         const pct = Math.round((D.PLAN_DISCOUNT[m.plan] || 0) * 100);
         lead.textContent = pct
-          ? "Club members save " + pct + "% on every order — your discount is applied at checkout."
-          : "Hand-picked products we'd give our own pets. Members get free delivery on every order.";
+          ? "Demo members save " + pct + "% on eligible demo orders."
+          : "Browse the catalog and check local availability.";
       }
     }
 

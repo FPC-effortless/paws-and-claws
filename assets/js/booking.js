@@ -251,7 +251,7 @@
         " has all required vaccines on file and approved.</div></div>";
     }
     return '<div class="warn-card bad">&#9888;<div><b>Vaccine records needed.</b> ' + esc(pet.petName) +
-      " is missing: " + esc(chk.missing.join(", ")) + '. Upload records in <a href="account.html#pets" style="font-weight:700;text-decoration:underline">your account</a> — staff approve them within one business day, and you can book a vaccination visit right now.</div></div>';
+      " is missing: " + esc(chk.missing.join(", ")) + '. Upload records in <a href="account.html#pets" style="font-weight:700;text-decoration:underline">your account</a> — staff review them before approving vaccine-required services. You can book a vaccination visit now.</div></div>';
   }
 
   function renderStep3() {

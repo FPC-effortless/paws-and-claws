@@ -4,15 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Shop — Paws &amp; Claws</title>
-  <meta name="description" content="Shop — Paws &amp; Claws. Club members save 15% on every order.">
+  <meta name="description" content="Browse the Paws &amp; Claws product catalog and check local availability.">
   <link rel="icon" href="assets/brand/favicon.ico" sizes="any">
   <link rel="icon" href="assets/brand/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="assets/brand/favicon-180.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/style.css">
-  <link rel="stylesheet" href="assets/css/pages.css">
+  <link rel="stylesheet" href="assets/css/style.css?v=20261008-audit1">
+  <link rel="stylesheet" href="assets/css/pages.css?v=20261008-audit1">
+  <link rel="stylesheet" href="assets/css/platform.css?v=20261008-audit1">
 </head>
 <body>
 
@@ -24,14 +25,15 @@
         <div class="sec-head" style="margin-bottom:26px">
           <span class="eyebrow">The store</span>
           <h1>Shop the whole store</h1>
-          <p class="lead" id="shopLead">Hand-picked products we'd give our own pets. Club members save 5–25% automatically at checkout.</p>
+          <p class="lead" id="shopLead">Browse products and check local availability. Online checkout is not available yet.</p>
         </div>
       </div>
     </section>
 
     <section style="padding-top:0">
       <div class="wrap shop-layout">
-        <aside class="shop-filters">
+        <aside class="shop-filters" id="shopFilters">
+          <button class="btn btn-ghost shop-filter-toggle" id="toggleFilters" aria-expanded="false" aria-controls="shopFilters">Show filters</button>
           <h3>Filters</h3>
           <div class="filter-group">
             <strong style="display:block;font-size:.82rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px">Category</strong>
@@ -52,7 +54,7 @@
           <div class="filter-group">
             <strong style="display:block;font-size:.82rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px">Max price</strong>
             <div id="filterPrice">
-              <input type="range" id="priceRange" min="0" max="200" step="5" value="200" style="width:100%" aria-label="Maximum price">
+              <input type="range" id="priceRange" min="0" max="200" step="0.01" value="200" style="width:100%" aria-label="Maximum price">
               <div id="priceReadout" style="font-size:.84rem;color:var(--ink-soft);margin-top:4px">Any price</div>
             </div>
           </div>
@@ -62,19 +64,23 @@
                     <div class="filter-group" style="border-top:none;padding-top:0">
             <strong style="display:block;font-size:.82rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px">Fulfillment</strong>
             <div style="display:flex;gap:8px">
-              <button type="button" class="btn btn-sm btn-ghost ful-opt" data-ful="delivery" style="flex:1">Delivery</button>
-              <button type="button" class="btn btn-sm btn-ghost ful-opt" data-ful="pickup" style="flex:1">Pickup</button>
+              <button type="button" class="btn btn-sm btn-ghost ful-opt" aria-pressed="true" data-ful="delivery" style="flex:1">Delivery</button>
+              <button type="button" class="btn btn-sm btn-ghost ful-opt" aria-pressed="false" data-ful="pickup" style="flex:1">Pickup</button>
             </div>
-            <p id="fulNote" style="font-size:.84rem;color:var(--ink-soft);margin:8px 0 0">Same-day delivery within Riverton — order by 2pm</p>
+            <p id="fulNote" style="font-size:.84rem;color:var(--ink-soft);margin:8px 0 0">Online ordering and delivery are not available yet.</p>
           </div>
           <div class="filter-group" style="border-top:none;padding-top:0">
-            <a class="btn btn-teal btn-block" href="membership.html">Join &amp; save 15%</a>
+            <a class="btn btn-teal btn-block" href="membership.html">Create a free account</a>
           </div>
         </aside>
 
         <div>
+          <div class="shop-search">
+            <label for="productSearch">Find something for your best friend</label>
+            <input class="input" type="search" id="productSearch" placeholder="Search food, toys, grooming…" autocomplete="off">
+          </div>
           <div class="shop-toolbar">
-            <span class="result-count" id="resultCount"></span>
+            <span class="result-count" id="resultCount" role="status" aria-live="polite"></span>
             <div style="margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
               <label for="sortBy" style="font-size:.86rem;color:var(--ink-soft);font-weight:600">Sort</label>
               <select id="sortBy">
@@ -94,12 +100,12 @@
     </section>
   </main>
 
-    <script src="assets/js/app.js"></script>
-  <script src="assets/js/data.js"></script>
-  <script src="assets/js/nav.js"></script>
-  <script src="assets/js/convexClient.js"></script>
+    <script src="assets/js/data.js?v=20261008-audit1"></script>
+  <script src="assets/js/app.js?v=20261008-audit1"></script>
+  <script src="assets/js/nav.js?v=20261008-audit1"></script>
+  <script src="assets/js/convexClient.js?v=20261008-audit1"></script>
   <!-- Clerk identity layer. The publishable key lives in clerk.js. -->
-  <script src="assets/js/clerk.js"></script>
-  <script src="assets/js/shop.js"></script>
+  <script src="assets/js/clerk.js?v=20261008-audit1"></script>
+  <script src="assets/js/shop.js?v=20261008-audit1"></script>
 </body>
 </html>

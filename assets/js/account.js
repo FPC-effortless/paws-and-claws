@@ -34,6 +34,7 @@
   function showApp() {
     $('#acctGate').style.display = 'none';
     $('#acctApp').style.display = '';
+    setTab(tab);
     renderAll();
   }
 
@@ -117,6 +118,7 @@
 
   /* ================= tabs ================= */
   function setTab(t) {
+    if (!['overview', 'pets', 'bookings', 'orders', 'inbox', 'payment', 'settings'].includes(t)) t = 'overview';
     tab = t;
     $$('.acct-tab').forEach(b => {
       const on = b.dataset.tab === t;
@@ -134,9 +136,9 @@
   /* ================= overview ================= */
   function renderOverview() {
     const m = me();
-    const up = bookings().filter(b => b.status !== 'cancelled' && b.date >= D.todayISO());
+    const up = bookings().slice().sort((a, b) => a.date.localeCompare(b.date) || a.hour - b.hour).filter(b => ['confirmed', 'pending'].includes(b.status) && b.date >= D.todayISO());
     const open = orders().filter(o => o.status === 'open');
-    const inbox = messages().filter(x => !x.read && x.direction === 'in');
+    const inbox = messages().filter(x => !x.read && x.direction === 'out');
     const ps = pets();
 
     $('#panelOverview').innerHTML =
@@ -144,7 +146,7 @@
         '<div class="avatar">' + D.initials(m.fullName) + '</div>' +
         '<div><h2>' + D.esc(m.fullName) + '</h2><p>' + D.esc(m.email) + '</p></div>' +
         '<span class="status-pill available" style="margin-left:auto;align-self:center">' +
-          PLAN_LABEL[m.plan] || 'Member' + '</span>' +
+          (PLAN_LABEL[m.plan] || 'Member') + '</span>' +
       '</div>' +
       '<div class="stat-row">' +
         statBox(D.speciesIcon(ps[0] ? ps[0].species : 'Dog'), ps.length, 'pets in your family') +
@@ -159,8 +161,8 @@
           : '<p class="muted">Nothing booked yet. <a class="teal" href="services.html">Book an appointment &rarr;</a></p>') +
       '</div>' +
       '<div class="panel">' +
-        '<h3>Member perks</h3>' +
-        '<div class="perk-row">' +
+        '<h3>' + (D.productionMode() ? 'Member tools' : 'Demo member perks') + '</h3>' +
+        (D.productionMode() ? '<p>Manage your pets, appointments and messages. Paid plans, online checkout and delivery perks are not connected.</p>' : '<div class="perk-row">' +
           '<div class="perk"><span class="perk-ico">&#128375;</span><div><strong>' +
             PLAN_DISCOUNT[m.plan] + ' off everything</strong><small>Applied automatically at checkout</small></div></div>' +
           '<div class="perk"><span class="perk-ico">&#128666;</span><div><strong>' +
@@ -169,7 +171,8 @@
           '<div class="perk"><span class="perk-ico">&#129389;</span><div><strong>Birthday treat box</strong>' +
             '<small>Every pet, every year</small></div></div>' +
         '</div>' +
-        '<a class="btn btn-ghost btn-sm" href="membership.html">Compare plans</a>' +
+        '</div>') +
+        '<a class="btn btn-ghost btn-sm" href="membership.html">' + (D.productionMode() ? 'Membership availability' : 'Compare demo plans') + '</a>' +
       '</div>';
   }
 
@@ -316,7 +319,7 @@
 
   /* ================= bookings ================= */
   function renderBookings() {
-    const all = bookings().slice().sort((a, b) => (b.date + b.hour) - (a.date + a.hour));
+    const all = bookings().slice().sort((a, b) => b.date.localeCompare(a.date) || b.hour - a.hour);
     $('#panelBookings').innerHTML =
       '<div class="panel-head"><h3>Appointments</h3>' +
       '<a class="btn btn-teal btn-sm" href="services.html">&#43; Book a visit</a></div>' +
@@ -336,14 +339,14 @@
         '</small></div>' +
       '<div class="timeline-main">' +
         '<h4>' + D.esc(s.name || 'Appointment') + ' &middot; <span class="muted">' +
-          D.money(s.price || 0) + '</span></h4>' +
+          D.money(b.total || 0) + '</span></h4>' +
         '<p class="muted small">' + D.esc(p ? p.petName : 'No pet') + ' &middot; ' +
           D.esc(prov.name || 'Any available provider') + ' &middot; ' + D.esc(b.id) + '</p>' +
         (b.notes ? '<p class="small">' + D.esc(b.notes) + '</p>' : '') +
         '<div class="timeline-actions">' +
           '<span class="status-pill ' + (st === 'cancelled' ? 'sold' : st === 'completed' ? 'reserved' : 'available') +
             '">' + D.titleCase(st) + '</span>' +
-          (past || st === 'cancelled' ? '' :
+          (past || !['pending', 'confirmed'].includes(st) ? '' :
             '<button type="button" class="btn btn-ghost btn-sm" data-resched="' + b.id + '">Reschedule</button>' +
             '<button type="button" class="btn btn-ghost btn-sm" data-cancel="' + b.id + '">Cancel</button>') +
         '</div>' +
@@ -384,7 +387,7 @@
       '<div class="panel-head"><h3>Order history</h3>' +
       '<a class="btn btn-teal btn-sm" href="shop.html">&#128722; Shop again</a></div>' +
       (all.length ? all.map(orderRow).join('') : emptyBlock(
-        'No orders yet', 'Food, toys, grooming gear and more — members save up to 25%.',
+        'No orders yet', D.productionMode() ? 'Online ordering is not available on this site yet.' : 'Browse demo products and place a local test order.',
         'shop.html', 'Browse the shop'));
   }
 
@@ -428,7 +431,8 @@
         '<small>' + D.titleCase(m.channel || 'email') + ' &middot; ' + D.fmtDate(m.createdAt) + '</small>' +
         '<p>' + D.esc(m.body) + '</p></div>' +
       '<span class="status-pill ' + (m.read ? 'sold' : 'available') + '">' +
-        (m.read ? 'Read' : 'New') + '</span>' +
+        (m.direction === 'in' ? 'Sent' : m.read ? 'Read' : 'New') + '</span>' +
+      (m.direction === 'out' && !m.read ? '<button class="btn btn-ghost btn-sm" data-read-message="' + D.esc(m.id) + '">Mark read</button>' : '') +
     '</div>';
   }
 
@@ -437,10 +441,10 @@
     const cs = cards();
     $('#panelPayment').innerHTML =
       '<div class="panel-head"><h3>Payment methods</h3>' +
-      '<button type="button" class="btn btn-teal btn-sm" id="addCardBtn" ' + ((D.productionMode && D.productionMode()) ? 'disabled' : '') + '>&#43; Add a card</button></div>' +
-      (cs.length ? '<div class="pay-grid">' + cs.map(cardRow).join('') + '</div>'
+      (D.productionMode() ? '' : '<button type="button" class="btn btn-teal btn-sm" id="addCardBtn">&#43; Add a demo card</button>') + '</div>' +
+      (D.productionMode() ? '<div class="empty-card"><h3>Payments are not connected</h3><p>Online checkout and saved payment methods are unavailable on this site.</p></div>' : (cs.length ? '<div class="pay-grid">' + cs.map(cardRow).join('') + '</div>'
         : '<div class="empty-card"><h3>No cards on file</h3>' +
-          '<p>Add a card for one-tap checkout and automatic member discounts.</p></div>') +
+          '<p>Demo payment methods are for local testing only.</p></div>')) +
       '<form id="cardForm" class="pay-form" style="display:none;margin-top:18px" novalidate>' +
         '<div class="grid2">' +
           '<div class="field"><label for="cfBrand">Brand</label>' +
@@ -563,7 +567,7 @@
     $('#acctHello').textContent = 'Hi, ' + m.fullName.split(' ')[0];
     $('#acctSub').textContent = pets().length + ' pet' + (pets().length === 1 ? '' : 's') +
       ' · ' + bookings().length + ' appointments · ' + PLAN_LABEL[m.plan];
-    const unread = messages().filter(x => !x.read && x.direction === 'in').length;
+    const unread = messages().filter(x => !x.read && x.direction === 'out').length;
     const badge = $('#inboxBadge');
     badge.hidden = !unread;
     badge.textContent = String(unread);
@@ -600,6 +604,12 @@
 
     /* delegated panel clicks */
     document.addEventListener('click', async function (e) {
+      const readMessage = e.target.closest('[data-read-message]');
+      if (readMessage) {
+        const r = await D.markMessageRead(readMessage.dataset.readMessage);
+        if (r?.error) return PNC.toast(r.error, 'err');
+        renderAll(); return;
+      }
       const addBtn = e.target.closest('#addPetBtn, #addPetBtn2');
       if (addBtn) { openPetModal(null); return; }
       const edit = e.target.closest('.pet-edit');
@@ -639,6 +649,8 @@
       else if (e.target.id === 'cardForm') saveCard(e);
     });
 
+    window.addEventListener('pnc:data-ready', syncView);
+    window.addEventListener('hashchange', function () { if (me()) setTab(location.hash.slice(1)); });
     window.addEventListener('pnc:auth', function () {
       if (me()) { showApp(); } else { showGate(); }
     });

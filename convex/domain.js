@@ -12,7 +12,7 @@ const PERMS = {
     "listings.edit": false, "reports.view": false, "staff.manage": false, "roles.edit": false
   },
   provider: {
-    "crm.view": "own", "bookings.view": "own", "bookings.notes": true,
+    "crm.view": "own", "bookings.view": "own", "bookings.notes": "own",
     "messages.send": "own", "payments.take": false, "payments.refund": false,
     "cms.edit": false, "inventory.edit": false, "listings.edit": false,
     "reports.view": false, "staff.manage": false, "roles.edit": false
@@ -65,6 +65,13 @@ function hash01(str) {
 }
 function dateOnly(s) { return String(s).slice(0, 10); }
 
+function validatePetInput(input) {
+  if (input.petName !== undefined && !String(input.petName).trim()) throw new Error("Give your pet a name.");
+  if (input.weightKg !== undefined && (!Number.isFinite(Number(input.weightKg)) || Number(input.weightKg) < 0)) throw new Error("Weight must be a non-negative number.");
+  if (input.species !== undefined && !["Dog","Cat","Bird","Rabbit","Reptile","Small Mammal","Fish"].includes(input.species)) throw new Error("Choose a valid species.");
+  if (input.dob && (!/^\d{4}-\d{2}-\d{2}$/.test(input.dob) || Number.isNaN(parseDate(input.dob).getTime()) || dateOnly(parseDate(input.dob).toISOString()) !== input.dob || input.dob > today())) throw new Error("Enter a valid birth date that is not in the future.");
+}
+
 async function identity(ctx) {
   const id = await ctx.auth.getUserIdentity();
   if (!id) throw new Error("Not authenticated.");
@@ -96,7 +103,7 @@ async function ownerFor(ctx, allowCreate = false) {
       notes: "",
       createdAt: today()
     };
-    await ctx.db.insert("owners", owner);
+    owner._id = await ctx.db.insert("owners", owner);
   }
   return owner;
 }
@@ -192,7 +199,7 @@ async function bootstrapData(ctx) {
   const id = await ctx.auth.getUserIdentity();
   const publicData = {
     version: 1,
-    owners: [], pets: [], bookings: [], orders: [], listings: [],
+    owners: [], pets: [], bookings: [], orders: [], listings: await ctx.db.query("listings").collect(),
     products: await ctx.db.query("products").collect(),
     services: await ctx.db.query("services").collect(),
     serviceGroups: await ctx.db.query("serviceGroups").collect(),
@@ -267,7 +274,7 @@ async function bootstrapData(ctx) {
     ...publicData,
     owners: [owner],
     pets: (await ctx.db.query("pets").collect()).filter(p => p.ownerId === owner.id),
-    bookings: (await ctx.db.query("bookings").collect()).filter(b => b.ownerId === owner.id),
+    bookings: (await ctx.db.query("bookings").collect()).filter(b => b.ownerId === owner.id).map(({ internalNotes, ...b }) => b),
     orders: (await ctx.db.query("orders").collect()).filter(o => o.ownerId === owner.id),
     messages: (await ctx.db.query("messages").collect()).filter(m => m.ownerId === owner.id),
     notifications: (await ctx.db.query("notifications").collect()).filter(n => n.ownerId === owner.id),
@@ -288,7 +295,7 @@ const OPS = new Set([
   "setBookingStatus","addBookingNote","placeOrder","setOrderStage","refund","setListingStatus",
   "adjustStock","updateProduct","updateCMS","updateService","addLeave","removeLeave",
   "joinWaitlist","removeWaitlist","posCharge","addPaymentMethod","removePaymentMethod",
-  "setPrimaryPayment","submitContact","submitInquiry"
+  "setPrimaryPayment","submitContact","submitInquiry","createOwner","sendMessage","markMessageRead","setContactStatus"
 ]);
 
 export const mutate = mutation({
@@ -297,6 +304,50 @@ export const mutate = mutation({
     if (!OPS.has(op)) throw new Error("Unknown operation.");
     if (payload == null || typeof payload !== "object" || Array.isArray(payload)) throw new Error("Invalid operation payload.");
     const p = payload;
+
+    if (op === "createOwner") {
+      const admin = await adminFor(ctx);
+      requirePermission(admin, "crm.edit");
+      const input = p.input || {};
+      const fullName = String(input.fullName || "").trim();
+      const email = String(input.email || "").trim().toLowerCase();
+      if (fullName.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a full name and valid email.");
+      if (await ctx.db.query("owners").withIndex("by_email", q => q.eq("email", email)).first()) throw new Error("An account with this email already exists.");
+      const owner = { id: uid("ow"), fullName, email, phone: String(input.phone || ""), address: "", emergencyContact: "", notes: "", plan: "puppy", createdAt: today() };
+      await ctx.db.insert("owners", owner);
+      await audit(ctx, admin, "Customer created", owner.id);
+      return { ok: true, ownerId: owner.id };
+    }
+    if (op === "sendMessage") {
+      const admin = await adminFor(ctx);
+      const scope = requirePermission(admin, "messages.send");
+      const owner = await getOwnerById(ctx, p.ownerId);
+      if (!owner) throw new Error("Customer not found.");
+      if (scope === "own" && !(await ctx.db.query("bookings").collect()).some(b => b.ownerId === owner.id && b.providerId === admin.providerId)) throw new Error("Not authorized.");
+      const subject = String(p.subject || "").trim();
+      const body = String(p.body || "").trim();
+      if (!subject || !body || subject.length > 200 || body.length > 4000) throw new Error("Enter a subject and message (maximum 4,000 characters).");
+      await ctx.db.insert("messages", { id: uid("msg"), ownerId: owner.id, direction: "out", channel: "portal", subject, body, read: false, createdAt: new Date().toISOString() });
+      await notify(ctx, owner.id, "message", subject, "You have a new message in your member inbox.");
+      await audit(ctx, admin, "Portal message sent", owner.id);
+      return { ok: true };
+    }
+    if (op === "markMessageRead") {
+      const owner = await ownerFor(ctx, false);
+      const row = await ctx.db.query("messages").filter(q => q.eq(q.field("id"), p.messageId)).first();
+      if (!owner || !row || row.ownerId !== owner.id || row.direction !== "out") throw new Error("Not authorized.");
+      await ctx.db.patch(row._id, { read: true });
+      return { ok: true };
+    }
+    if (op === "setContactStatus") {
+      const admin = await adminFor(ctx);
+      requirePermission(admin, "crm.edit");
+      const row = await ctx.db.query("contactMessages").filter(q => q.eq(q.field("id"), p.contactId)).first();
+      if (!row || !["new", "resolved"].includes(p.status)) throw new Error("Invalid contact request.");
+      await ctx.db.patch(row._id, { status: p.status });
+      await audit(ctx, admin, "Contact request " + p.status, row.id);
+      return { ok: true };
+    }
 
     if (op === "ensureOwner") {
       const id = await identity(ctx);
@@ -342,8 +393,13 @@ export const mutate = mutation({
       if (!admin && patch.email !== undefined && String(patch.email).trim().toLowerCase() !== String(target.email).toLowerCase()) {
         throw new Error("Change your email through your identity provider.");
       }
-      if (patch.email) patch.email = patch.email.trim().toLowerCase();
-      if (patch.fullName && patch.fullName.trim().length < 2) throw new Error("Name is too short.");
+      if (patch.email !== undefined) {
+        patch.email = patch.email.trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(patch.email)) throw new Error("Enter a valid email address.");
+        const duplicate = await ctx.db.query("owners").withIndex("by_email", q => q.eq("email", patch.email)).first();
+        if (duplicate && duplicate._id !== target._id) throw new Error("An account with this email already exists.");
+      }
+      if (patch.fullName !== undefined && patch.fullName.trim().length < 2) throw new Error("Name is too short.");
       await ctx.db.patch(target._id, patch);
       if (admin) await audit(ctx, admin, "Owner updated", target.id);
       return { ok: true };
@@ -361,6 +417,7 @@ export const mutate = mutation({
       const allowedSex = ["Male","Female"];
       const allowedAltered = ["Intact","Neutered","Spayed"];
       const input = p.input || {};
+      validatePetInput(input);
       const pet = {
         id: uid("pt"), ownerId, petName: String(input.petName || "New pet").trim() || "New pet",
         species: allowedSpecies.includes(input.species) ? input.species : "Dog",
@@ -389,6 +446,7 @@ export const mutate = mutation({
         if (!ownBooking) throw new Error("Not authorized.");
       }
       const input = p.patch || {};
+      validatePetInput(input);
       const patch = {};
       for (const k of ["petName","species","breed","dob","sex","altered","weightKg","microchip","coat","notes"]) {
         if (input[k] !== undefined) patch[k] = k === "weightKg" ? Math.max(0, Number(input[k]) || 0) : String(input[k]);
@@ -422,7 +480,7 @@ export const mutate = mutation({
       if (!pet || pet.ownerId !== owner?.id) throw new Error("Not authorized.");
       const name = String(p.name || "").trim();
       const date = String(p.date || "");
-      if (!name || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Invalid vaccine record.");
+      if (!["Rabies", "DHPP", "Bordetella", "FVRCP", "Leptospirosis", "Canine Influenza"].includes(name) || !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(parseDate(date).getTime()) || dateOnly(parseDate(date).toISOString()) !== date || date > today()) throw new Error("Invalid vaccine record.");
       const vaccines = Array.isArray(pet.vaccines) ? pet.vaccines.slice() : [];
       vaccines.push({ name, date, lot: String(p.lot || ""), status: "pending" });
       await ctx.db.patch(pet._id, { vaccines });
@@ -449,7 +507,7 @@ export const mutate = mutation({
       const pet = await getPet(ctx, p.petId);
       if (!owner || !service || !pet || pet.ownerId !== owner.id) throw new Error("Invalid booking request.");
       if (service.duration >= 24) throw new Error("This service requires overnight scheduling; please contact the store.");
-      if (service.deposit && process.env.PNC_PAYMENTS_ENABLED !== "true") throw new Error("This booking requires a payment processor that is not configured yet.");
+      if (service.deposit) throw new Error("This booking requires a payment processor that is not connected yet.");
       const required = pet.species === "Cat" ? ["Rabies","FVRCP"] : ["Rabies","DHPP","Bordetella"];
       if (service.requiresVaccine) {
         const have = (pet.vaccines || []).filter(v => v.status === "approved").map(v => v.name);
@@ -471,7 +529,7 @@ export const mutate = mutation({
       };
       await ctx.db.insert("bookings", booking);
       await notify(ctx, owner.id, "booking", "Booking confirmed: " + service.name, pet.petName + " is booked for " + booking.date + ".");
-      await ctx.db.insert("messages", { id: uid("msg"), ownerId: owner.id, direction: "out", channel: "email", subject: "Appointment confirmation", body: service.name + " for " + pet.petName + " on " + booking.date + ". Payment due: $" + deposit.toFixed(2) + ".", read: false, createdAt: today() });
+      await ctx.db.insert("messages", { id: uid("msg"), ownerId: owner.id, direction: "out", channel: "portal", subject: "Appointment confirmation", body: service.name + " for " + pet.petName + " on " + booking.date + ". " + (deposit ? "Deposit due: $" + deposit.toFixed(2) + "." : "No deposit is required."), read: false, createdAt: today() });
       return { ok: true, bookingId: booking.id };
     }
 
@@ -487,7 +545,7 @@ export const mutate = mutation({
       if (!activeBookingStatus(booking.status)) throw new Error("Cannot reschedule a closed booking.");
       const service = await getService(ctx, booking.serviceId);
       const provider = await getProvider(ctx, p.providerId || booking.providerId);
-      if (!service || !provider) throw new Error("Invalid booking.");
+      if (!service || !provider || !(service.staff || []).includes(provider.id)) throw new Error("Invalid provider for this service.");
       const ok = await slotAvailable(ctx, service, provider, String(p.date), Number(p.hour), booking.id);
       if (!ok) throw new Error("That time slot is no longer available.");
       await ctx.db.patch(booking._id, { date: String(p.date), hour: Number(p.hour), providerId: provider.id });
@@ -518,7 +576,7 @@ export const mutate = mutation({
       if (scope === "own" && booking.providerId !== admin.providerId) throw new Error("Not authorized.");
       const status = String(p.status || "");
       if (!["pending","confirmed","completed","cancelled","no-show"].includes(status)) throw new Error("Invalid booking status.");
-      if (booking.status === "completed" && status !== "completed") throw new Error("Completed bookings cannot be reopened.");
+      if (!activeBookingStatus(booking.status) && status !== booking.status) throw new Error("Closed bookings cannot be changed.");
       const patch = { status };
       if (status === "completed") patch.completedAt = new Date().toISOString();
       await ctx.db.patch(booking._id, patch);
@@ -545,7 +603,7 @@ export const mutate = mutation({
     if (op === "placeOrder") {
       const owner = await ownerFor(ctx, true);
       if (!owner) throw new Error("Please sign in to checkout.");
-      if (process.env.PNC_PAYMENTS_ENABLED !== "true") throw new Error("Online checkout is disabled until a payment processor is configured.");
+      throw new Error("Online checkout is disabled until a payment processor is connected.");
       const rawLines = Array.isArray(p.items) ? p.items : [];
       if (!rawLines.length) throw new Error("Your cart is empty.");
       const lines = [];
@@ -686,7 +744,7 @@ export const mutate = mutation({
       }
       if (input.duration !== undefined) {
         const duration = Number(input.duration);
-        if (!Number.isFinite(duration) || duration <= 0 || duration > 24) throw new Error("Invalid service duration.");
+        if (!Number.isFinite(duration) || duration <= 0 || duration > 12) throw new Error("Invalid service duration.");
         patch.duration = duration;
       }
       if (input.popular !== undefined) patch.popular = !!input.popular;
