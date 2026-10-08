@@ -7,7 +7,8 @@
   "use strict";
 
   const DEFAULT_URL = "https://gallant-lion-490.convex.cloud";
-  const SYNCED_KEY = "pnc_convex_seeded";
+  let syncPromise = null;
+  let sessionRevision = 0;
   let authBound = false;
   let boundClerk = null;
 
@@ -22,6 +23,7 @@
     get active() { return api.enabled && !!api.client; },
 
     async connect() {
+      if (global.PNC_CLERK && global.PNC_CLERK.demo) return false;
       const url = configured();
       if (!url) return false;
 
@@ -45,7 +47,11 @@
         }
 
         const clerk = global.PNC_CLERK;
-        if (!clerk || !clerk.active || !clerk.clerk) return false;
+        if (!clerk || !clerk.active || !clerk.clerk) {
+          // Public catalog and guest contact requests do not require login.
+          api.enabled = true;
+          return true;
+        }
 
         if (authBound && boundClerk === clerk.clerk) {
           api.enabled = true;
@@ -78,24 +84,29 @@
     },
 
     async syncBootstrap() {
-      if (!(await api.connect())) return false;
-      if (api.syncing) return false;
-      api.syncing = true;
-      try {
-        const snapshot = await api.client.query("domain:bootstrap", {});
-        if (snapshot && global.PNC_DB && global.PNC_DB.applyRemoteSnapshot) {
-          global.PNC_DB.applyRemoteSnapshot(snapshot);
-          // No persistent flag or data is needed for authenticated snapshots.
-          global.dispatchEvent(new CustomEvent("pnc:convex-ready", { detail: { snapshot } }));
-          return true;
+      if (syncPromise) return syncPromise;
+      const revision = sessionRevision;
+      syncPromise = (async function () {
+        if (!(await api.connect())) return false;
+        api.syncing = true;
+        try {
+          const snapshot = await api.client.query("domain:bootstrap", {});
+          if (revision !== sessionRevision) return false;
+          if (snapshot && global.PNC_DB && global.PNC_DB.applyRemoteSnapshot) {
+            global.PNC_DB.applyRemoteSnapshot(snapshot);
+            global.dispatchEvent(new CustomEvent("pnc:convex-ready", { detail: { snapshot } }));
+            return true;
+          }
+          return false;
+        } catch (err) {
+          console.warn("[pnc] Convex bootstrap failed.", err);
+          return false;
+        } finally {
+          api.syncing = false;
         }
-        return false;
-      } catch (err) {
-        console.warn("[pnc] Convex bootstrap failed.", err);
-        return false;
-      } finally {
-        api.syncing = false;
-      }
+      })();
+      try { return await syncPromise; }
+      finally { syncPromise = null; }
     },
 
     async mutate(op, payload) {
@@ -123,23 +134,34 @@
 
   global.PNC_CONVEX = api;
 
-  let binding = null;
-  async function bindClerk() {
-    if (binding) return binding;
-    binding = (async function () {
-      const on = await api.connect();
-      if (!on) return;
-      const identity = global.PNC_CLERK && global.PNC_CLERK.currentOwner();
-      if (!identity) {
-        if (global.PNC_DB && global.PNC_DB.clearRemoteSnapshot) global.PNC_DB.clearRemoteSnapshot();
-        return;
+  // Run transitions serially so an older session cannot overwrite a newer
+  // user's in-memory data after sign-out or account switching.
+  let binding = Promise.resolve();
+  let lastSession = null;
+  function bindClerk() {
+    const ck = global.PNC_CLERK;
+    const session = ck && ck.active && ck.clerk && ck.clerk.session;
+    const sessionKey = session ? (session.id || ck.clerk.user?.id || "authenticated") : null;
+    const revision = ++sessionRevision;
+    binding = binding.catch(function () {}).then(async function () {
+      if (revision !== sessionRevision) return;
+      if (ck && ck.demo) { await api.close(); return; }
+      if (sessionKey !== lastSession) {
+        lastSession = sessionKey;
+        await api.close();
+        if (global.PNC_DB && global.PNC_DB.clearRemoteSnapshot) {
+          global.PNC_DB.clearRemoteSnapshot();
+        }
       }
-      const result = await api.mutate("ensureOwner", {});
-      if (result && result.error) return;
+      if (revision !== sessionRevision || !(await api.connect())) return;
+      if (revision !== sessionRevision) return;
+      if (sessionKey) {
+        const result = await api.mutate("ensureOwner", {});
+        if (revision !== sessionRevision || (result && result.error)) return;
+      }
       await api.syncBootstrap();
-    })();
-    try { return await binding; }
-    finally { binding = null; }
+    });
+    return binding;
   }
 
   global.addEventListener("pnc:clerk", bindClerk);
