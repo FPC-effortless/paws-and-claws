@@ -101,9 +101,9 @@
     });
   }
 
-  async function loadClerkUI(domain) {
-    await loadScript("https://" + domain + "/npm/@clerk/ui@1/dist/ui.browser.js", "the Clerk UI bundle");
-    await loadScript("https://" + domain + "/npm/@clerk/clerk-js@6/dist/clerk.browser.js", "ClerkJS", {
+  async function loadClerkUI() {
+    await loadScript("/assets/js/vendor/clerk-ui/ui.browser.js", "the Clerk UI bundle");
+    await loadScript("/assets/js/vendor/clerk-js/clerk.browser.js", "ClerkJS", {
       "data-clerk-publishable-key": PUBLISHABLE_KEY,
     });
     return global.__internal_ClerkUICtor;
@@ -174,7 +174,7 @@
       try {
         const domain = clerkDomain(PUBLISHABLE_KEY);
         if (!domain) throw new Error("Could not derive a Clerk domain from the publishable key.");
-        const ClerkUI = await loadClerkUI(domain);
+        const ClerkUI = await loadClerkUI();
         const clerk = new global.Clerk(PUBLISHABLE_KEY);
         await clerk.load({ ui: { ClerkUI } });
         api.clerk = clerk;
