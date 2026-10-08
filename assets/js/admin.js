@@ -93,13 +93,16 @@
   }
 
   function go(id) {
+    if (!visibleSections().some(s => s.id === id)) id = "dashboard";
     state.section = id;
+    const side = $("#adminSide");
+    if (side) side.classList.remove("open");
     $$(".admin-view").forEach(function (v) { v.classList.toggle("active", v.id === "view-" + id); });
     $$("[data-section]").forEach(function (b) { b.classList.toggle("active", b.dataset.section === id); });
     render();
     const sc = $("#adminScroll");
     if (sc) sc.scrollTop = 0;
-    try { history.replaceState(null, "", "# " + id); } catch (e) {}
+    try { history.replaceState(null, "", "#" + id); } catch (e) {}
   }
 
   function renderTopbar() {
@@ -204,6 +207,7 @@
 
   function enter() {
     const a = admin();
+    if (!a) return;
     $("#adminGate").hidden = true;
     $("#adminShell").hidden = false;
     document.body.classList.remove("admin-body");
@@ -212,8 +216,14 @@
     go(state.section);
   }
 
-  function leave() {
-    D.adminLogout();
+  function exitGate() {
+    $("#adminShell").hidden = true;
+    $("#adminGate").hidden = false;
+    document.body.classList.add("admin-body");
+  }
+
+  async function leave() {
+    await D.adminLogout();
     $("#adminShell").hidden = true;
     $("#adminGate").hidden = false;
     document.body.classList.add("admin-body");
@@ -353,6 +363,7 @@
     }
 
     const canManage = allowed("bookings.manage");
+    const canNote = !!scopeOf("bookings.notes");
     host.innerHTML = "<thead><tr><th>Date</th><th>Time</th><th>Service</th><th>Pet</th><th>Customer</th><th>Provider</th><th>Status</th><th>Paid</th><th></th></tr></thead><tbody>" +
       list.map(function (b) {
         const pet = petOfId(b.petId) || {};
@@ -367,17 +378,17 @@
           "<td>" + pill(b.status, b.status === "completed" ? "primary" : b.status === "cancelled" ? "danger" : "") + "</td>" +
           '<td class="num">' + money(b.paid) + " / " + money(b.total) + "</td>" +
           '<td><div style="display:flex;gap:5px;flex-wrap:wrap">' +
-            (canManage && b.status !== "completed"
+            (canManage && ["pending", "confirmed"].includes(b.status)
               ? '<button class="mini-btn primary" data-bkdone="' + b.id + '">Complete</button>' : "") +
-            (canManage && b.status !== "cancelled"
+            (canNote
               ? '<button class="mini-btn warn" data-bknote="' + b.id + '">Note</button>' : "") +
-            (canManage && b.status !== "cancelled"
+            (canManage && ["pending", "confirmed"].includes(b.status)
               ? '<button class="mini-btn danger" data-bkcancel="' + b.id + '">Cancel</button>' : "") +
           "</div></td>" +
         "</tr>";
       }).join("") + "</tbody>";
 
-    $("[data-bkdone]").forEach(function (b) {
+    $$("[data-bkdone]").forEach(function (b) {
       b.addEventListener("click", async function () {
         const r = await Promise.resolve(D.setBookingStatus(b.dataset.bkdone, "completed"));
         if (r.error) return toast(r.error, "err");
@@ -385,7 +396,7 @@
         render();
       });
     });
-    $("[data-bkcancel]").forEach(function (b) {
+    $$("[data-bkcancel]").forEach(function (b) {
       b.addEventListener("click", async function () {
         const r = await Promise.resolve(D.setBookingStatus(b.dataset.bkcancel, "cancelled"));
         if (r.error) return toast(r.error, "err");
@@ -393,7 +404,7 @@
         render();
       });
     });
-    $("[data-bknote]").forEach(function (b) {
+    $$("[data-bknote]").forEach(function (b) {
       b.addEventListener("click", async function () {
         const note = window.prompt("Internal note for " + b.dataset.bknote + ":");
         if (!note) return;
@@ -426,7 +437,7 @@
         (w.note ? "<p style='margin-top:3px'>\"" + esc(w.note) + "\"</p>" : "") +
       "</div>";
     }).join("");
-    $("[data-wlrm]").forEach(function (b) {
+    $$("[data-wlrm]").forEach(function (b) {
       b.addEventListener("click", async function () {
         const r = await Promise.resolve(D.removeWaitlist(b.dataset.wlrm));
         if (r && r.error) return toast(r.error, "err");
@@ -481,6 +492,10 @@
     });
 
     renderPets();
+    renderOwnerDetail();
+    renderContactRequests();
+    const createButton = $("#newOwnerBtn");
+    if (createButton) createButton.hidden = !canEdit;
   }
 
   function renderPets() {
@@ -520,7 +535,7 @@
         "</div></div>";
     }).join("") + "</div>";
 
-    $("[data-vok]").forEach(function (b) {
+    $$("[data-vok]").forEach(function (b) {
       b.addEventListener("click", async function () {
         const parts = b.dataset.vok.split(":");
         const r = await Promise.resolve(D.setVaccineStatus(parts[0], Number(parts[1]), "approved"));
@@ -616,8 +631,8 @@
         return toast(r.error, "err");
       }
       $("#posMsg").style.color = "var(--ok)";
-      $("#posMsg").textContent = "Charged " + money(r.total) + " — order " + r.order.id;
-      toast("Charged " + money(r.total));
+      $("#posMsg").textContent = "Recorded " + money(r.total) + " — order " + (r.order ? r.order.id : r.orderId || "created");
+      toast("Recorded payment of " + money(r.total));
       posLines = [{ label: "", amount: "" }];
       renderPOS();
     });
@@ -659,15 +674,15 @@
     }).join("");
 
     $$("[data-ostage]").forEach(function (b) {
-      b.addEventListener("click", function () {
+      b.addEventListener("click", async function () {
         const parts = b.dataset.ostage.split(":");
-        const r = D.setOrderStage(parts[0], parts[1]);
+        const r = await Promise.resolve(D.setOrderStage(parts[0], parts[1]));
         if (r.error) return toast(r.error, "err");
         toast("Order moved to " + parts[1]);
         render();
       });
     });
-    $("[data-orefund]").forEach(function (b) {
+    $$("[data-orefund]").forEach(function (b) {
       b.addEventListener("click", async function () {
         const o = D.byId(D.db.orders, b.dataset.orefund);
         if (!o) return;
@@ -710,16 +725,16 @@
         "</tr>";
       }).join("") + "</tbody>";
 
-    $("[data-stk]").forEach(function (b) {
+    $$("[data-stk]").forEach(function (b) {
       b.addEventListener("click", async function () {
         const parts = b.dataset.stk.split(":");
         const r = await Promise.resolve(D.adjustStock(parts[0], Number(parts[1]), "admin adjustment"));
         if (r.error) return toast(r.error, "err");
-        toast(r.product.name + " → " + r.product.stock + " in stock");
+        toast("Stock adjusted for " + parts[0]);
         render();
       });
     });
-    $("[data-pedit]").forEach(function (b) {
+    $$("[data-pedit]").forEach(function (b) {
       b.addEventListener("click", async function () {
         const p = D.byId(D.db.products, b.dataset.pedit);
         if (!p) return;
@@ -761,12 +776,12 @@
         "</div></div>";
     }).join("") + "</div>";
 
-    $("[data-lst]").forEach(function (b) {
+    $$("[data-lst]").forEach(function (b) {
       b.addEventListener("click", async function () {
         const parts = b.dataset.lst.split(":");
         const r = await Promise.resolve(D.setListingStatus(parts[0], parts[1]));
         if (r.error) return toast(r.error, "err");
-        toast(r.listing.name + " is now " + parts[1]);
+        toast("Listing is now " + parts[1]);
         render();
       });
     });
@@ -850,7 +865,7 @@
         return toast(r.error, "err");
       }
       $("#svcMsg").style.color = "var(--ok)";
-      $("#svcMsg").textContent = r.service.name + " updated.";
+      $("#svcMsg").textContent = "Service updated.";
       toast("Service updated");
       renderCMS();
     });
@@ -899,7 +914,7 @@
           : '<p class="hint" style="margin:6px 0 0">No time off booked.</p>') +
       "</div>";
     }).join("");
-    $("[data-lvrm]").forEach(function (b) {
+    $$("[data-lvrm]").forEach(function (b) {
       b.addEventListener("click", async function () {
         const r = await Promise.resolve(D.removeLeave(b.dataset.lvrm));
         if (r && r.error) return toast(r.error, "err");
@@ -1029,6 +1044,7 @@
     const lo = $("#adLogout");
     if (lo) lo.addEventListener("click", leave);
     const rs = $("#adReset");
+    if (rs) rs.hidden = D.productionMode();
     if (rs) rs.addEventListener("click", function () {
       if (!window.confirm("Reset all demo data to its seeded state? This cannot be undone.")) return;
       D.reset();
@@ -1054,15 +1070,6 @@
   function start() {
     try { D.load(); } catch (e) { try { D.reset(); } catch (e2) {} }
 
-    /* password reveal on the gate */
-    $$(".pw-toggle").forEach(function (t) {
-      t.addEventListener("click", function () {
-        const input = t.parentElement.querySelector(".input");
-        if (!input) return;
-        input.type = input.type === "password" ? "text" : "password";
-      });
-    });
-
     renderCreds();
     mountLogin();
     mountClerkGate();
@@ -1075,7 +1082,10 @@
        re-evaluate the staff session once it reports ready. */
     window.addEventListener("pnc:clerk", function () {
       mountClerkGate();
-      if (admin()) enter();
+      if (admin()) enter(); else exitGate();
+    });
+    window.addEventListener("pnc:data-ready", function () {
+      if (admin()) enter(); else exitGate();
     });
 
     const a = admin();
