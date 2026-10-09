@@ -37,6 +37,8 @@
 .bubble-one { width: 26px; height: 26px; top: 8%; right: 12%; }.bubble-two { width: 14px; height: 14px; top: 22%; left: 6%; }.bubble-three { width: 37px; height: 37px; bottom: 18%; right: 1%; }
 .scene-paw { position: absolute; color: var(--yellow); font-size: 1.5rem; filter: drop-shadow(0 8px 4px rgba(0,47,79,.25)); }
 .paw-one { top: 20%; left: 18%; }.paw-two { bottom: 20%; left: 27%; transform: translateZ(16px) rotate(28deg); }.paw-three { top: 30%; right: 14%; transform: translateZ(16px) rotate(42deg); }
+.hero-pet-party { position: absolute; z-index: 5; width: 105%; right: -1%; bottom: -18%; filter: drop-shadow(0 27px 16px rgba(0,40,70,.32)); animation: pet-party-float 5.5s ease-in-out infinite; transform-origin: 58% 84%; }
+.hero-pet-party img { display: block; width: 100%; height: auto; }
 .pet { position: absolute; display: grid; place-items: center; transform-style: preserve-3d; filter: drop-shadow(0 22px 14px rgba(0,42,73,.35)); animation: pet-float 4.8s ease-in-out infinite; }
 .pet-face { display: block; font-size: clamp(90px, 14vw, 154px); line-height: .8; transform: translateZ(18px); filter: saturate(1.12) contrast(1.04); }
 .pet-dog { z-index: 3; left: 18%; bottom: 4%; }.pet-dog .pet-face { font-size: clamp(130px, 19vw, 205px); }.pet-cat { z-index: 4; right: 13%; bottom: 5%; animation-delay: -.9s; }.pet-bunny { z-index: 2; right: -2%; bottom: 7%; animation-delay: -2.1s; }.pet-bunny .pet-face { font-size: clamp(74px, 10vw, 116px); }
@@ -54,13 +56,14 @@
 }
 @keyframes pet-float { 0%,100% { margin-top: 0; } 50% { margin-top: -13px; } }
 @keyframes toy-bob { 0%,100% { margin-bottom: 0; } 50% { margin-bottom: 10px; } }
-@media (prefers-reduced-motion: reduce) { .pet, .toy { animation: none; } }
+@keyframes pet-party-float { 0%,100% { margin-bottom: 0; } 50% { margin-bottom: 13px; } }
+@media (prefers-reduced-motion: reduce) { .pet, .toy, .hero-pet-party { animation: none; } }
 @media (max-width: 900px) { .hero-art { min-height: 420px; } }
 
 @media (max-width: 620px) {
   .hero--hub { padding-block: 38px 48px; }
   .hero-grid { gap: 0; }
-  .hero-art { display: grid; min-height: 330px; margin-top: 36px; }.hero-card { width: min(100%, 340px); }.scene-hint, .hero-note { display: none; }
+  .hero-art { display: grid; min-height: 330px; margin-top: 36px; }.hero-card { width: min(100%, 340px); }.hero-pet-party { width: 116%; right: -3%; bottom: -12%; }.scene-hint, .hero-note { display: none; }
   .hero-cta { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 22px; }
   .hero-cta .btn { width: 100%; }
   .hero-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 26px; padding-top: 18px; }

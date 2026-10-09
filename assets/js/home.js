@@ -46,16 +46,19 @@
     const host = $("#groupGrid");
     if (!host) return;
     const ready = D.catalogReady();
-    host.innerHTML = D.SERVICE_GROUPS.map(function (g) {
+    const groups = D.SERVICE_GROUPS.map(function (g) {
       const svc = (D.SERVICES || []).filter(function (s) { return s.group === g.id; });
       const from = svc.length ? Math.min.apply(null, svc.map(function (s) { return s.price; })) : 0;
-      return '<a class="card cat-card reveal" href="services.html#' + g.id + '">' +
+      return '<a class="home-service-card reveal" href="services.html#' + g.id + '">' +
         '<span class="cat-ico">' + D.icon(g.icon) + "</span>" +
         "<h3>" + esc(g.name) + "</h3>" +
         "<p>" + esc(g.blurb) + "</p>" +
-        '<span class="tag tag--yellow">' + (ready ? 'From ' + money(from) : 'Ask for current services and prices') + "</span>" +
+        '<span class="home-card-action">' + (ready ? 'From ' + money(from) : 'Enquire') + " →</span>" +
         "</a>";
-    }).join("");
+    });
+    groups.push('<a class="home-service-card reveal" href="pets.html"><span class="cat-ico">&#128054;&#128049;</span><h3>Pet Connect</h3><p>Responsible pet listings and guided introductions.</p><span class="home-card-action">Meet the pets →</span></a>');
+    groups.push('<a class="home-service-card reveal" href="shop.html"><span class="cat-ico">&#127918;</span><h3>Quality Supplies</h3><p>Food, toys and accessories chosen for everyday care.</p><span class="home-card-action">Visit the store →</span></a>');
+    host.innerHTML = groups.join("");
   }
 
   /* ---------------------------- featured pets ------------------------- */
