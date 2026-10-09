@@ -67,7 +67,7 @@
         "</a>" +
         '<div class="nav-links" id="primaryNav">' + links +
           '<a href="account.html" data-member-only hidden>My pets</a>' +
-          '<a class="btn btn-teal" href="services.html">Book a visit</a>' +
+          '<a class="btn btn-teal" id="visitNavLink" href="services.html#book">Book a visit</a>' +
         "</div>" +
         '<div class="nav-actions">' +
           '<div id="memberZone"></div>' +
@@ -227,6 +227,14 @@
     if (btn) btn.setAttribute("aria-expanded", "false");
   }
 
+  function syncVisitCta() {
+    const link = $("#visitNavLink");
+    if (!link) return;
+    const bookable = D.catalogReady && D.catalogReady();
+    link.href = bookable ? "services.html#book" : "contact.html";
+    link.textContent = bookable ? "Book a visit" : "Ask about visits";
+  }
+
   function renderCmsChrome() {
     const header = $(".site-header"), cms = D.db.cms;
     if (!header || !cms) return;
@@ -254,6 +262,7 @@
     if (!$(".site-footer")) document.body.insertAdjacentHTML("beforeend", footerHTML());
 
     renderCmsChrome();
+    syncVisitCta();
 
     const cartBtn = $("#cartBtn");
     if (cartBtn) cartBtn.addEventListener("click", function () { PNC.openModal("cartModal"); });
@@ -311,7 +320,7 @@
 
     /* sync member zone: prefer the new DB session */
     syncMemberZone();
-    window.addEventListener("pnc:data-ready", function () { syncMemberZone(); renderBell(); renderCmsChrome(); });
+    window.addEventListener("pnc:data-ready", function () { syncMemberZone(); renderBell(); renderCmsChrome(); syncVisitCta(); });
     window.addEventListener("pnc:auth", function () { syncMemberZone(); renderBell(); });
     window.addEventListener("storage", function () { renderBell(); syncMemberZone(); });
   }
