@@ -1,6 +1,6 @@
 /* ============================================================
    Paws & Claws — Shared site chrome
-   Renders the unified nav (5 areas + admin), the notification
+   Renders the unified public nav, the notification
    bell + popover, the CMS banner, and keeps auth state in sync
    between the legacy PNC Auth and the new PNC_DB owner session.
    Loaded after app.js and data.js.
@@ -18,8 +18,7 @@
     { href: "services.html", label: "Services", match: ["services.html", "pets.html"] },
     { href: "shop.html", label: "Shop", match: ["shop.html"] },
     { href: "account.html", label: "Member", match: ["account.html", "membership.html"] },
-    { href: "contact.html", label: "Contact", match: ["contact.html"] },
-    { href: "admin/", label: "Admin", match: ["admin"] }
+    { href: "contact.html", label: "Contact", match: ["contact.html"] }
   ];
 
   function here() {
@@ -125,7 +124,6 @@
           '<li><a href="membership.html">Membership</a></li>' +
           '<li><a href="account.html">Member Portal</a></li>' +
           '<li><a href="contact.html">Contact &amp; Emergency</a></li>' +
-          '<li><a href="admin/">Admin Control Panel</a></li>' +
         "</ul></div>" +
         '<div id="footerVisit"><h4>Visit us</h4><ul></ul></div>' +
       "</div>" +
