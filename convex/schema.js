@@ -204,6 +204,7 @@ export default defineSchema({
   providers: defineTable({
     id: v.string(),
     active: v.optional(v.boolean()),
+    ownerId: v.optional(v.string()),
     name: v.string(),
     role: v.string(),
     title: v.string(),

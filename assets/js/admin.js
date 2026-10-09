@@ -1016,7 +1016,7 @@
       e.preventDefault();
       const id = staffPick.value;
       const off = $$('[data-staff-off]:checked').map(function (box) { return Number(box.value); });
-      const input = { id: $("#staffId").value.trim(), name: $("#staffName").value.trim(), role: $("#staffRole").value.trim(), title: $("#staffTitle").value.trim(), group: $("#staffGroup").value, icon: $("#staffIcon").value.trim(), start: Number($("#staffStart").value), end: Number($("#staffEnd").value), off, bio: $("#staffBio").value.trim() };
+      const input = { id: $("#staffId").value.trim(), name: $("#staffName").value.trim(), role: $("#staffRole").value.trim(), title: $("#staffTitle").value.trim(), group: $("#staffGroup").value, icon: $("#staffIcon").value.trim(), start: Number($("#staffStart").value), end: Number($("#staffEnd").value), off, bio: $("#staffBio").value.trim(), ownerId: $("#staffAccount").value };
       if (!id && !input.id) {
         input.id = input.name.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
         if (input.id.length < 2) input.id = "staff-profile";
@@ -1040,6 +1040,17 @@
       if (r && r.error) { $("#staffMsg").style.color = "var(--danger)"; $("#staffMsg").textContent = r.error; return toast(r.error, "err"); }
       $("#staffMsg").style.color = "var(--ok)"; $("#staffMsg").textContent = reactivating ? "Staff member restored to the site." : "Staff member archived; profile and history retained.";
       toast(reactivating ? "Staff member restored" : "Staff member archived"); renderCMS();
+    };
+    const clearStaff = $("#clearStaffProfiles");
+    if (clearStaff) clearStaff.onclick = async function () {
+      if (!window.confirm("Remove every staff profile, leave block and non-super staff control-panel access? Registered customer accounts and this Super Admin account stay intact.")) return;
+      clearStaff.disabled = true;
+      try {
+        const r = await Promise.resolve(D.clearStaffProfiles());
+        if (r?.error) return toast(r.error, "err");
+        $("#clearStaffMsg").textContent = "Staff setup cleared. Add new staff from registered accounts when ready.";
+        toast("Staff setup cleared"); renderCMS();
+      } finally { clearStaff.disabled = false; }
     };
 
     const lf = $("#leaveForm");
@@ -1065,11 +1076,11 @@
     if (accessForm) accessForm.onsubmit = async function (e) {
       e.preventDefault();
       const button = $("#accessSave"); if (button.disabled) return; button.disabled = true;
-      const input = { name: $("#accessName").value.trim(), email: $("#accessEmail").value.trim(), role: $("#accessRole").value, providerId: $("#accessProvider").value };
+      const input = { ownerId: $("#accessOwner").value, role: $("#accessRole").value, providerId: $("#accessProvider").value };
       try {
         const result = await Promise.resolve(D.grantAdminAccess(input));
         if (result && result.error) { $("#accessMsg").style.color = "var(--danger)"; $("#accessMsg").textContent = result.error; return toast(result.error, "err"); }
-        $("#accessMsg").style.color = "var(--ok)"; $("#accessMsg").textContent = "Access granted. The staff member can sign in after verifying this email on the site.";
+        $("#accessMsg").style.color = "var(--ok)"; $("#accessMsg").textContent = "Staff access granted to the selected registered account.";
         accessForm.reset(); syncAdminAccessForm(); renderAdminAccess(); renderAudit(); toast("Admin access granted");
       } catch (error) { $("#accessMsg").style.color = "var(--danger)"; $("#accessMsg").textContent = error.message || "Could not grant access."; }
       finally { button.disabled = false; }
@@ -1108,6 +1119,12 @@
       if (current && D.byId(providers, current)) pick.value = current;
       const group = $("#staffGroup");
       if (group) group.innerHTML = (D.SERVICE_GROUPS || []).map(function (g) { return '<option value="' + esc(g.id) + '">' + esc(g.name) + '</option>'; }).join("");
+      const account = $("#staffAccount");
+      if (account) {
+        const currentAccount = account.value;
+        account.innerHTML = '<option value="">Not linked yet</option>' + (D.db.owners || []).map(function (owner) { return '<option value="' + esc(owner.id) + '">' + esc(owner.fullName || "Unnamed account") + ' · ' + esc(owner.email || "No email") + '</option>'; }).join("");
+        if (currentAccount && D.byId(D.db.owners || [], currentAccount)) account.value = currentAccount;
+      }
       const off = $("#staffOff");
       if (off) off.innerHTML = [[1,"Mon"],[2,"Tue"],[3,"Wed"],[4,"Thu"],[5,"Fri"],[6,"Sat"],[0,"Sun"]].map(function (d) { return '<label class="checkrow"><input type="checkbox" data-staff-off value="' + d[0] + '"> ' + d[1] + '</label>'; }).join("");
       fillStaffForm();
@@ -1144,7 +1161,7 @@
   function fillStaffForm() {
     const p = D.byId(D.PROVIDERS || [], $("#staffPick")?.value);
     const set = function (id, value) { const el = $(id); if (el) el.value = value == null ? "" : value; };
-    set("#staffId", p ? p.id : ""); set("#staffName", p ? p.name : ""); set("#staffRole", p ? p.role : ""); set("#staffTitle", p ? p.title : ""); set("#staffIcon", p ? p.icon : ""); set("#staffStart", p ? p.start : "8"); set("#staffEnd", p ? p.end : "17"); set("#staffBio", p ? p.bio : "");
+    set("#staffId", p ? p.id : ""); set("#staffName", p ? p.name : ""); set("#staffRole", p ? p.role : ""); set("#staffTitle", p ? p.title : ""); set("#staffIcon", p ? p.icon : ""); set("#staffStart", p ? p.start : "8"); set("#staffEnd", p ? p.end : "17"); set("#staffBio", p ? p.bio : ""); set("#staffAccount", p ? p.ownerId : "");
     const group = $("#staffGroup"); if (group) group.value = p ? p.group : ((D.SERVICE_GROUPS || [])[0] || {}).id || "";
     $$('[data-staff-off]').forEach(function (box) { box.checked = !!(p && (p.off || []).includes(Number(box.value))); });
     const title = $("#staffFormTitle"); if (title) title.textContent = p ? "Edit staff member" : "Add staff member";
@@ -1182,6 +1199,13 @@
     const select = $("#accessProvider");
     if (field) field.hidden = role !== "provider";
     if (select && role === "provider") select.innerHTML = (D.PROVIDERS || []).filter(p => p.active !== false).map(p => '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>').join("");
+    const account = $("#accessOwner");
+    if (account) {
+      const current = account.value;
+      const assigned = new Set((D.db.admins || []).map(row => row.ownerId).filter(Boolean));
+      account.innerHTML = '<option value="">Choose a registered account</option>' + (D.db.owners || []).filter(owner => owner.clerkId && !assigned.has(owner.id)).map(function (owner) { return '<option value="' + esc(owner.id) + '">' + esc(owner.fullName || "Unnamed account") + ' · ' + esc(owner.email || "No email") + '</option>'; }).join("");
+      if (current && D.byId(D.db.owners || [], current)) account.value = current;
+    }
   }
 
   function renderAdminAccess() {

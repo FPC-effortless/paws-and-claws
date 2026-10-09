@@ -394,7 +394,7 @@ export const bootstrap = query({
 
 const OPS = new Set([
   "generateUploadUrl",
-  "grantAdminAccess","revokeAdminAccess",
+  "grantAdminAccess","revokeAdminAccess","clearStaffProfiles","removeNonPawServices",
   "ensureOwner","markNotificationRead","markNotificationsRead","updateOwner","addPet","updatePet",
   "removePet","addVaccine","setVaccineStatus","createBooking","rescheduleBooking","cancelBooking",
   "setBookingStatus","addBookingNote","placeOrder","setOrderStage","refund","setListingStatus",
@@ -421,22 +421,59 @@ export const mutate = mutation({
       const admin = await adminFor(ctx);
       requirePermission(admin, "roles.edit");
       const input = p.input || {};
-      const email = String(input.email || "").trim().toLowerCase();
-      const name = String(input.name || "").trim();
       const role = String(input.role || "");
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || name.length < 2 || name.length > 120 || !ROLES.includes(role)) {
-        throw new Error("Enter a staff name, valid account email and supported role.");
+      const owner = await getOwnerById(ctx, String(input.ownerId || ""));
+      if (!owner || !owner.clerkId || !owner.email || !ROLES.includes(role)) {
+        throw new Error("Choose a registered account and a supported role.");
       }
+      const email = owner.email.trim().toLowerCase();
+      const name = owner.fullName;
       const existing = await ctx.db.query("admins").withIndex("by_email", q => q.eq("email", email)).first();
       if (existing) throw new Error("That email already has control panel access. Edit or revoke the existing entry.");
       const providerId = role === "provider" ? String(input.providerId || "") : "";
       if (role === "provider") {
         const provider = await getProvider(ctx, providerId);
         if (!provider || provider.active === false) throw new Error("Choose an active provider profile for this role.");
+        if (provider.ownerId && provider.ownerId !== owner.id) throw new Error("That provider profile is already linked to another registered account.");
+        await ctx.db.patch(provider._id, { ownerId: owner.id });
       }
-      await ctx.db.insert("admins", { email, name, role, ...(providerId ? { providerId } : {}) });
+      await ctx.db.insert("admins", { email, name, role, ownerId: owner.id, ...(providerId ? { providerId } : {}) });
       await audit(ctx, admin, "Admin access granted", email + " — " + role);
       return { ok: true, email, role };
+    }
+
+    if (op === "clearStaffProfiles") {
+      const admin = await adminFor(ctx);
+      requirePermission(admin, "roles.edit");
+      if (admin.role !== "super") throw new Error("Only a Super Admin can clear staff setup.");
+      const providers = await ctx.db.query("providers").collect();
+      const leaves = await ctx.db.query("staffLeave").collect();
+      const services = await ctx.db.query("services").collect();
+      const admins = await ctx.db.query("admins").collect();
+      for (const provider of providers) await ctx.db.delete(provider._id);
+      for (const leave of leaves) await ctx.db.delete(leave._id);
+      for (const service of services) await ctx.db.patch(service._id, { staff: [], active: false });
+      let accessRemoved = 0;
+      for (const entry of admins) {
+        if (entry._id !== admin._id && entry.role !== "super") { await ctx.db.delete(entry._id); accessRemoved++; }
+      }
+      await audit(ctx, admin, "Staff setup cleared", providers.length + " profiles, " + leaves.length + " leave blocks, " + accessRemoved + " staff access entries removed");
+      return { ok: true, providersRemoved: providers.length, accessRemoved };
+    }
+
+    if (op === "removeNonPawServices") {
+      const admin = await adminFor(ctx);
+      requirePermission(admin, "cms.edit");
+      const services = await ctx.db.query("services").collect();
+      const targets = services.filter(service => !/paw/i.test(service.name));
+      const bookings = await ctx.db.query("bookings").collect();
+      const waitlist = await ctx.db.query("waitlist").collect();
+      if (targets.some(service => bookings.some(booking => booking.serviceId === service.id) || waitlist.some(row => row.serviceId === service.id))) {
+        throw new Error("A non-Paw service has history. Archive it from the service editor instead.");
+      }
+      for (const service of targets) await ctx.db.delete(service._id);
+      await audit(ctx, admin, "Non-Paw services removed", targets.length + " services removed");
+      return { ok: true, removed: targets.length };
     }
 
     if (op === "revokeAdminAccess") {
@@ -870,7 +907,11 @@ export const mutate = mutation({
       if (!product) throw new Error("Product not found.");
       const patch = {};
       const input = p.patch || {};
-      if (input.name !== undefined) patch.name = String(input.name).trim();
+      if (input.name !== undefined) {
+        const name = String(input.name).trim();
+        if (!/paw/i.test(name)) throw new Error("Service names must include Paw.");
+        patch.name = name;
+      }
       if (input.cat !== undefined) patch.cat = String(input.cat);
       if (input.price !== undefined) {
         const price = Number(input.price);
@@ -994,6 +1035,7 @@ export const mutate = mutation({
       const price = Number(input.price);
       const duration = Number(input.duration);
       if (!name) throw new Error("Enter a service name.");
+      if (!/paw/i.test(name)) throw new Error("Service names must include Paw.");
       if (!Number.isFinite(price) || price < 0) throw new Error("Invalid service price.");
       if (!Number.isFinite(duration) || duration <= 0 || duration > 24) throw new Error("Invalid service duration.");
       const service = {
@@ -1024,6 +1066,11 @@ export const mutate = mutation({
       const input = p.patch || {};
       const patch = {};
       for (const key of ["name", "role", "title", "icon", "bio"]) if (input[key] !== undefined) patch[key] = String(input[key]).trim();
+      if (input.ownerId !== undefined) {
+        const owner = await getOwnerById(ctx, String(input.ownerId || ""));
+        if (!owner || !owner.clerkId) throw new Error("Choose a registered account for this staff profile.");
+        patch.ownerId = owner.id;
+      }
       if (input.group !== undefined) {
         const group = await ctx.db.query("serviceGroups").filter(q => q.eq(q.field("id"), String(input.group))).first();
         if (!group) throw new Error("Choose a valid department.");
@@ -1059,7 +1106,12 @@ export const mutate = mutation({
       }
       const group = await ctx.db.query("serviceGroups").filter(q => q.eq(q.field("id"), String(input.group || ""))).first();
       if (!group) throw new Error("Choose a valid department.");
-      const provider = { id: uniqueId, active: true, name: String(input.name || "").trim(), role: String(input.role || "").trim(), title: String(input.title || "").trim(), group: String(input.group), icon: String(input.icon || "").trim(), start: Number(input.start), end: Number(input.end), off: Array.isArray(input.off) ? input.off.map(Number) : [], bio: String(input.bio || "").trim() };
+      const ownerId = String(input.ownerId || "");
+      if (ownerId) {
+        const owner = await getOwnerById(ctx, ownerId);
+        if (!owner || !owner.clerkId) throw new Error("Choose a registered account for this staff profile.");
+      }
+      const provider = { id: uniqueId, active: true, ...(ownerId ? { ownerId } : {}), name: String(input.name || "").trim(), role: String(input.role || "").trim(), title: String(input.title || "").trim(), group: String(input.group), icon: String(input.icon || "").trim(), start: Number(input.start), end: Number(input.end), off: Array.isArray(input.off) ? input.off.map(Number) : [], bio: String(input.bio || "").trim() };
       if (!provider.name || !provider.role || !provider.title) throw new Error("Enter the staff member's name, role and title.");
       if (!Number.isFinite(provider.start) || !Number.isFinite(provider.end) || provider.start < 0 || provider.end > 24 || provider.end <= provider.start) throw new Error("Enter valid working hours.");
       if (provider.off.some(day => !Number.isInteger(day) || day < 0 || day > 6)) throw new Error("Choose valid days off.");

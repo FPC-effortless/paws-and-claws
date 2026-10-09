@@ -1114,6 +1114,7 @@
     const s = byId(db.services, serviceId);
     if (!s) return { error: "Service not found." };
     const values = { ...s, ...patch };
+    if (patch.name !== undefined && !/paw/i.test(String(patch.name))) return { error: "Service names must include Paw." };
     const error = validateServiceValues(values);
     if (error) return { error };
     ["name", "group", "price", "duration", "desc", "popular", "deposit", "requiresVaccine", "staff", "active"].forEach((k) => {
@@ -1147,6 +1148,7 @@
       staff: Array.isArray(input.staff) ? input.staff.slice() : [], desc: String(input.desc || "").trim(),
       popular: !!input.popular
     };
+    if (!/paw/i.test(values.name)) return { error: "Service names must include Paw." };
     const error = validateServiceValues(values);
     if (error) return { error };
     db.services.push(values);
@@ -1232,6 +1234,54 @@
     audit("Staff profile archived", provider.id + " — " + provider.name);
     persist();
     return { ok: true, providerId, active: false };
+  }
+  function grantAdminAccess(input) {
+    if (remoteEnabled()) return remoteMutation("grantAdminAccess", { input });
+    if (productionMode()) return { error: "Secure backend is not available." };
+    const actor = currentAdmin();
+    if (!actor || actor.role !== "super") return { error: "Not authorized." };
+    const owner = byId(db.owners || [], String(input?.ownerId || ""));
+    const role = String(input?.role || "");
+    if (!owner || !owner.email || !ADMIN_ROLES[role]) return { error: "Choose a registered account and supported role." };
+    if ((db.admins || []).some(row => row.email === owner.email)) return { error: "That account already has control panel access." };
+    const providerId = role === "provider" ? String(input?.providerId || "") : "";
+    const provider = providerId ? byId(db.providers || [], providerId) : null;
+    if (role === "provider" && (!provider || provider.active === false || (provider.ownerId && provider.ownerId !== owner.id))) return { error: "Choose an available provider profile for this account." };
+    if (provider) provider.ownerId = owner.id;
+    const entry = { id: uid("ad"), ownerId: owner.id, email: owner.email, name: owner.fullName, role, ...(providerId ? { providerId } : {}) };
+    db.admins.push(entry); audit("Admin access granted", entry.email + " — " + role); persist();
+    return { ok: true, email: entry.email, role };
+  }
+  function revokeAdminAccess(email) {
+    if (remoteEnabled()) return remoteMutation("revokeAdminAccess", { email });
+    if (productionMode()) return { error: "Secure backend is not available." };
+    const actor = currentAdmin();
+    if (!actor || actor.role !== "super") return { error: "Not authorized." };
+    const target = (db.admins || []).find(row => row.email === String(email || "").trim().toLowerCase());
+    if (!target || target.email === actor.email) return { error: "You cannot revoke your own access while signed in." };
+    if (target.role === "super" && db.admins.filter(row => row.role === "super").length <= 1) return { error: "At least one Super Admin must keep access." };
+    db.admins = db.admins.filter(row => row !== target); audit("Admin access revoked", target.email); persist(); return { ok: true };
+  }
+  function clearStaffProfiles() {
+    if (remoteEnabled()) return remoteMutation("clearStaffProfiles", {});
+    if (productionMode()) return { error: "Secure backend is not available." };
+    const actor = currentAdmin();
+    if (!actor || actor.role !== "super") return { error: "Not authorized." };
+    const count = (db.providers || []).length;
+    db.providers = []; db.staffLeave = [];
+    (db.services || []).forEach(service => { service.staff = []; service.active = false; });
+    db.admins = (db.admins || []).filter(entry => entry.role === "super");
+    audit("Staff setup cleared", count + " profiles removed"); persist(); return { ok: true, providersRemoved: count };
+  }
+  function removeNonPawServices() {
+    if (remoteEnabled()) return remoteMutation("removeNonPawServices", {});
+    if (productionMode()) return { error: "Secure backend is not available." };
+    const actor = currentAdmin();
+    if (!actor || !can("cms.edit")) return { error: "Not authorized." };
+    const targets = (db.services || []).filter(service => !/paw/i.test(service.name));
+    if (targets.some(service => (db.bookings || []).some(booking => booking.serviceId === service.id) || (db.waitlist || []).some(row => row.serviceId === service.id))) return { error: "A non-Paw service has history. Archive it instead." };
+    db.services = db.services.filter(service => /paw/i.test(service.name));
+    audit("Non-Paw services removed", targets.length + " services removed"); persist(); return { ok: true, removed: targets.length };
   }
   /* ------------------------- staff & waitlist ------------------------- */
   function addLeave(providerId, date, reason) {
@@ -1628,7 +1678,7 @@ function prepareStoreSale(lines, products, method, options) {
     /* inventory */
     adjustStock, updateProduct,
     /* cms */
-    updateCMS, updateService, createService, deleteService, updateProvider, createProvider, deleteProvider,
+    updateCMS, updateService, createService, deleteService, updateProvider, createProvider, deleteProvider, grantAdminAccess, revokeAdminAccess, clearStaffProfiles, removeNonPawServices,
     /* staff */
     addLeave, removeLeave, joinWaitlist, removeWaitlist,
     /* crm */

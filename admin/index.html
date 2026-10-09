@@ -260,8 +260,8 @@
                   <div class="field"><label for="svcPick">Service</label>
                     <select class="input" id="svcPick"></select></div>
                   <div class="form-grid">
-                    <div class="field"><label for="svcName">Name</label>
-                      <input class="input" id="svcName"></div>
+                  <div class="field"><label for="svcName">Name</label>
+                    <input class="input" id="svcName"></div>
                     <div class="field"><label for="svcGroup">Department</label>
                       <select class="input" id="svcGroup"></select></div>
                     <div class="field"><label for="svcPrice">Price</label>
@@ -303,10 +303,12 @@
                     <div class="field"><label for="staffEnd">Ends</label><input class="input" id="staffEnd" type="number" min="0" max="24" step="0.5"></div>
                   </div>
                   <div class="field"><label>Regular days off</label><div id="staffOff" class="checkrow"></div></div>
+                  <div class="field"><label for="staffAccount">Registered account <span class="muted">(optional until access is granted)</span></label><select class="input" id="staffAccount"></select></div>
                   <div class="field"><label for="staffBio">Bio / customer-facing description</label><textarea class="input" id="staffBio" rows="2"></textarea></div>
                   <div class="form-grid"><button class="btn btn-primary" type="submit" id="staffSave">Save staff member</button><button class="btn btn-ghost" type="button" id="staffNew">New staff member</button><button class="btn btn-ghost" type="button" id="staffDelete" style="color:var(--danger)">Archive staff profile</button></div>
                   <p class="hint" id="staffMsg" role="status" style="margin:10px 0 0"></p>
                 </form>
+                <div class="field" style="margin-top:18px"><button class="btn btn-ghost" type="button" id="clearStaffProfiles" style="color:var(--danger)">Clear all staff profiles</button><p class="hint">Removes staff profiles, staff-only access and leave blocks. Registered customer accounts and the signed-in Super Admin remain.</p><p class="hint" id="clearStaffMsg" role="status"></p></div>
                 <form id="leaveForm" class="leave-form" novalidate>
                   <div class="form-grid">
                     <div class="field"><label for="lvWho">Provider</label>
@@ -326,12 +328,11 @@
               </div>
               <div class="admin-panel pos-pad">
                 <div class="panel-head"><h2>Admin account access</h2><span class="muted">Grant or revoke staff access to the control panel</span></div>
-                <p class="hint">The email must belong to a verified account on this site. Role access takes effect when that person signs in.</p>
+                <p class="hint">Choose an existing registered account, then give it the control-panel role it needs. The account keeps its customer profile and can sign in with the same credentials.</p>
                 <div id="adminAccessHost"></div>
                 <form id="adminAccessForm" class="staff-editor" novalidate>
                   <div class="form-grid">
-                    <div class="field"><label for="accessName">Staff name</label><input class="input" id="accessName" required></div>
-                    <div class="field"><label for="accessEmail">Verified account email</label><input class="input" id="accessEmail" type="email" required></div>
+                    <div class="field"><label for="accessOwner">Registered account</label><select class="input" id="accessOwner" required></select></div>
                     <div class="field"><label for="accessRole">Control panel role</label><select class="input" id="accessRole"><option value="desk">Front desk / support</option><option value="provider">Service provider</option><option value="retail">Retail manager</option><option value="super">Super admin</option></select></div>
                     <div class="field" id="accessProviderField" hidden><label for="accessProvider">Linked provider profile</label><select class="input" id="accessProvider"></select></div>
                   </div>

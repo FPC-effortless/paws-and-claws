@@ -150,10 +150,10 @@ const editedProvider = D.updateProvider("TestStaff", { name: "Edited Staff", end
 assert(!editedProvider.error && D.byId(D.db.providers, "TestStaff").name === "Edited Staff" && D.byId(D.db.providers, "TestStaff").end === 18, "super admin can edit staff");
 const deletedProvider = D.deleteProvider("TestStaff");
 assert(!deletedProvider.error && D.byId(D.db.providers, "TestStaff")?.active === false, "super admin archives staff without deleting the profile");
-const addedService = D.createService({ group: "grooming", name: "Test Hygiene Service", price: 22, duration: 0.5, deposit: false, requiresVaccine: false, staff: ["Rosa"], desc: "Temporary CRUD test service." });
+const addedService = D.createService({ group: "grooming", name: "Paw Hygiene Service", price: 22, duration: 0.5, deposit: false, requiresVaccine: false, staff: ["Rosa"], desc: "Temporary CRUD test service." });
 assert(!addedService.error && D.byId(D.db.services, addedService.service.id), "super admin can add a service");
-const editedService = D.updateService(addedService.service.id, { name: "Edited Hygiene Service", price: 24, duration: 0.75, staff: ["Talia"] });
-assert(!editedService.error && D.byId(D.db.services, addedService.service.id).name === "Edited Hygiene Service", "super admin can edit a service");
+const editedService = D.updateService(addedService.service.id, { name: "Paw Edited Hygiene Service", price: 24, duration: 0.75, staff: ["Talia"] });
+assert(!editedService.error && D.byId(D.db.services, addedService.service.id).name === "Paw Edited Hygiene Service", "super admin can edit a service");
 const deletedService = D.deleteService(addedService.service.id);
 assert(!deletedService.error && D.byId(D.db.services, addedService.service.id)?.active === false, "super admin archives services without deleting them");
 D.adminLogout();
