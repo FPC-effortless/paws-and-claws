@@ -18,7 +18,8 @@
     { href: "services.html", label: "Services", match: ["services.html", "pets.html"] },
     { href: "shop.html", label: "Shop", match: ["shop.html"] },
     { href: "account.html", label: "Member", match: ["account.html", "membership.html"] },
-    { href: "contact.html", label: "Contact", match: ["contact.html"] }
+    { href: "contact.html", label: "Contact", match: ["contact.html"] },
+    { href: "admin/", label: "Admin", match: ["admin"] }
   ];
 
   function here() {
@@ -336,7 +337,7 @@
           D.esc(o.fullName.split(" ")[0]) +
         "</a>";
     } else {
-      zone.innerHTML = '<a class="btn btn-teal" href="membership.html">Join now</a>';
+      zone.innerHTML = '<div class="guest-actions"><a class="nav-login" href="account.html">Log in</a><a class="btn btn-teal" href="membership.html#join">Join now</a></div>';
     }
     $$("[data-member-only]").forEach(function (el) { el.hidden = !o; });
     $$("[data-guest-only]").forEach(function (el) { el.hidden = !!o; });

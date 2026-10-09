@@ -200,6 +200,9 @@ section { padding: clamp(56px, 8vw, 104px) 0; }
   font-weight: 800; font-size: .82rem; color: var(--ocean);
 }
 .member-chip svg { width: 15px; height: 15px; }
+.guest-actions { display: inline-flex; align-items: center; gap: 8px; }
+.nav-login { padding: 8px 10px; color: var(--ink-soft); font-weight: 700; font-size: .86rem; }
+.nav-login:hover { color: var(--ocean); }
 
 .burger { display: none; width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--white); place-items: center; }
 .burger span { display: block; width: 19px; height: 2px; background: var(--ocean); border-radius: 2px; position: relative; transition: .2s; }
@@ -222,6 +225,7 @@ body.menu-open .burger span::after { top: 0; transform: rotate(-45deg); }
   body.menu-open .nav-links { visibility: visible; opacity: 1; pointer-events: auto; transform: none; }
   .nav-links a { padding: 13px 16px; min-height: 48px; font-size: 1.05rem; border-radius: var(--r-md); }
   .nav-links .btn { margin-top: 8px; }
+  .guest-actions { width: 100%; justify-content: flex-end; }
 }
 
 /* ----------------------------- Footer ---------------------------- */

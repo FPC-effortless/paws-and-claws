@@ -22,6 +22,7 @@
     <!-- gate (sign in / sign up) -->
     <section class="admin-gate" id="acctGate" style="display:none">
       <div class="gate-card">
+        <div id="clerkMemberHolder" hidden class="clerk-member-holder"></div>
         <div class="gate-tabs" role="tablist" aria-label="Account access">
           <button type="button" class="gate-tab active" id="gate-signIn" data-gate="signIn" role="tab" aria-controls="signInForm" aria-selected="true" tabindex="0">Sign in</button>
           <button type="button" class="gate-tab" id="gate-signUp" data-gate="signUp" role="tab" aria-controls="signUpForm" aria-selected="false" tabindex="-1">Create account</button>
@@ -63,6 +64,7 @@
           </div>
           <button class="btn btn-primary btn-block btn-lg" type="submit">Create my account</button>
         </form>
+        <p class="auth-route">Need an account? <a href="membership.html#join">Join now — it’s free</a></p>
       </div>
     </section>
 

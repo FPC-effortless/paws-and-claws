@@ -30,6 +30,7 @@
               <p class="lead" style="color:#cfe6e3">You do not need a subscription or online account to shop at our physical store. An optional free account keeps pet profiles, appointments and linked purchase history together. Paid memberships are not offered yet.</p>
               <div class="hero-cta">
                 <a class="btn btn-primary btn-lg" href="#join">Join now — it's free</a>
+                <a class="btn btn-ghost btn-lg" href="account.html">Log in</a>
                 <a class="btn btn-ghost btn-lg" href="#plans">Account options</a>
               </div>
             </div>
@@ -72,7 +73,7 @@
         <div class="auth-card">
           <!-- Clerk replaces the local forms when a publishable key is set.
                This page is about joining, so Clerk's <SignUp/> is mounted. -->
-          <div id="clerkMemberHolder" hidden style="padding:4px 0 8px"></div>
+          <div id="clerkMemberHolder" hidden class="clerk-member-holder"></div>
           <div id="accountUnavailable" hidden class="auth-body" role="status"><h2>Online accounts are temporarily unavailable</h2><p>Please contact or visit our Amasoma store. You can shop in person without an account.</p><a class="btn btn-primary" href="contact.html">Contact the store</a></div>
           <div class="auth-tabs" role="tablist">
             <button id="tabSignup" class="active" role="tab" aria-selected="true" aria-controls="paneSignup">Sign up</button>
@@ -314,6 +315,8 @@
         }
         if (!ck || !ck.active) return;
         unavailable.hidden = true;
+        var card = holder.closest(".auth-card");
+        if (card) card.classList.add("clerk-active");
         holder.hidden = false;
         ck.mountSignUp(holder, {
           appearance: { elements: { rootBox: "width:100%" } }
