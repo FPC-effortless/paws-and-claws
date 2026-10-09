@@ -92,9 +92,9 @@
               '<div class="row" id="cartSubtotal" hidden></div>' +
               '<div class="row" id="cartDiscount" hidden></div>' +
               '<div class="row"><span>Total</span><span id="cartTotal">&#8358;0.00</span></div>' +
-              '<div class="row"><span>Delivery</span><span>Calculated at checkout</span></div>' +
+              '<div class="row"><span>Fulfillment</span><span>Online delivery not available</span></div>' +
               '<button class="btn btn-primary btn-block" id="cartCheckout">Proceed to checkout</button>' +
-              '<p class="cart-note">Demo store — no payment is processed.</p>' +
+              '<p class="cart-note">Online payments are unavailable. Visit our Amasoma store to confirm price and availability.</p>' +
             "</div>" +
           "</div>" +
         "</div>" +
