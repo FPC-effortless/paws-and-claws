@@ -18,6 +18,10 @@
   function renderHero() {
     const cms = D.db.cms;
     if (!cms) return;
+    const title = $("#heroTitle");
+    if (title && cms.heroTitle) title.textContent = cms.heroTitle;
+    const tagline = $(".hero-tagline");
+    if (tagline && cms.tagline) tagline.textContent = cms.tagline;
     const lead = $("#heroLead");
     if (lead) lead.textContent = "Quality pet supplies, thoughtful grooming, daycare, vet support, training and a community of pet lovers — all in one place.";
     const bookingLink = $("#heroBookingLink");

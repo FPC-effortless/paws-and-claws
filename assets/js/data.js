@@ -179,7 +179,7 @@
     if (!dateStr && typeof providerArg === "string") { provider = dbArg; dateStr = providerArg; }
     if (!provider || !dateStr) return false;
     const dow = parseD(dateStr).getDay();
-    if (provider.off == null || provider.off.indexOf(dow) !== -1) return false;
+    if (provider.active === false || provider.off == null || provider.off.indexOf(dow) !== -1) return false;
     return !providerLeave(dbArg && dbArg.staffLeave ? dbArg : db, provider.id).some((l) => l.date === dateStr);
   }
 
@@ -318,9 +318,9 @@
       admins,
       cms: {
         siteName: "Paws & Claws",
-        tagline: "Pet Co.",
+        tagline: "Care, play & community in Amasoma.",
         banner: "",
-        heroTitle: "Everything your best friend needs, all under one woof.",
+        heroTitle: "More joy for every paw.",
         catalogConfirmed: false,
         emergencyHotline: "",
         emergencyNote: "For urgent pet health concerns, contact a local veterinary clinic. Online messages are not monitored for emergencies.",
@@ -1115,6 +1115,7 @@
     if (productionMode()) return { error: "Secure backend is not available." };
     const admin = currentAdmin();
     if (!admin || !can("cms.edit")) return { error: "Not authorized." };
+    if (patch.siteName !== undefined && String(patch.siteName).trim().length < 2) return { error: "Enter a site name with at least 2 characters." };
     if (patch.email && !isValidEmail(patch.email)) return { error: "Enter a valid store email." };
     if (patch.catalogConfirmed !== undefined && typeof patch.catalogConfirmed !== "boolean") return { error: "Invalid catalog setting." };
     Object.assign(db.cms, patch);
@@ -1202,10 +1203,14 @@
     if (!admin || !can("staff.manage")) return { error: "Not authorized." };
     const provider = byId(db.providers || [], providerId);
     if (!provider) return { error: "Staff member not found." };
+    if (patch.active !== undefined && typeof patch.active !== "boolean") return { error: "Choose whether this staff member is active." };
     const values = { ...provider, ...patch, id: provider.id };
     const error = validateProviderValues(values, false);
     if (error) return { error };
     Object.assign(provider, { name: String(values.name).trim(), role: String(values.role).trim(), title: String(values.title).trim(), group: values.group, icon: String(values.icon || "").trim(), start: Number(values.start), end: Number(values.end), off: values.off.slice(), bio: String(values.bio || "").trim() });
+    if (patch.active !== undefined) {
+      provider.active = patch.active;
+    }
     audit("Staff profile edited", provider.id + " — " + provider.name);
     persist();
     return { provider };
@@ -1215,7 +1220,16 @@
     if (productionMode()) return { error: "Secure backend is not available." };
     const admin = currentAdmin();
     if (!admin || !can("staff.manage")) return { error: "Not authorized." };
-    const values = { id: String(input.id || "").trim(), name: String(input.name || "").trim(), role: String(input.role || "").trim(), title: String(input.title || "").trim(), group: String(input.group || ""), icon: String(input.icon || "").trim(), start: Number(input.start), end: Number(input.end), off: Array.isArray(input.off) ? input.off.map(Number) : [], bio: String(input.bio || "").trim() };
+    const name = String(input.name || "").trim();
+    const rawId = String(input.id || "").trim();
+    const baseId = rawId && /^[A-Za-z0-9][A-Za-z0-9_-]{1,39}$/.test(rawId) ? rawId : (rawId || name).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+    const id = /^[A-Za-z0-9][A-Za-z0-9_-]{1,39}$/.test(baseId) ? baseId : "staff-" + uid("id").slice(-8);
+    let uniqueId = id, suffix = 2;
+    while ((db.providers || []).some(p => p.id === uniqueId)) {
+      const tail = "-" + suffix++;
+      uniqueId = id.slice(0, 40 - tail.length) + tail;
+    }
+    const values = { id: uniqueId, active: true, name, role: String(input.role || "").trim(), title: String(input.title || "").trim(), group: String(input.group || ""), icon: String(input.icon || "").trim(), start: Number(input.start), end: Number(input.end), off: Array.isArray(input.off) ? input.off.map(Number) : [], bio: String(input.bio || "").trim() };
     if ((db.providers || []).some(p => p.id === values.id)) return { error: "That staff ID is already in use." };
     const error = validateProviderValues(values, true);
     if (error) return { error };
@@ -1232,9 +1246,23 @@
     if (!admin || !can("staff.manage")) return { error: "Not authorized." };
     const provider = byId(db.providers || [], providerId);
     if (!provider) return { error: "Staff member not found." };
-    if ((db.services || []).some(s => (s.staff || []).includes(providerId)) || (db.bookings || []).some(b => b.providerId === providerId) || (db.staffLeave || []).some(l => l.providerId === providerId)) return { error: "This staff member is referenced by services, bookings or leave. Reassign those records first." };
-    db.providers = db.providers.filter(p => p.id !== providerId);
-    audit("Staff profile deleted", provider.id + " — " + provider.name);
+    if (provider.active === false) return { error: "This staff member has already been removed from the public site." };
+    const affected = (db.services || []).filter(s => (s.staff || []).includes(providerId));
+    for (const service of affected) {
+      const remaining = service.staff.filter(id => id !== providerId && byId(db.providers || [], id)?.active !== false);
+      if (!remaining.length) return { error: "Assign another active team member to “" + service.name + "” before removing " + provider.name + "." };
+    }
+    if ((db.bookings || []).some(b => b.providerId === providerId && b.date >= todayISO() && !["cancelled", "completed", "no-show"].includes(b.status))) return { error: "Move or cancel this staff member’s upcoming appointments before removing them." };
+    affected.forEach(service => { service.staff = service.staff.filter(id => id !== providerId); });
+    const hasHistory = (db.bookings || []).some(b => b.providerId === providerId);
+    if (!hasHistory && !affected.length) {
+      db.providers = db.providers.filter(p => p.id !== providerId);
+      audit("Staff profile deleted", provider.id + " — " + provider.name);
+      persist();
+      return { ok: true, providerId, deleted: true };
+    }
+    provider.active = false;
+    audit("Staff profile removed from site", provider.id + " — " + provider.name);
     persist();
     return { ok: true, providerId };
   }

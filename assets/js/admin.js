@@ -848,6 +848,7 @@
     const cms = D.db.cms;
     if (!cms) return;
     const set = function (id, val) { const el = $(id); if (el) el.value = val == null ? "" : val; };
+    set("#cms-site-name", cms.siteName);
     set("#cms-banner", cms.banner);
     set("#cms-hero", cms.heroTitle);
     set("#cms-tag", cms.tagline);
@@ -886,7 +887,7 @@
         return '<option value="' + esc(g.id) + '">' + esc(g.name) + '</option>';
       }).join("");
       const staff = $("#svcStaff");
-      if (staff) staff.innerHTML = (D.PROVIDERS || []).map(function (p) {
+      if (staff) staff.innerHTML = (D.PROVIDERS || []).filter(p => p.active !== false).map(function (p) {
         return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>';
       }).join("");
       fillServiceForm();
@@ -911,6 +912,7 @@
 
     renderStaff();
     renderRoles();
+    renderAdminAccess();
     renderAudit();
   }
 
@@ -951,6 +953,7 @@
         hours.push({day: row.dataset.hourDay, open: open ? asClock(open) : "Closed", close: close ? asClock(close) : "Closed"});
       }
       const res = await Promise.resolve(D.updateCMS({
+        siteName: String(fd.get("siteName") || "").trim(),
         banner: String(fd.get("banner") || "").trim(),
         heroTitle: String(fd.get("heroTitle") || "").trim(),
         tagline: String(fd.get("tagline") || "").trim(),
@@ -964,7 +967,7 @@
       }));
       if (res && res.error) return toast(res.error, "err");
       $("#cmsMsg").style.color = "var(--ok)";
-      $("#cmsMsg").textContent = "Site content saved.";
+      $("#cmsMsg").textContent = "Site content saved and published to public pages.";
       toast("Site content saved");
     });
 
@@ -1030,19 +1033,29 @@
       const id = staffPick.value;
       const off = $$('[data-staff-off]:checked').map(function (box) { return Number(box.value); });
       const input = { id: $("#staffId").value.trim(), name: $("#staffName").value.trim(), role: $("#staffRole").value.trim(), title: $("#staffTitle").value.trim(), group: $("#staffGroup").value, icon: $("#staffIcon").value.trim(), start: Number($("#staffStart").value), end: Number($("#staffEnd").value), off, bio: $("#staffBio").value.trim() };
+      if (!id && !input.id) {
+        input.id = input.name.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+        if (input.id.length < 2) input.id = "staff-profile";
+        const baseId = input.id; let suffix = 2;
+        while (D.byId(D.PROVIDERS || [], input.id)) input.id = baseId.slice(0, 36) + "-" + suffix++;
+        $("#staffId").value = input.id;
+      }
       const r = await Promise.resolve(id ? D.updateProvider(id, input) : D.createProvider(input));
       if (r && r.error) { $("#staffMsg").style.color = "var(--danger)"; $("#staffMsg").textContent = r.error; return toast(r.error, "err"); }
-      $("#staffMsg").style.color = "var(--ok)"; $("#staffMsg").textContent = id ? "Staff member updated." : "Staff member created.";
+      $("#staffMsg").style.color = "var(--ok)"; $("#staffMsg").textContent = id ? "Staff member updated." : "Staff member created and added to the site.";
       toast(id ? "Staff member updated" : "Staff member created");
       renderCMS();
     };
     const staffDelete = $("#staffDelete");
     if (staffDelete) staffDelete.onclick = async function () {
       const id = staffPick.value, p = D.byId(D.PROVIDERS || [], id);
-      if (!id || !p || !window.confirm("Delete " + p.name + "? Reassign services and bookings first.")) return;
-      const r = await Promise.resolve(D.deleteProvider(id));
-      if (r && r.error) return toast(r.error, "err");
-      toast("Staff member deleted"); renderCMS();
+      if (!id || !p) return;
+      const reactivating = p.active === false;
+      if (!window.confirm(reactivating ? "Restore " + p.name + " to the public care team?" : "Remove " + p.name + " from the public care team? Their booking history will be retained.")) return;
+      const r = await Promise.resolve(reactivating ? D.updateProvider(id, { active: true }) : D.deleteProvider(id));
+      if (r && r.error) { $("#staffMsg").style.color = "var(--danger)"; $("#staffMsg").textContent = r.error; return toast(r.error, "err"); }
+      $("#staffMsg").style.color = "var(--ok)"; $("#staffMsg").textContent = reactivating ? "Staff member restored to the site." : "Staff member removed from public pages; their history is retained.";
+      toast(reactivating ? "Staff member restored" : "Staff member removed from site"); renderCMS();
     };
 
     const lf = $("#leaveForm");
@@ -1060,6 +1073,36 @@
       renderStaff();
       lf.reset();
     });
+
+    const accessRole = $("#accessRole");
+    if (accessRole) accessRole.onchange = syncAdminAccessForm;
+    syncAdminAccessForm();
+    const accessForm = $("#adminAccessForm");
+    if (accessForm) accessForm.onsubmit = async function (e) {
+      e.preventDefault();
+      const button = $("#accessSave"); if (button.disabled) return; button.disabled = true;
+      const input = { name: $("#accessName").value.trim(), email: $("#accessEmail").value.trim(), role: $("#accessRole").value, providerId: $("#accessProvider").value };
+      try {
+        const result = await Promise.resolve(D.grantAdminAccess(input));
+        if (result && result.error) { $("#accessMsg").style.color = "var(--danger)"; $("#accessMsg").textContent = result.error; return toast(result.error, "err"); }
+        $("#accessMsg").style.color = "var(--ok)"; $("#accessMsg").textContent = "Access granted. The staff member can sign in after verifying this email on the site.";
+        accessForm.reset(); syncAdminAccessForm(); renderAdminAccess(); renderAudit(); toast("Admin access granted");
+      } catch (error) { $("#accessMsg").style.color = "var(--danger)"; $("#accessMsg").textContent = error.message || "Could not grant access."; }
+      finally { button.disabled = false; }
+    };
+    const accessHost = $("#adminAccessHost");
+    if (accessHost) accessHost.onclick = async function (e) {
+      const button = e.target.closest("[data-revoke-admin]"); if (!button) return;
+      const email = button.dataset.revokeAdmin;
+      if (!window.confirm("Revoke control panel access for " + email + "?")) return;
+      button.disabled = true;
+      try {
+        const result = await Promise.resolve(D.revokeAdminAccess(email));
+        if (result && result.error) { $("#accessMsg").style.color = "var(--danger)"; $("#accessMsg").textContent = result.error; return toast(result.error, "err"); }
+        $("#accessMsg").style.color = "var(--ok)"; $("#accessMsg").textContent = "Admin access revoked.";
+        renderAdminAccess(); renderAudit(); toast("Admin access revoked");
+      } finally { button.disabled = false; }
+    };
   }
 
   function renderStaff() {
@@ -1077,7 +1120,7 @@
     const pick = $("#staffPick");
     if (pick) {
       const current = pick.value;
-      pick.innerHTML = '<option value="">New staff member</option>' + providers.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>'; }).join("");
+      pick.innerHTML = '<option value="">New staff member</option>' + providers.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.name) + (p.active === false ? " (removed)" : "") + '</option>'; }).join("");
       if (current && D.byId(providers, current)) pick.value = current;
       const group = $("#staffGroup");
       if (group) group.innerHTML = (D.SERVICE_GROUPS || []).map(function (g) { return '<option value="' + esc(g.id) + '">' + esc(g.name) + '</option>'; }).join("");
@@ -1090,8 +1133,9 @@
       const mine = leave.filter(function (l) { return l.providerId === p.id; });
       return '<div class="kan-card">' +
         '<div class="row"><b>' + D.icon(p.icon) + " " + esc(p.name) + "</b>" +
-          pill(p.role, "primary") + "</div>" +
+          '<span>' + pill(p.role, "primary") + (p.active === false ? pill("Removed from site", "danger") : pill("Active", "primary")) + '</span></div>' +
         "<p>" + esc(p.title) + " · " + D.fmtTime(p.start) + "–" + D.fmtTime(p.end) + "</p>" +
+        '<button type="button" class="mini-btn" data-staff-edit="' + esc(p.id) + '">Edit profile</button>' +
         (mine.length
           ? '<div style="margin-top:8px;display:grid;gap:5px">' + mine.map(function (l) {
               return '<div style="display:flex;align-items:center;gap:8px;font-size:.78rem">' +
@@ -1110,6 +1154,7 @@
         renderStaff();
       });
     });
+    $$ ("[data-staff-edit]").forEach(function (b) { b.onclick = function () { const staffSelect = $("#staffPick"); if (staffSelect) { staffSelect.value = b.dataset.staffEdit; fillStaffForm(); $("#staffFormTitle").scrollIntoView({ behavior: "smooth", block: "center" }); } }; });
   }
 
   function fillStaffForm() {
@@ -1120,7 +1165,7 @@
     $$('[data-staff-off]').forEach(function (box) { box.checked = !!(p && (p.off || []).includes(Number(box.value))); });
     const title = $("#staffFormTitle"); if (title) title.textContent = p ? "Edit staff member" : "Add staff member";
     const id = $("#staffId"); if (id) id.disabled = !!p;
-    const del = $("#staffDelete"); if (del) del.disabled = !p;
+    const del = $("#staffDelete"); if (del) { del.disabled = !p; del.textContent = p && p.active === false ? "Restore to site" : "Remove from site"; }
     const save = $("#staffSave"); if (save) save.textContent = p ? "Save staff member" : "Create staff member";
   }
 
@@ -1145,6 +1190,25 @@
           }).join("") + "</tr>";
       }).join("") + "</tbody></table></div>" +
       '<p class="hint" style="margin:10px 0 0">Super Admin has every permission. "Own only" limits a provider to their own schedule and customers.</p>';
+  }
+
+  function syncAdminAccessForm() {
+    const role = $("#accessRole")?.value;
+    const field = $("#accessProviderField");
+    const select = $("#accessProvider");
+    if (field) field.hidden = role !== "provider";
+    if (select && role === "provider") select.innerHTML = (D.PROVIDERS || []).filter(p => p.active !== false).map(p => '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>').join("");
+  }
+
+  function renderAdminAccess() {
+    const host = $("#adminAccessHost");
+    if (!host) return;
+    if (!allowed("roles.edit")) { host.innerHTML = '<p class="hint">Only a Super Admin can grant or revoke control panel access.</p>'; return; }
+    const rows = (D.db.admins || []).slice().sort((a, b) => a.email.localeCompare(b.email));
+    host.innerHTML = rows.length ? '<div class="table-wrap"><table class="adm-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr></thead><tbody>' + rows.map(function (row) {
+      const isSelf = String(row.email).toLowerCase() === String(admin()?.email || "").toLowerCase();
+      return '<tr><td>' + esc(row.name || "—") + '</td><td>' + esc(row.email) + '</td><td>' + esc((D.ADMIN_ROLES[row.role] || {}).name || row.role) + '</td><td>' + (isSelf ? '<span class="muted">Signed in</span>' : '<button type="button" class="mini-btn danger" data-revoke-admin="' + esc(row.email) + '">Revoke</button>') + '</td></tr>';
+    }).join("") + '</tbody></table></div>' : emptyState("👤", "No admin accounts", "Grant a role to a verified account to add staff access.");
   }
 
   function renderAudit() {

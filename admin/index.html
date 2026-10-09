@@ -222,8 +222,10 @@
           <div class="cms-cols">
             <div class="panel-stack">
               <div class="admin-panel pos-pad">
-                <div class="panel-head"><h2>Site content</h2></div>
+                <div class="panel-head"><h2>Site content</h2><span class="muted">Changes appear on public pages after saving</span></div>
                 <form id="cmsForm" novalidate>
+                  <div class="field"><label for="cms-site-name">Site name</label>
+                    <input class="input" id="cms-site-name" name="siteName" placeholder="Paws &amp; Claws"></div>
                   <div class="field"><label for="cms-banner">Announcement banner</label>
                     <input class="input" id="cms-banner" name="banner" placeholder="Free shipping this week &mdash; leave empty for none"></div>
                   <div class="field"><label for="cms-hero">Homepage hero headline</label>
@@ -292,7 +294,7 @@
                   <div class="panel-head"><h3 id="staffFormTitle">Add staff member</h3><span class="muted">Admin-managed provider profile and availability</span></div>
                   <div class="field"><label for="staffPick">Staff member</label><select class="input" id="staffPick"></select></div>
                   <div class="form-grid">
-                    <div class="field"><label for="staffId">Staff ID</label><input class="input" id="staffId" placeholder="e.g. Rosa" autocomplete="off"></div>
+                    <div class="field"><label for="staffId">Staff ID <span class="muted">(optional)</span></label><input class="input" id="staffId" placeholder="Generated from the name" autocomplete="off"><p class="hint">A short profile key is generated automatically when this is blank.</p></div>
                     <div class="field"><label for="staffName">Name</label><input class="input" id="staffName"></div>
                     <div class="field"><label for="staffRole">Role</label><input class="input" id="staffRole" placeholder="Groomer"></div>
                     <div class="field"><label for="staffTitle">Title</label><input class="input" id="staffTitle" placeholder="Grooming Studio Lead"></div>
@@ -303,7 +305,7 @@
                   </div>
                   <div class="field"><label>Regular days off</label><div id="staffOff" class="checkrow"></div></div>
                   <div class="field"><label for="staffBio">Bio / customer-facing description</label><textarea class="input" id="staffBio" rows="2"></textarea></div>
-                  <div class="form-grid"><button class="btn btn-primary" type="submit" id="staffSave">Save staff member</button><button class="btn btn-ghost" type="button" id="staffNew">New staff member</button><button class="btn btn-ghost" type="button" id="staffDelete" style="color:var(--danger)">Delete staff member</button></div>
+                  <div class="form-grid"><button class="btn btn-primary" type="submit" id="staffSave">Save staff member</button><button class="btn btn-ghost" type="button" id="staffNew">New staff member</button><button class="btn btn-ghost" type="button" id="staffDelete" style="color:var(--danger)">Remove from site</button></div>
                   <p class="hint" id="staffMsg" role="status" style="margin:10px 0 0"></p>
                 </form>
                 <form id="leaveForm" class="leave-form" novalidate>
@@ -322,6 +324,21 @@
               <div class="admin-panel">
                 <div class="panel-head"><h2>Roles &amp; permissions</h2></div>
                 <div id="rolesHost"></div>
+              </div>
+              <div class="admin-panel pos-pad">
+                <div class="panel-head"><h2>Admin account access</h2><span class="muted">Grant or revoke staff access to the control panel</span></div>
+                <p class="hint">The email must belong to a verified account on this site. Role access takes effect when that person signs in.</p>
+                <div id="adminAccessHost"></div>
+                <form id="adminAccessForm" class="staff-editor" novalidate>
+                  <div class="form-grid">
+                    <div class="field"><label for="accessName">Staff name</label><input class="input" id="accessName" required></div>
+                    <div class="field"><label for="accessEmail">Verified account email</label><input class="input" id="accessEmail" type="email" required></div>
+                    <div class="field"><label for="accessRole">Control panel role</label><select class="input" id="accessRole"><option value="desk">Front desk / support</option><option value="provider">Service provider</option><option value="retail">Retail manager</option><option value="super">Super admin</option></select></div>
+                    <div class="field" id="accessProviderField" hidden><label for="accessProvider">Linked provider profile</label><select class="input" id="accessProvider"></select></div>
+                  </div>
+                  <button class="btn btn-primary" type="submit" id="accessSave">Grant account access</button>
+                  <p class="hint" id="accessMsg" role="status" style="margin:10px 0 0"></p>
+                </form>
               </div>
               <div class="admin-panel">
                 <div class="panel-head"><h2>Audit log</h2><span class="muted">Every staff action</span></div>

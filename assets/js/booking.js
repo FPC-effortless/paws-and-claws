@@ -78,7 +78,7 @@
   function renderProviders() {
     const grid = $("#providerGrid");
     if (!grid) return;
-    grid.innerHTML = D.PROVIDERS.map(function (p) {
+    grid.innerHTML = D.PROVIDERS.filter(p => p.active !== false).map(function (p) {
       const svc = D.db.services.filter((s) => s.staff.indexOf(p.id) !== -1);
       return (
         '<div class="card svc-card reveal in">' +

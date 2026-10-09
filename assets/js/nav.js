@@ -243,6 +243,16 @@
   function renderCmsChrome() {
     const header = $(".site-header"), cms = D.db.cms;
     if (!header || !cms) return;
+    const brandName = $(".brand span");
+    if (brandName && cms.siteName) brandName.innerHTML = D.esc(cms.siteName) + "<small>Connect Hub</small>";
+    const footerBrand = $(".footer-brand");
+    if (footerBrand && cms.siteName) footerBrand.innerHTML = brandImg("brand-mark brand-img footer-mark") + D.esc(cms.siteName);
+    const footerCopyright = $(".footer-bottom span");
+    if (footerCopyright && cms.siteName) footerCopyright.textContent = "© 2026 " + cms.siteName + ". All rights reserved.";
+    if (cms.siteName) {
+      const title = document.title.split(" — ");
+      document.title = (title[0] || "Paws & Claws") + " — " + cms.siteName;
+    }
     let banner = $(".site-banner");
     if (cms.banner) {
       if (!banner) { banner = document.createElement("div"); banner.className = "site-banner"; header.before(banner); }

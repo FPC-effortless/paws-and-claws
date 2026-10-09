@@ -43,6 +43,22 @@ const PROVIDERS = [
   { id: "Coach Ray", name: "Ray Carter", role: "Trainer", title: "CPDT-KA Trainer", group: "training", icon: "&#127893;", start: 10, end: 19, off: [0], bio: "Positive reinforcement only." }
 ];
 
+const DEFAULT_CMS = {
+  id: "site",
+  siteName: "Paws & Claws",
+  tagline: "Care, play & community in Amasoma.",
+  banner: "",
+  heroTitle: "More joy for every paw.",
+  catalogConfirmed: false,
+  emergencyHotline: "",
+  emergencyNote: "For urgent pet health concerns, contact a local veterinary clinic. Online messages are not monitored for emergencies.",
+  hours: [],
+  toggles: {},
+  address: "Amasoma",
+  phone: "",
+  email: ""
+};
+
 // First-run production catalog. This is only used by the one-time, super-admin
 // guarded initializer; after insertion, every record is edited through CMS.
 const SERVICE_CATALOG = [
@@ -227,7 +243,7 @@ function serviceProviders(service, providers) {
   return providers.filter(p => (service.staff || []).includes(p.id));
 }
 async function slotAvailable(ctx, service, provider, date, hour, ignoreBookingId) {
-  if (service.duration >= 24) return false;
+  if (service.duration >= 24 || provider.active === false) return false;
   const d = parseDate(date);
   if (!validDateOnly(date)) return false;
   if (date < today()) return false;
@@ -282,7 +298,7 @@ async function bootstrapData(ctx) {
     products: (await addImageUrls(await ctx.db.query("products").collect())).map(({ cost, ...p }) => p),
     services: await addImageUrls(await ctx.db.query("services").collect()),
     serviceGroups: await ctx.db.query("serviceGroups").collect(),
-    providers: await ctx.db.query("providers").collect(),
+    providers: (await ctx.db.query("providers").collect()).filter(provider => provider.active !== false),
     staffLeave: (await ctx.db.query("staffLeave").collect()).map(l => ({ providerId: l.providerId, date: l.date })),
     occupiedSlots: (await ctx.db.query("bookings").collect()).filter(b => b.date >= today() && activeBookingStatus(b.status))
       .map(b => ({ providerId: b.providerId, date: b.date, hour: b.hour, duration: b.duration })),
@@ -297,11 +313,13 @@ async function bootstrapData(ctx) {
   if (!id) return publicCatalog(publicData);
 
   const admin = await adminFor(ctx);
-  if (admin) {
+    if (admin) {
     const out = { ...publicData };
     out.admins = [admin];
     if (permission(admin, "inventory.edit")) out.products = await addImageUrls(await ctx.db.query("products").collect());
     if (admin.role === "super") {
+      out.admins = (await ctx.db.query("admins").collect()).map(({ _id, clerkId, ...safe }) => safe);
+      out.providers = await ctx.db.query("providers").collect();
       out.owners = await ctx.db.query("owners").collect();
       out.pets = await addImageUrls(await ctx.db.query("pets").collect());
       out.bookings = await ctx.db.query("bookings").collect();
@@ -376,6 +394,7 @@ export const bootstrap = query({
 
 const OPS = new Set([
   "generateUploadUrl",
+  "grantAdminAccess","revokeAdminAccess",
   "ensureOwner","markNotificationRead","markNotificationsRead","updateOwner","addPet","updatePet",
   "removePet","addVaccine","setVaccineStatus","createBooking","rescheduleBooking","cancelBooking",
   "setBookingStatus","addBookingNote","placeOrder","setOrderStage","refund","setListingStatus",
@@ -396,6 +415,44 @@ export const mutate = mutation({
       const owner = await ownerFor(ctx, false);
       if (!admin && !owner) throw new Error("Not authorized.");
       return { uploadUrl: await ctx.storage.generateUploadUrl() };
+    }
+
+    if (op === "grantAdminAccess") {
+      const admin = await adminFor(ctx);
+      requirePermission(admin, "roles.edit");
+      const input = p.input || {};
+      const email = String(input.email || "").trim().toLowerCase();
+      const name = String(input.name || "").trim();
+      const role = String(input.role || "");
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || name.length < 2 || name.length > 120 || !ROLES.includes(role)) {
+        throw new Error("Enter a staff name, valid account email and supported role.");
+      }
+      const existing = await ctx.db.query("admins").withIndex("by_email", q => q.eq("email", email)).first();
+      if (existing) throw new Error("That email already has control panel access. Edit or revoke the existing entry.");
+      const providerId = role === "provider" ? String(input.providerId || "") : "";
+      if (role === "provider") {
+        const provider = await getProvider(ctx, providerId);
+        if (!provider || provider.active === false) throw new Error("Choose an active provider profile for this role.");
+      }
+      await ctx.db.insert("admins", { email, name, role, ...(providerId ? { providerId } : {}) });
+      await audit(ctx, admin, "Admin access granted", email + " — " + role);
+      return { ok: true, email, role };
+    }
+
+    if (op === "revokeAdminAccess") {
+      const admin = await adminFor(ctx);
+      requirePermission(admin, "roles.edit");
+      const email = String(p.email || "").trim().toLowerCase();
+      if (!email || email === String(admin.email || "").toLowerCase()) throw new Error("You cannot revoke your own access while signed in.");
+      const target = await ctx.db.query("admins").withIndex("by_email", q => q.eq("email", email)).first();
+      if (!target) throw new Error("Admin access entry not found.");
+      if (target.role === "super") {
+        const supers = (await ctx.db.query("admins").collect()).filter(item => item.role === "super");
+        if (supers.length <= 1) throw new Error("At least one Super Admin must keep access.");
+      }
+      await ctx.db.delete(target._id);
+      await audit(ctx, admin, "Admin access revoked", email);
+      return { ok: true, email };
     }
 
     if (op === "createOwner") {
@@ -618,7 +675,7 @@ export const mutate = mutation({
         if (missing.length) throw new Error("Missing required vaccines: " + missing.join(", ") + ".");
       }
       const provider = await getProvider(ctx, p.providerId);
-      if (!provider || !(service.staff || []).includes(provider.id)) throw new Error("Specialist is not available for this service.");
+      if (!provider || provider.active === false || !(service.staff || []).includes(provider.id)) throw new Error("Specialist is not available for this service.");
       const ok = await slotAvailable(ctx, service, provider, String(p.date), Number(p.hour));
       if (!ok) throw new Error("That time slot is no longer available.");
       const rate = staff ? 0 : PLANS[owner.plan] || 0;
@@ -668,7 +725,7 @@ export const mutate = mutation({
       if (!activeBookingStatus(booking.status)) throw new Error("Cannot reschedule a closed booking.");
       const service = await getService(ctx, booking.serviceId);
       const provider = await getProvider(ctx, p.providerId || booking.providerId);
-      if (!service || !provider || !(service.staff || []).includes(provider.id)) throw new Error("Invalid provider for this service.");
+      if (!service || !provider || provider.active === false || !(service.staff || []).includes(provider.id)) throw new Error("Invalid provider for this service.");
       const ok = await slotAvailable(ctx, service, provider, String(p.date), Number(p.hour), booking.id);
       if (!ok) throw new Error("That time slot is no longer available.");
       await ctx.db.patch(booking._id, { date: String(p.date), hour: Number(p.hour), providerId: provider.id });
@@ -842,12 +899,12 @@ export const mutate = mutation({
     if (op === "updateCMS") {
       const admin = await adminFor(ctx);
       requirePermission(admin, "cms.edit");
-      const cms = await ctx.db.query("cms").first();
-      if (!cms) throw new Error("CMS record not initialized.");
+      let cms = await ctx.db.query("cms").first();
       const patch = {};
       for (const k of ["siteName","tagline","banner","heroTitle","emergencyHotline","emergencyNote","phone","email","address"]) {
         if (p.patch?.[k] !== undefined) patch[k] = String(p.patch[k]);
       }
+      if (patch.siteName !== undefined && patch.siteName.trim().length < 2) throw new Error("Enter a site name with at least 2 characters.");
       if (p.patch?.catalogConfirmed !== undefined) {
         if (typeof p.patch.catalogConfirmed !== "boolean") throw new Error("Invalid catalog setting.");
         patch.catalogConfirmed = p.patch.catalogConfirmed;
@@ -870,7 +927,12 @@ export const mutate = mutation({
         patch.hours = hours;
       }
       if (p.patch?.toggles !== undefined) patch.toggles = p.patch.toggles;
-      await ctx.db.patch(cms._id, patch);
+      if (cms) await ctx.db.patch(cms._id, patch);
+      else {
+        cms = { ...DEFAULT_CMS, ...patch };
+        cms.id = DEFAULT_CMS.id;
+        await ctx.db.insert("cms", cms);
+      }
       await audit(ctx, admin, "CMS update", Object.keys(patch).join(", "));
       return { ok: true };
     }
@@ -970,6 +1032,10 @@ export const mutate = mutation({
       if (input.start !== undefined) patch.start = Number(input.start);
       if (input.end !== undefined) patch.end = Number(input.end);
       if (input.off !== undefined) patch.off = Array.isArray(input.off) ? input.off.map(Number) : [];
+      if (input.active !== undefined) {
+        if (typeof input.active !== "boolean") throw new Error("Choose whether this staff member is active.");
+        patch.active = input.active;
+      }
       const values = { ...provider, ...patch };
       if (!values.name || !values.role || !values.title) throw new Error("Enter the staff member's name, role and title.");
       if (!Number.isFinite(values.start) || !Number.isFinite(values.end) || values.start < 0 || values.end > 24 || values.end <= values.start) throw new Error("Enter valid working hours.");
@@ -983,12 +1049,17 @@ export const mutate = mutation({
       const admin = await adminFor(ctx);
       requirePermission(admin, "staff.manage");
       const input = p.input || {};
-      const id = String(input.id || "").trim();
-      if (!/^[A-Za-z0-9][A-Za-z0-9_-]{1,39}$/.test(id)) throw new Error("Use a staff ID with 2-40 letters, numbers, hyphens or underscores.");
-      if (await ctx.db.query("providers").filter(q => q.eq(q.field("id"), id)).first()) throw new Error("That staff ID is already in use.");
+      const rawId = String(input.id || "").trim();
+      const baseId = rawId && /^[A-Za-z0-9][A-Za-z0-9_-]{1,39}$/.test(rawId) ? rawId : (rawId || String(input.name || "")).normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+      const id = /^[A-Za-z0-9][A-Za-z0-9_-]{1,39}$/.test(baseId) ? baseId : "staff-" + uid("id").slice(-8);
+      let uniqueId = id, suffix = 2;
+      while (await ctx.db.query("providers").filter(q => q.eq(q.field("id"), uniqueId)).first()) {
+        const tail = "-" + suffix++;
+        uniqueId = id.slice(0, 40 - tail.length) + tail;
+      }
       const group = await ctx.db.query("serviceGroups").filter(q => q.eq(q.field("id"), String(input.group || ""))).first();
       if (!group) throw new Error("Choose a valid department.");
-      const provider = { id, name: String(input.name || "").trim(), role: String(input.role || "").trim(), title: String(input.title || "").trim(), group: String(input.group), icon: String(input.icon || "").trim(), start: Number(input.start), end: Number(input.end), off: Array.isArray(input.off) ? input.off.map(Number) : [], bio: String(input.bio || "").trim() };
+      const provider = { id: uniqueId, active: true, name: String(input.name || "").trim(), role: String(input.role || "").trim(), title: String(input.title || "").trim(), group: String(input.group), icon: String(input.icon || "").trim(), start: Number(input.start), end: Number(input.end), off: Array.isArray(input.off) ? input.off.map(Number) : [], bio: String(input.bio || "").trim() };
       if (!provider.name || !provider.role || !provider.title) throw new Error("Enter the staff member's name, role and title.");
       if (!Number.isFinite(provider.start) || !Number.isFinite(provider.end) || provider.start < 0 || provider.end > 24 || provider.end <= provider.start) throw new Error("Enter valid working hours.");
       if (provider.off.some(day => !Number.isInteger(day) || day < 0 || day > 6)) throw new Error("Choose valid days off.");
@@ -1002,13 +1073,30 @@ export const mutate = mutation({
       requirePermission(admin, "staff.manage");
       const provider = await ctx.db.query("providers").filter(q => q.eq(q.field("id"), String(p.providerId || ""))).first();
       if (!provider) throw new Error("Staff member not found.");
+      if (provider.active === false) throw new Error("This staff member has already been removed from the public site.");
       const services = await ctx.db.query("services").collect();
       const bookings = await ctx.db.query("bookings").collect();
-      const leave = await ctx.db.query("staffLeave").collect();
-      if (services.some(s => (s.staff || []).includes(provider.id)) || bookings.some(b => b.providerId === provider.id) || leave.some(l => l.providerId === provider.id)) throw new Error("This staff member is referenced by services, bookings or leave. Reassign those records first.");
-      await ctx.db.delete(provider._id);
-      await audit(ctx, admin, "Staff profile deleted", provider.id + " — " + provider.name);
-      return { ok: true, providerId: provider.id };
+      const affectedServices = services.filter(s => (s.staff || []).includes(provider.id));
+      for (const service of affectedServices) {
+        const remaining = (service.staff || []).filter(id => id !== provider.id);
+        const activeProviders = await ctx.db.query("providers").collect();
+        if (!remaining.some(id => activeProviders.some(item => item.id === id && item.active !== false))) {
+          throw new Error("Assign another active team member to “" + service.name + "” before removing " + provider.name + ".");
+        }
+      }
+      if (bookings.some(b => b.providerId === provider.id && b.date >= today() && activeBookingStatus(b.status))) {
+        throw new Error("Move or cancel this staff member’s upcoming appointments before removing them.");
+      }
+      for (const service of affectedServices) await ctx.db.patch(service._id, { staff: service.staff.filter(id => id !== provider.id) });
+      const hasHistory = bookings.some(b => b.providerId === provider.id);
+      if (!hasHistory && !affectedServices.length) {
+        await ctx.db.delete(provider._id);
+        await audit(ctx, admin, "Staff profile deleted", provider.id + " — " + provider.name);
+        return { ok: true, providerId: provider.id, deleted: true };
+      }
+      await ctx.db.patch(provider._id, { active: false });
+      await audit(ctx, admin, "Staff profile removed from site", provider.id + " — " + provider.name);
+      return { ok: true, providerId: provider.id, active: false };
     }
 
     if (op === "initializeCatalog") {
@@ -1061,7 +1149,7 @@ export const mutate = mutation({
       if (!owner) throw new Error("Please sign in.");
       const service = await getService(ctx, p.serviceId);
       const provider = await getProvider(ctx, p.providerId);
-      if (!service || !provider || !(service.staff || []).includes(provider.id)) throw new Error("Invalid waitlist request.");
+      if (!service || !provider || provider.active === false || !(service.staff || []).includes(provider.id)) throw new Error("Invalid waitlist request.");
       const note = String(p.note || "").slice(0, 500);
       await ctx.db.insert("waitlist", { id: uid("wl"), ownerId: owner.id, serviceId: service.id, providerId: provider.id, note, createdAt: today() });
       await notify(ctx, owner.id, "waitlist", "Added to the waitlist", "We'll notify you when a slot opens.");
