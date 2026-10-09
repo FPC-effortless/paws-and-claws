@@ -21,7 +21,9 @@
     const t = $("#heroTitle");
     if (t && cms.heroTitle) t.innerHTML = esc(cms.heroTitle);
     const lead = $("#heroLead");
-    if (lead) lead.textContent = "Visit our physical store for pet supplies and care. Walk in to shop, speak with our team, or book an appointment online before your visit. No membership is required to shop in person.";
+    if (lead) lead.textContent = D.catalogReady()
+      ? "Visit our physical store for pet supplies and care. Walk in to shop, speak with our team, or book an appointment online before your visit. No membership is required to shop in person."
+      : "Visit our physical store for pet supplies and care. Walk in to shop, speak with our team, or ask about an appointment before your visit. No membership is required to shop in person.";
     const bookingLink = $("#heroBookingLink");
     if (bookingLink) {
       bookingLink.href = D.catalogReady() ? 'services.html#book' : 'contact.html';

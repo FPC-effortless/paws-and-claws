@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/style.css?v=20261009-store4">
-  <link rel="stylesheet" href="assets/css/pages.css?v=20261009-store4">
+  <link rel="stylesheet" href="assets/css/style.css?v=20261009-store5">
+  <link rel="stylesheet" href="assets/css/pages.css?v=20261009-store5">
 </head>
 <body>
 
@@ -61,7 +61,7 @@
         <div class="sec-head center"><span class="eyebrow">Member tools</span><h2>Useful features in one place</h2></div>
         <div class="perks">
           <div class="card perk reveal"><div class="ico">📱</div><h3>Member account</h3><p>Manage your profile and pet records.</p></div>
-          <div class="card perk reveal"><div class="ico">🐾</div><h3>Appointment booking</h3><p>View services and available appointment times.</p></div>
+          <div class="card perk reveal"><div class="ico">🐾</div><h3>Appointment planning</h3><p>Ask the store about visits while our service list is being confirmed.</p></div>
           <div class="card perk reveal"><div class="ico">💬</div><h3>Member messages</h3><p>Keep contact submissions and portal messages together.</p></div>
         </div>
       </div>
@@ -73,6 +73,7 @@
           <!-- Clerk replaces the local forms when a publishable key is set.
                This page is about joining, so Clerk's <SignUp/> is mounted. -->
           <div id="clerkMemberHolder" hidden style="padding:4px 0 8px"></div>
+          <div id="accountUnavailable" hidden class="auth-body" role="status"><h2>Online accounts are temporarily unavailable</h2><p>Please contact or visit our Amasoma store. You can shop in person without an account.</p><a class="btn btn-primary" href="contact.html">Contact the store</a></div>
           <div class="auth-tabs" role="tablist">
             <button id="tabSignup" class="active" role="tab" aria-selected="true" aria-controls="paneSignup">Sign up</button>
             <button id="tabLogin" role="tab" aria-selected="false" aria-controls="paneLogin">Log in</button>
@@ -191,13 +192,13 @@
 
 
 
-  <script src="assets/js/data.js?v=20261009-store4"></script>
-  <script src="assets/js/app.js?v=20261009-store4"></script>
-  <script src="assets/js/nav.js?v=20261009-store4"></script>
-  <script src="assets/js/convexClient.js?v=20261009-store4"></script>
+  <script src="assets/js/data.js?v=20261009-store5"></script>
+  <script src="assets/js/app.js?v=20261009-store5"></script>
+  <script src="assets/js/nav.js?v=20261009-store5"></script>
+  <script src="assets/js/convexClient.js?v=20261009-store5"></script>
   <!-- Clerk identity layer. The publishable key lives in clerk.js;
        without one the local forms below stay as the demo path. -->
-  <script src="assets/js/clerk.js?v=20261009-store4"></script>
+  <script src="assets/js/clerk.js?v=20261009-store5"></script>
   <script>
     document.addEventListener("pnc:ready", function () {
       var grid = document.getElementById("planGrid");
@@ -206,8 +207,8 @@
         var currentPlan = current ? current.plan : null;
         var plans = [
           { id: "puppy", name: "Puppy Pass", price: "Free", period: "forever", badge: "", featured: false,
-            blurb: "A free account for pet profiles and appointments.",
-            perks: ["Member account", "Pet profiles", "Appointment booking"] },
+            blurb: "A free account for pet profiles and messages.",
+            perks: ["Member account", "Pet profiles", "Member messages"] },
           { id: "adult", name: "Adult Adventurer", price: "Demo only", period: "", badge: "", featured: false,
             blurb: PNC_DB.productionMode() ? "Paid subscriptions are not connected yet." : "Demo tier for testing local membership discounts.",
             perks: PNC_DB.productionMode() ? ["Billing setup required"] : ["Demo discount rules", "No real subscription is created"] },
@@ -283,6 +284,7 @@
         if (!b || b.disabled) return;
         var owner = PNC_DB.currentOwner();
         if (!owner) {
+          if (PNC_DB.productionMode()) { location.hash = "join"; return; }
           show("signup");
           var radio = document.querySelector('input[name="plan"][value="' + b.dataset.plan + '"]');
           if (radio) radio.checked = true;
@@ -301,7 +303,17 @@
       function mountClerkJoin() {
         var ck = window.PNC_CLERK;
         var holder = document.getElementById("clerkMemberHolder");
-        if (!holder || !ck || !ck.active) return;
+        var unavailable = document.getElementById("accountUnavailable");
+        if (!holder) return;
+        if (PNC_DB.productionMode() && (!ck || !ck.active)) {
+          unavailable.hidden = false;
+          document.querySelector(".auth-tabs").hidden = true;
+          paneSignup.hidden = true;
+          paneLogin.hidden = true;
+          return;
+        }
+        if (!ck || !ck.active) return;
+        unavailable.hidden = true;
         holder.hidden = false;
         ck.mountSignUp(holder, {
           appearance: { elements: { rootBox: "width:100%" } }
@@ -314,7 +326,7 @@
       window.addEventListener("pnc:clerk", mountClerkJoin);
 
       var pre = new URLSearchParams(location.search).get("plan");
-      if (pre) {
+      if (pre && !PNC_DB.productionMode()) {
         var radio = document.querySelector('input[name="plan"][value="' + pre + '"]');
         if (radio) radio.checked = true;
         show("signup");

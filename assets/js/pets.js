@@ -170,11 +170,16 @@
 
   function render() {
     const list = filtered();
+    const facets = $('.pet-facets');
+    if (facets) facets.hidden = !D.catalogReady();
+    const reset = $('#petResetEmpty');
+    if (reset) reset.hidden = !D.catalogReady();
     $('#petGrid').innerHTML = list.map(card).join('');
-    $('#petCount').textContent = list.length + (list.length === 1 ? ' pet' : ' pets');
+    $('#petCount').textContent = D.catalogReady() ? list.length + (list.length === 1 ? ' pet' : ' pets') : 'Listings pending';
     $('#petEmpty').style.display = list.length ? 'none' : 'block';
     if (!D.catalogReady()) $('#petEmpty').firstChild.textContent = 'Pet listings are being confirmed. Contact the store to ask about availability. ';
     renderChips();
+    if (!D.catalogReady()) $('#petChips').innerHTML = '';
     syncFacets();
     renderCta();
   }

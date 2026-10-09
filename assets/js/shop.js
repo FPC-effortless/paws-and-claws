@@ -146,11 +146,16 @@
 
   function render() {
     const list = D.catalogReady() ? filtered() : [];
+    const filters = $('#shopFilters');
+    if (filters) filters.hidden = !D.catalogReady();
+    const reset = $('#resetEmpty');
+    if (reset) reset.hidden = !D.catalogReady();
     $('#productGrid').innerHTML = list.map(card).join('');
-    $('#resultCount').textContent = list.length + (list.length === 1 ? ' product' : ' products');
+    $('#resultCount').textContent = D.catalogReady() ? list.length + (list.length === 1 ? ' product' : ' products') : 'Catalog pending';
     $('#noResults').style.display = list.length ? 'none' : 'block';
     if (!D.catalogReady()) $('#noResults').firstChild.textContent = 'Our product catalog is being updated with verified naira prices. Contact the store to ask about stock. ';
     renderChips();
+    if (!D.catalogReady()) $('#activeChips').innerHTML = '';
     syncFacets();
   }
 
