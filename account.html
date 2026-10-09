@@ -42,9 +42,15 @@
         </form>
 
         <form id="signUpForm" class="gate-form" role="tabpanel" aria-labelledby="gate-signUp" style="display:none" novalidate>
-          <div class="field">
-            <label for="suName">Full name</label>
-            <input class="input" id="suName" type="text" autocomplete="name" required>
+          <div class="grid2">
+            <div class="field">
+              <label for="suFirst">First name</label>
+              <input class="input" id="suFirst" type="text" autocomplete="given-name" required>
+            </div>
+            <div class="field">
+              <label for="suLast">Last name</label>
+              <input class="input" id="suLast" type="text" autocomplete="family-name" required>
+            </div>
           </div>
           <div class="field">
             <label for="suEmail">Email</label>
@@ -55,7 +61,7 @@
             <input class="input" id="suPw" type="password" autocomplete="new-password" placeholder="At least 8 characters" required>
           </div>
           <div class="field">
-            <label for="suPhone">Phone</label>
+            <label for="suPhone">Phone number</label>
             <input class="input" id="suPhone" type="tel" autocomplete="tel">
           </div>
           <div class="field">
@@ -189,6 +195,6 @@
        assets/js/clerk.js — one place for the whole site. Without a
        key the site runs in DEMO MODE. -->
   <script src="assets/js/clerk.js?v=20261009-polish3"></script>
-  <script src="assets/js/account.js?v=20261009-authflow1"></script>
+  <script src="assets/js/account.js?v=20261009-profile1"></script>
 </body>
 </html>

@@ -120,10 +120,11 @@ const run=(op,payload={})=>backend.mutate.handler(ctx,{op,payload});
  assert.equal(tables.owners.length,2);
  assert.equal(tables.owners[1].clerkId,'unverified-new');
  who={subject:'subject-only',email:undefined,emailVerified:undefined,name:undefined};
- await run('ensureOwner',{profile:{email:'subject-only@example.com',fullName:'Subject Only'}});
+ await run('ensureOwner',{profile:{email:'subject-only@example.com',fullName:'Subject Only',phone:'+2348000000000'}});
  assert.equal(tables.owners.length,3);
  assert.equal(tables.owners[2].clerkId,'subject-only');
  assert.equal(tables.owners[2].email,'subject-only@example.com');
+ assert.equal(tables.owners[2].phone,'+2348000000000');
  who={subject:'user-new',email:owner.email,emailVerified:true};
  await db.patch(owner._id,{notes:'Private staff notes'});
  // Unverified email claims and a different subject must never inherit records.

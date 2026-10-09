@@ -133,6 +133,7 @@ async function ownerFor(ctx, allowCreate = false, profile = {}) {
     // templates omit email/name claims; those fields never authorize access.
     const email = String(id.email || profile.email || "").trim().toLowerCase();
     const fullName = String(id.name || profile.fullName || email || "Member").trim().slice(0, 120);
+    const phone = String(profile.phone || "").trim().slice(0, 40);
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Your account needs an email address before creating a member profile.");
     if (await ctx.db.query("owners").withIndex("by_email", q => q.eq("email", email)).first()) throw new Error("This email is already linked to another account. Contact support.");
     owner = {
@@ -140,7 +141,7 @@ async function ownerFor(ctx, allowCreate = false, profile = {}) {
       clerkId: id.subject,
       fullName,
       email,
-      phone: "",
+      phone,
       emergencyContact: "",
       address: "",
       plan: "puppy",

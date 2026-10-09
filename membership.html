@@ -85,14 +85,25 @@
             <p>Two minutes, no card required to start.</p>
             <form id="signupForm" novalidate>
               <div class="form-grid">
-                <div class="field full">
-                  <label for="su-name">Your name</label>
-                  <input class="input" id="su-name" name="name" type="text" autocomplete="name" placeholder="Alex Rivera">
+                <div class="field">
+                  <label for="su-first">First name</label>
+                  <input class="input" id="su-first" name="firstName" type="text" autocomplete="given-name" placeholder="Alex">
+                  <span class="err-msg" data-err></span>
+                </div>
+                <div class="field">
+                  <label for="su-last">Last name</label>
+                  <input class="input" id="su-last" name="lastName" type="text" autocomplete="family-name" placeholder="Rivera">
                   <span class="err-msg" data-err></span>
                 </div>
                 <div class="field full">
                   <label for="su-email">Email</label>
                   <input class="input" id="su-email" name="email" type="email" autocomplete="email" placeholder="you@example.com">
+                  <span class="err-msg" data-err></span>
+                </div>
+                <div class="field full">
+                  <label for="su-phone">Phone number</label>
+                  <input class="input" id="su-phone" name="phone" type="tel" autocomplete="tel" placeholder="+234 800 000 0000">
+                  <span class="hint">Used only for appointment updates and urgent pet-care communication.</span>
                   <span class="err-msg" data-err></span>
                 </div>
                 <div class="field full">
@@ -261,9 +272,10 @@
           e.stopImmediatePropagation();
           var res = mode === "signup"
             ? PNC_DB.signUp({
-                fullName: document.getElementById("su-name").value,
+                fullName: [document.getElementById("su-first").value, document.getElementById("su-last").value].join(" ").trim(),
                 email: document.getElementById("su-email").value,
                 password: document.getElementById("su-pw").value,
+                phone: document.getElementById("su-phone").value,
                 petName: document.getElementById("su-pet").value,
                 petSpecies: document.getElementById("su-type").value,
                 plan: (form.querySelector('input[name="plan"]:checked') || {}).value

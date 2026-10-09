@@ -124,7 +124,7 @@
   function doSignUp(e) {
     e.preventDefault();
     const res = D.signUp({
-      fullName: $('#suName').value,
+      fullName: ($('#suFirst').value + ' ' + $('#suLast').value).trim(),
       email: $('#suEmail').value,
       password: $('#suPw').value,
       phone: $('#suPhone').value,
@@ -169,7 +169,25 @@
     const inbox = messages().filter(x => !x.read && x.direction === 'out');
     const ps = pets();
 
+    const needsProfile = !m.fullName || m.fullName.includes('@') || !String(m.phone || '').trim();
+    const profilePrompt = needsProfile
+      ? '<div class="panel" style="border:2px solid var(--teal);background:var(--cream)">' +
+          '<h3>Complete your member profile</h3>' +
+          '<p class="muted">Add your contact details so we can match your pets, appointments and urgent care messages to you.</p>' +
+          '<form id="welcomeProfileForm" novalidate>' +
+            '<div class="grid2">' +
+              '<div class="field"><label for="wpFirst">First name</label><input class="input" id="wpFirst" autocomplete="given-name" required></div>' +
+              '<div class="field"><label for="wpLast">Last name</label><input class="input" id="wpLast" autocomplete="family-name" required></div>' +
+              '<div class="field"><label for="wpPhone">Phone number</label><input class="input" id="wpPhone" type="tel" autocomplete="tel" required></div>' +
+              '<div class="field"><label for="wpEmergency">Emergency contact <span class="muted small">(optional)</span></label><input class="input" id="wpEmergency" placeholder="Name and phone"></div>' +
+            '</div>' +
+            '<div class="field"><label for="wpAddress">Address <span class="muted small">(optional)</span></label><input class="input" id="wpAddress" autocomplete="street-address" placeholder="Street, city"></div>' +
+            '<button class="btn btn-primary" type="submit">Save my details</button>' +
+          '</form>' +
+        '</div>'
+      : '';
     $('#panelOverview').innerHTML =
+      profilePrompt +
       '<div class="acct-hero">' +
         '<div class="avatar">' + D.initials(m.fullName) + '</div>' +
         '<div><h2>' + D.esc(m.fullName) + '</h2><p>' + D.esc(m.email) + '</p></div>' +
@@ -569,6 +587,25 @@
     renderAll();
   }
 
+  async function saveWelcomeProfile(e) {
+    e.preventDefault();
+    const first = $('#wpFirst').value.trim();
+    const last = $('#wpLast').value.trim();
+    const phone = $('#wpPhone').value.trim();
+    if (!first || !last) { PNC.toast('Enter your first and last name.', 'err'); return; }
+    if (!phone) { PNC.toast('Enter a phone number for appointment updates.', 'err'); return; }
+    const res = await Promise.resolve(D.updateOwner(me().id, {
+      fullName: first + ' ' + last,
+      phone,
+      emergencyContact: $('#wpEmergency').value.trim(),
+      address: $('#wpAddress').value.trim()
+    }));
+    if (res && res.error) { PNC.toast(res.error, 'err'); return; }
+    PNC.toast('Profile details saved');
+    window.dispatchEvent(new CustomEvent('pnc:auth'));
+    renderAll();
+  }
+
   /* ================= shared bits ================= */
   function emptyBlock(title, body, href, cta) {
     return '<div class="empty-card"><h3>' + title + '</h3><p>' + body + '</p>' +
@@ -694,6 +731,7 @@
     $('#profileForm') && null;
     document.addEventListener('submit', function (e) {
       if (e.target.id === 'profileForm') saveProfile(e);
+      else if (e.target.id === 'welcomeProfileForm') saveWelcomeProfile(e);
       else if (e.target.id === 'cardForm') saveCard(e);
     });
 
