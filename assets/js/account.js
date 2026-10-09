@@ -53,11 +53,30 @@
     const holder = $('#clerkMemberHolder');
     if (!holder) return;
     if (!ck || !ck.active) { holder.hidden = true; return; }
+
+    const gate = $('#acctGate');
+    const hideLocalGate = function () {
+      if (!gate) return;
+      $$('.gate-form', gate).forEach(f => f.style.display = 'none');
+      $$('.gate-tab', gate).forEach(t => t.style.display = 'none');
+    };
+
+    // An existing Clerk session must not mount SignIn: Clerk treats that as
+    // a completed sign-in flow and redirects to its default route (/).
+    // Wait for Convex to hydrate the member record instead.
+    if (ck.clerk && ck.clerk.user) {
+      hideLocalGate();
+      holder.hidden = false;
+      holder.innerHTML = '<p class="auth-loading" role="status">Loading your member account&hellip;</p>';
+      syncView();
+      return;
+    }
+
     holder.hidden = false;
     ck.mountSignIn(holder, {
-      appearance: { elements: { rootBox: 'width:100%' } }
+      appearance: { elements: { rootBox: 'width:100%' } },
+      signIn: { redirectUrl: new URL('/account', location.origin).toString() }
     });
-    const gate = $('#acctGate');
     if (gate) {
       /* Keep the tab UI but hide the local forms, which Clerk has
          replaced. */
