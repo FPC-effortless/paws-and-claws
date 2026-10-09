@@ -1006,6 +1006,18 @@
       toast(restoring ? "Service restored" : "Service archived");
       renderCMS();
     };
+    const removeNonPaw = $("#removeNonPawServices");
+    if (removeNonPaw) removeNonPaw.onclick = async function () {
+      if (!window.confirm("Remove every service whose name does not include Paw? Services with booking history are protected.")) return;
+      removeNonPaw.disabled = true;
+      try {
+        const r = await Promise.resolve(D.removeNonPawServices());
+        if (r?.error) return toast(r.error, "err");
+        $("#svcMsg").style.color = "var(--ok)";
+        $("#svcMsg").textContent = r.removed + " non-Paw service(s) removed.";
+        toast("Paw service catalog cleaned"); renderCMS();
+      } finally { removeNonPaw.disabled = false; }
+    };
 
     const staffPick = $("#staffPick");
     if (staffPick) staffPick.onchange = fillStaffForm;

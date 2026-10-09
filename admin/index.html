@@ -281,6 +281,8 @@
                     <textarea class="input" id="svcDesc" rows="2"></textarea></div>
                   <div class="field"><label for="svcImage">Service image</label><input class="input" id="svcImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif"><p class="hint">JPG, PNG, WEBP or GIF up to 8 MB.</p></div>
                   <div class="form-grid"><button class="btn btn-primary" type="submit" id="svcSave">Save service</button><button class="btn btn-ghost" type="button" id="svcNew">New service</button><button class="btn btn-ghost" type="button" id="svcDelete" style="color:var(--danger)">Archive service</button></div>
+                  <button class="btn btn-ghost btn-sm" type="button" id="removeNonPawServices" style="color:var(--danger);margin-top:10px">Remove non-Paw services</button>
+                  <p class="hint">New or renamed services must include “Paw”. This removes older services that do not meet that naming rule and have no booking history.</p>
                   <p class="hint" id="svcMsg" role="status" style="margin:10px 0 0"></p>
                 </form>
               </div>
