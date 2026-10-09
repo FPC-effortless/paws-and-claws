@@ -19,8 +19,9 @@
     renderLines();
   }
   function renderLines() {
+    if (!D.catalogReady()) lines.forEach(line => { line.productId = ''; });
     $('#posLines').innerHTML = lines.map((line, i) => '<fieldset class="store-sale-line"><legend>Item ' + (i + 1) + '</legend>' +
-      '<label>Product<select class="input" data-line="' + i + '" data-key="productId">' + option('', 'Custom item / unbooked service') + D.PRODUCTS.map(p => option(p.id, p.name + ' · ' + D.money(p.price) + ' · ' + p.stock + ' in stock')).join('') + '</select></label>' +
+      '<label>Product<select class="input" data-line="' + i + '" data-key="productId">' + option('', 'Custom item / unbooked service') + (D.catalogReady() ? D.PRODUCTS.map(p => option(p.id, p.name + ' · ' + D.money(p.price) + ' · ' + p.stock + ' in stock')).join('') : '') + '</select></label>' +
       (!line.productId ? '<label>Description<input class="input" data-line="' + i + '" data-key="label" maxlength="120" value="' + esc(line.label) + '"></label><label>Unit price<input class="input" type="number" min="0.01" step="0.01" data-line="' + i + '" data-key="amount" value="' + esc(line.amount) + '"></label>' : '') +
       '<label>Quantity<input class="input" type="number" min="1" max="9999" step="1" data-line="' + i + '" data-key="qty" value="' + esc(line.qty) + '"></label><button class="mini-btn danger" type="button" data-remove="' + i + '">Remove item ' + (i + 1) + '</button></fieldset>').join('');
     document.querySelectorAll('[data-key="productId"]').forEach(s => { s.value = lines[Number(s.dataset.line)].productId; });
@@ -88,13 +89,13 @@
     const host = $('#storeBookingHost');
     host.hidden = !D.can('bookings.manage');
     if (host.hidden || host.querySelector('form')) return;
-    host.innerHTML = '<details><summary>Create an in-store / phone appointment</summary><p>Register the customer and pet in Customers & Pets first. Vaccine and availability checks apply to every appointment. Payment is recorded separately after collection.</p><form id="storeBookingForm">' +
+    host.innerHTML = '<details><summary>Create an in-store / phone appointment</summary><p>Register the customer and pet in Customers & Pets first. Vaccine and availability checks apply to every appointment. Payment is recorded separately after collection.</p>' + (D.catalogReady() ? '' : '<p>Confirm real naira service prices in Site & Staff before creating appointments.</p>') + '<form id="storeBookingForm">' +
       '<div class="field"><label for="storeCustomer">Customer</label><select class="input" id="storeCustomer" required></select></div>' +
       '<div class="field"><label for="storePet">Pet</label><select class="input" id="storePet" required></select></div>' +
       '<div class="field"><label for="storeService">Service</label><select class="input" id="storeService" required></select></div>' +
       '<div class="field"><label for="storeDate">Date</label><input class="input" id="storeDate" type="date" min="' + D.todayISO() + '" required></div>' +
       '<div class="field"><label for="storeSlot">Available time / specialist</label><select class="input" id="storeSlot" required></select></div><p id="storeBookingPrice" class="hint"></p>' +
-      '<button class="btn btn-teal" type="submit">Create appointment</button><p role="status" id="storeBookingMsg"></p></form></details>';
+      '<button class="btn btn-teal" type="submit"' + (D.catalogReady() ? '' : ' disabled') + '>Create appointment</button><p role="status" id="storeBookingMsg"></p></form></details>';
     const refreshCustomers = () => {
       const previous = $('#storeCustomer').value;
       $('#storeCustomer').innerHTML = option('', 'Choose a customer') + D.db.owners.map(o => option(o.id, o.fullName)).join('');

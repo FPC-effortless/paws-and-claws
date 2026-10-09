@@ -22,7 +22,7 @@
 
   let inqId = null;
 
-  function listings() { return D.db.listings; }
+  function listings() { return D.catalogReady() ? D.db.listings : []; }
   function member() { return D.currentOwner(); }
 
   function ageLabel(m) {
@@ -91,14 +91,15 @@
 
   /* ---------- facts strip ---------- */
   function renderFacts() {
+    $('#petFacts').hidden = !D.catalogReady();
+    if (!D.catalogReady()) return;
     const all = listings();
     const avail = all.filter(l => l.status === 'available').length;
     const checked = all.reduce((n, l) => n + (l.health || []).length, 0);
     $('#petFacts').innerHTML = [
       ['&#129462;', all.length, 'pets in our network'],
       ['&#9989;', avail, 'available now'],
-      ['&#129656;', checked, 'health records on file'],
-      ['&#129309;', '100%', 'meet-and-greet first']
+      ['&#129656;', checked, 'health records on file']
     ].map(function (f) {
       return '<div class="pet-fact"><span class="pet-fact-ico">' + f[0] + '</span><span><strong>' +
         f[1] + '</strong>' + f[2] + '</span></div>';
@@ -172,6 +173,7 @@
     $('#petGrid').innerHTML = list.map(card).join('');
     $('#petCount').textContent = list.length + (list.length === 1 ? ' pet' : ' pets');
     $('#petEmpty').style.display = list.length ? 'none' : 'block';
+    if (!D.catalogReady()) $('#petEmpty').firstChild.textContent = 'Pet listings are being confirmed. Contact the store to ask about availability. ';
     renderChips();
     syncFacets();
     renderCta();
@@ -195,9 +197,9 @@
     const el = $('#petCta');
     if (!el) return;
     el.innerHTML = '<div class="pet-cta-card">' +
-      '<h3>Not sure yet? Meet first, decide later.</h3>' +
-      '<p>Every adoption starts with a free, no-pressure meet-and-greet. Bring the family, bring questions, take your time.</p>' +
-      '<a class="btn btn-teal" href="contact.html">Book a meet-and-greet</a>' +
+      '<h3>Ask about available pets</h3>' +
+      '<p>Contact the store for current pet listings, health details and visit arrangements.</p>' +
+      '<a class="btn btn-teal" href="contact.html">Contact the team</a>' +
       ' <a class="btn btn-ghost" href="services.html">See our care services</a>' +
     '</div>';
   }

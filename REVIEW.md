@@ -1,4 +1,4 @@
-# Security and workflow review — 8 October 2026
+# Security and workflow review — 9 October 2026
 
 Implemented fixes:
 
@@ -23,8 +23,8 @@ Verification:
 
 Deployment and remaining integration work:
 
-- Deploy the updated Convex schema/functions (including `submissionLimits`) before deploying the frontend. Confirm Clerk's Convex token includes the standard `email_verified` claim; [Convex documents it as `identity.emailVerified`](https://docs.convex.dev/auth/functions-auth).
-- Live hosted authentication and each real staff role still need production acceptance testing. This review used local demo UI and real backend handlers running against an in-memory test database; it did not deploy or mutate production data.
+- The updated Convex schema/functions and static frontend were deployed. Confirm Clerk's Convex token includes the standard `email_verified` claim; [Convex documents it as `identity.emailVerified`](https://docs.convex.dev/auth/functions-auth).
+- Live hosted authentication and each real staff role still need production acceptance testing. Workflow tests used local demo UI and real backend handlers running against an in-memory test database; production customer data was not mutated during review.
 - Online checkout, refunds, saved payment methods, self-service deposit bookings, and paid membership changes require payment/subscription integration. They remain unavailable in production.
 - Newsletter delivery and automated email/SMS are not integrated. Portal messages work within the application; staff must reply to guest inquiries/contact requests through their existing communication service.
 
@@ -41,6 +41,6 @@ Physical-store update (2026-10-08):
 - Staff can create customers without email, register pets, add vaccine records for review, create in-store/phone appointments, and collect appointment deposits/balances. Vaccine and schedule checks still apply. Service payment revenue is not duplicated as a retail order.
 - Public pages explain visiting the store, optional accounts, and online appointment/contact tools. Paid subscription plans remain unavailable. Live service prices do not inherit sample membership discounts.
 - Internet is required for production writes, as requested. No internet-outage transaction queue is included.
-- All catalog/service amounts remain sample prices; the currency switch is not an exchange-rate conversion. Set actual naira prices and confirm store hours before launch.
+- All catalog/service amounts remain sample prices; the currency switch is not an exchange-rate conversion. Hosted pages and public API responses now hide the unconfirmed catalog. Catalog-price sales, appointments, and listing inquiries are blocked until a super admin confirms all product, service, and pet records through the Site & Staff publication control. Staff can record a custom walk-in line at a confirmed counter price meanwhile. Set actual naira prices and confirm store hours before public booking or catalog sale.
 - New backend fields/indexes: orders item label, requestId index, payment reference/cash amounts and storeRefunds; bookings storePayments. Deploy Convex schema/functions before the matching frontend.
-- Verification: local/server workflow tests cover guest sales, authoritative prices, stock limits, quantities, insufficient cash, retries, no-email customers, staff-created bookings, payment limits, and unauthorized writes. Browser checks cover cash receipt/change, no-email customer/pet registration, appointment creation, and bank-transfer settlement. Production was not changed.
+- Verification: local/server workflow tests cover guest sales, authoritative prices, stock limits, quantities, insufficient cash, retries, no-email customers, staff-created bookings, payment limits, unconfirmed-catalog guards, and unauthorized writes. Browser checks cover cash receipt/change, no-email customer/pet registration, appointment creation, and bank-transfer settlement. The production backend and website were deployed without changing production customer records.

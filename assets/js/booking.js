@@ -13,6 +13,22 @@
   const D = window.PNC_DB;
   const esc = D.esc;
   const money = D.money;
+  const publicPrice = n => D.catalogReady() ? money(n) : "Price confirmed in store";
+
+  function syncCatalogAvailability() {
+    const ready = D.catalogReady();
+    ['#services', '#our-team', '#book', '#svcStats', '.quick-book'].forEach(selector => {
+      const element = $(selector); if (element) element.hidden = !ready;
+    });
+    if (!ready) {
+      const title = $('#heroTitle');
+      if (title) title.textContent = 'Ask us about pet care services';
+      const lead = $('.hero-grid .lead');
+      if (lead) lead.textContent = 'Our service list, staff and naira prices are being confirmed. Contact our Amasoma team to ask about care and arrange a visit.';
+      const actions = $('.hero-grid .hero-cta');
+      if (actions) actions.innerHTML = '<a class="btn btn-primary btn-lg" href="contact.html">Contact the store</a>';
+    }
+  }
 
   /* ------------------------- catalog render ------------------------- */
   let activeGroup = "all";
@@ -34,9 +50,9 @@
           providers.map((p) => esc(p.name)).join(", ") +
         "</p>" +
         '<div class="svc-foot">' +
-          '<span class="svc-price">' + money(s.price) + "</span>" +
+          '<span class="svc-price">' + publicPrice(s.price) + "</span>" +
           '<span class="svc-dur">' + s.duration + " hr" + (s.duration === 1 ? "" : "s") + "</span>" +
-          (s.duration >= 24
+          (s.duration >= 24 || !D.catalogReady()
             ? '<a class="mini-btn" href="contact.html">Contact us</a>'
             : '<button class="mini-btn primary" data-book="' + s.id + '">Book now</button>') +
         "</div>" +
@@ -92,15 +108,14 @@
     const svc = D.db.services;
     host.innerHTML =
       "<div><b>" + svc.length + "</b><span>Services on the menu</span></div>" +
-      "<div><b>" + D.PROVIDERS.length + "</b><span>Verified providers</span></div>" +
-      "<div><b>4.9&#9733;</b><span>Average care rating</span></div>";
+      "<div><b>" + D.PROVIDERS.length + "</b><span>Care team members</span></div>";
   }
 
   /* --------------------------- quick book --------------------------- */
   function renderQuickBook() {
     const sel = $("#qbService");
     if (!sel) return;
-    sel.innerHTML = D.db.services.map((s) => '<option value="' + s.id + '">' + esc(s.name) + " · " + money(s.price) + "</option>").join("");
+    sel.innerHTML = D.db.services.map((s) => '<option value="' + s.id + '">' + esc(s.name) + " · " + publicPrice(s.price) + "</option>").join("");
     refreshQBPets();
   }
 
@@ -158,7 +173,7 @@
       return (
         '<button class="pick' + (on ? " on" : "") + '" data-pick="' + s.id + '">' +
           '<span class="pi">' + D.icon(s.icon) + "</span>" +
-          "<span><b>" + esc(s.name) + "</b><small>" + money(s.price) + " · " + s.duration + " hr" + (s.duration === 1 ? "" : "s") +
+          "<span><b>" + esc(s.name) + "</b><small>" + publicPrice(s.price) + " · " + s.duration + " hr" + (s.duration === 1 ? "" : "s") +
           (s.requiresVaccine ? " · vaccines required" : "") + "</small></span>" +
         "</button>"
       );
@@ -228,7 +243,7 @@
 
     if (!open.length) {
       html = '<div class="slot-none">&#128197; Nothing open on ' + D.fmtDate(W.date) + ". " +
-        "Try another day, or join the waitlist and we'll text you the moment a slot frees up.</div>" +
+        "Try another day, or join the waitlist. Check your account or contact the store for an update.</div>" +
         '<div style="margin-top:14px"><button class="btn btn-teal" id="wlJoin">Join the waitlist</button></div>';
     }
     host.innerHTML = html;
@@ -377,7 +392,7 @@
       '<div class="row"><span>' + (svc.deposit ? "Deposit today (30%)" : "Payment due at visit") + '</span><span><b>' + money(b.deposit) + "</b></span></div>" +
       (svc.deposit ? '<div class="row"><span>Balance at the visit</span><span>' + money(b.remainder) + "</span></div>" : "") +
       '<div class="row total"><span>' + (svc.deposit ? "Charged now" : "Charged now") + '</span><span>' + money(b.deposit) + "</span></div>" +
-      '<p class="tiny muted" style="margin:10px 0 0">Free cancellation up to 24 hours before. Demo checkout — no real card is charged.</p>';
+      '<p class="tiny muted" style="margin:10px 0 0">' + (D.productionMode() ? 'Confirm payment arrangements with the store.' : 'Local demo only — no real payment is collected.') + '</p>';
 
     $("#acctGate").innerHTML = o
       ? '<p class="small muted" style="margin:14px 0 0">Booking as <b>' + esc(o.fullName) + "</b> · " + esc(o.email) + "</p>"
@@ -399,6 +414,7 @@
   }
 
   function startBooking(serviceId) {
+    if (!D.catalogReady()) { PNC.toast("Service prices are being confirmed. Please contact the store to arrange a visit.", "err"); return; }
     W.serviceId = serviceId;
     W.date = null; W.hour = null; W.providerId = null;
     gotoStep(2);
@@ -408,6 +424,7 @@
   /* ---------------------------- events ------------------------------ */
   document.addEventListener("pnc:nav-ready", function () {
     window.addEventListener("pnc:data-ready", function () {
+      syncCatalogAvailability();
       renderStats(); renderServices(); renderProviders(); renderQuickBook();
       if (W.step === 1) renderStep1();
       if (W.step === 2) renderStep2();
@@ -423,6 +440,7 @@
     /* hero title from CMS */
     const t = D.db.cms.heroTitle;
     if (t) $("#heroTitle").innerHTML = esc(t).replace("best friend", "<em>best friend</em>");
+    syncCatalogAvailability();
 
     /* group filter */
     $("#groupNav").addEventListener("click", function (e) {

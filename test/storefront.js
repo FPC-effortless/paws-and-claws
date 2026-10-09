@@ -10,7 +10,7 @@ function node(selector) {
     innerHTML: '', textContent: '', value: '', max: '', hidden: true,
     style: {}, dataset: {}, listeners: {},
     addEventListener(event, callback) { this.listeners[event] = callback; },
-    setAttribute() {}, appendChild() {},
+    setAttribute() {}, appendChild() {}, closest() { return node('.filter-group'); },
   });
   return nodes.get(selector);
 }
@@ -27,7 +27,7 @@ const document = {
 };
 const context = { document, addEventListener: document.addEventListener, console, URLSearchParams, setTimeout() {},
   location: { search: '' }, localStorage: { getItem: () => savedCart, setItem() {} },
-  PNC_DB: { PRODUCTS: products, PRODUCT_BY_ID: Object.fromEntries(products.map(p => [p.id, p])),
+  PNC_DB: { PRODUCTS: products, PRODUCT_BY_ID: Object.fromEntries(products.map(p => [p.id, p])), catalogReady: () => true,
     db: { products }, currentOwner: () => null, money: n => '$' + n.toFixed(2),
     esc: s => String(s), titleCase: s => s, speciesIcon: () => '' },
 };

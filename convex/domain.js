@@ -244,6 +244,7 @@ async function limitSubmission(ctx, id, email) {
 
 async function bootstrapData(ctx) {
   const id = await ctx.auth.getUserIdentity();
+  const cms = (await ctx.db.query("cms").first()) || null;
   const publicData = {
     version: 1,
     owners: [], pets: [], bookings: [], orders: [], listings: await ctx.db.query("listings").collect(),
@@ -256,10 +257,13 @@ async function bootstrapData(ctx) {
       .map(b => ({ providerId: b.providerId, date: b.date, hour: b.hour, duration: b.duration })),
     waitlist: [], messages: [], notifications: [], payments: [],
     audit: [], admins: [], inquiries: [], contactMessages: [],
-    cms: (await ctx.db.query("cms").first()) || null,
+    cms,
     inquiryCounter: 0
   };
-  if (!id) return publicData;
+  const publicCatalog = data => cms?.catalogConfirmed ? data : {
+    ...data, listings: [], products: [], services: [], serviceGroups: [], providers: []
+  };
+  if (!id) return publicCatalog(publicData);
 
   const admin = await adminFor(ctx);
   if (admin) {
@@ -319,8 +323,8 @@ async function bootstrapData(ctx) {
   }
 
   const owner = await ownerFor(ctx, false);
-  if (!owner) return publicData;
-  return {
+  if (!owner) return publicCatalog(publicData);
+  return publicCatalog({
     ...publicData,
     owners: [(({ notes, ...profile }) => profile)(owner)],
     pets: (await ctx.db.query("pets").collect()).filter(p => p.ownerId === owner.id),
@@ -331,7 +335,7 @@ async function bootstrapData(ctx) {
     payments: [],
     waitlist: (await ctx.db.query("waitlist").collect()).filter(w => w.ownerId === owner.id),
     inquiries: (await ctx.db.query("inquiries").collect()).filter(i => i.ownerId === owner.id)
-  };
+  });
 }
 
 export const bootstrap = query({
@@ -558,6 +562,8 @@ export const mutate = mutation({
     if (op === "createBooking" || op === "staffBooking") {
       const staff = op === "staffBooking" ? await adminFor(ctx) : null;
       if (op === "staffBooking") requirePermission(staff, "bookings.manage");
+      const catalog = await ctx.db.query("cms").first();
+      if (!catalog?.catalogConfirmed) throw new Error("Service prices need store confirmation before appointments can be booked. Please contact the team.");
       const owner = staff ? await getOwnerById(ctx, p.ownerId) : await ownerFor(ctx, true);
       const service = await getService(ctx, p.serviceId);
       const pet = await getPet(ctx, p.petId);
@@ -799,6 +805,10 @@ export const mutate = mutation({
       for (const k of ["siteName","tagline","banner","heroTitle","emergencyHotline","emergencyNote","phone","email","address"]) {
         if (p.patch?.[k] !== undefined) patch[k] = String(p.patch[k]);
       }
+      if (p.patch?.catalogConfirmed !== undefined) {
+        if (typeof p.patch.catalogConfirmed !== "boolean") throw new Error("Invalid catalog setting.");
+        patch.catalogConfirmed = p.patch.catalogConfirmed;
+      }
       if (p.patch?.hours !== undefined) {
         const hours = p.patch.hours;
         const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -903,6 +913,10 @@ export const mutate = mutation({
       if (!/^[a-zA-Z0-9_-]{8,100}$/.test(options.requestId || "")) throw new Error("A sale reference is required.");
       const previous = await ctx.db.query("orders").withIndex("by_requestId", q => q.eq("requestId", options.requestId)).first();
       if (previous) return {ok: true, orderId: previous.id, total: previous.total};
+      if (Array.isArray(p.lines) && p.lines.some(line => line?.productId)) {
+        const catalog = await ctx.db.query("cms").first();
+        if (!catalog?.catalogConfirmed) throw new Error("Confirm actual naira catalog prices in Site & Staff before selling catalog products. Use a custom line for a verified walk-in price.");
+      }
       const products = await ctx.db.query("products").collect();
       const sale = prepareStoreSale(p.lines, products, p.method, options);
       const order = {
@@ -970,6 +984,8 @@ export const mutate = mutation({
     }
 
     if (op === "submitInquiry") {
+      const catalog = await ctx.db.query("cms").first();
+      if (!catalog?.catalogConfirmed) throw new Error("Pet listings are not published yet. Please contact the store.");
       const identityValue = await ctx.auth.getUserIdentity();
       const owner = identityValue ? await ownerFor(ctx, true) : null;
       const listing = await ctx.db.query("listings").filter(q => q.eq(q.field("id"), p.listingId)).first();

@@ -114,10 +114,10 @@
           ((p.size || []).length ? '<span>Size ' + D.esc(p.size.join('/')) + '</span>' : '') +
         '</div>' +
         '<div class="price-row">' +
-          '<span class="price">' + D.money(p.price) + '</span>' +
+          '<span class="price">' + (D.catalogReady() ? D.money(p.price) : 'Price confirmed in store') + '</span>' +
           '<button type="button" class="btn btn-teal btn-sm add-btn" data-add="' + p.id + '"' +
-            (p.stock <= 0 ? ' disabled' : '') + '>' +
-            (p.stock <= 0 ? 'Sold out' : 'Add to cart') + '</button>' +
+            (p.stock <= 0 || !D.catalogReady() ? ' disabled' : '') + '>' +
+            (!D.catalogReady() ? 'Visit the store' : p.stock <= 0 ? 'Sold out' : 'Add to cart') + '</button>' +
         '</div>' +
       '</div>' +
     '</article>';
@@ -145,10 +145,11 @@
   }
 
   function render() {
-    const list = filtered();
+    const list = D.catalogReady() ? filtered() : [];
     $('#productGrid').innerHTML = list.map(card).join('');
     $('#resultCount').textContent = list.length + (list.length === 1 ? ' product' : ' products');
     $('#noResults').style.display = list.length ? 'none' : 'block';
+    if (!D.catalogReady()) $('#noResults').firstChild.textContent = 'Our product catalog is being updated with verified naira prices. Contact the store to ask about stock. ';
     renderChips();
     syncFacets();
   }
@@ -257,6 +258,7 @@
     });
 
     const range = $('#priceRange');
+    if (range?.closest('.filter-group')) range.closest('.filter-group').hidden = !D.catalogReady();
     if (range) {
       range.addEventListener('input', function (e) {
         const v = Number(e.target.value), max = Number(e.target.max);

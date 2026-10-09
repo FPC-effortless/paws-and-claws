@@ -22,6 +22,13 @@
     if (t && cms.heroTitle) t.innerHTML = esc(cms.heroTitle);
     const lead = $("#heroLead");
     if (lead) lead.textContent = "Visit our physical store for pet supplies and care. Walk in to shop, speak with our team, or book an appointment online before your visit. No membership is required to shop in person.";
+    const bookingLink = $("#heroBookingLink");
+    if (bookingLink) {
+      bookingLink.href = D.catalogReady() ? 'services.html#book' : 'contact.html';
+      bookingLink.textContent = D.catalogReady() ? 'Book an appointment' : 'Ask about appointments';
+    }
+    const services = $("#services");
+    if (services) services.hidden = !D.catalogReady();
     const visit = $("#storeVisitDetails");
     if (visit) visit.textContent = [cms.address, cms.phone].filter(Boolean).join(" · ");
 
@@ -40,6 +47,7 @@
   function renderGroups() {
     const host = $("#groupGrid");
     if (!host) return;
+    const ready = D.catalogReady();
     host.innerHTML = D.SERVICE_GROUPS.map(function (g) {
       const svc = (D.SERVICES || []).filter(function (s) { return s.group === g.id; });
       const from = svc.length ? Math.min.apply(null, svc.map(function (s) { return s.price; })) : 0;
@@ -47,7 +55,7 @@
         '<span class="cat-ico">' + D.icon(g.icon) + "</span>" +
         "<h3>" + esc(g.name) + "</h3>" +
         "<p>" + esc(g.blurb) + "</p>" +
-        '<span class="tag tag--yellow">From ' + money(from) + "</span>" +
+        '<span class="tag tag--yellow">' + (ready ? 'From ' + money(from) : 'Ask for current services and prices') + "</span>" +
         "</a>";
     }).join("");
   }
@@ -62,11 +70,14 @@
   function renderListings() {
     const host = $("#featuredListings");
     if (!host) return;
+    const section = $("#featured-pets");
+    if (section) section.hidden = !D.catalogReady();
+    if (!D.catalogReady()) return;
     const list = (D.db.listings || []).filter(function (l) { return l.status === "available"; }).slice(0, 3);
     if (!list.length) {
       host.innerHTML = '<div class="empty-card" style="grid-column:1/-1">' +
         '<span class="ico">&#128062;</span><b>No pets available right now</b>' +
-        "<p>New listings are vetted weekly. Check back soon or join the waitlist.</p></div>";
+        "<p>Contact the store to ask about current availability.</p></div>";
       return;
     }
     host.innerHTML = list.map(function (l) {
@@ -94,16 +105,17 @@
   function renderBestsellers() {
     const host = $("#featuredGrid");
     if (!host) return;
-    const prods = (PNC && PNC.PRODUCTS ? PNC.PRODUCTS.slice() : [])
-      .sort(function (a, b) { return b.rating - a.rating; })
-      .slice(0, 4);
+    if (!D.catalogReady()) {
+      host.innerHTML = '<p>Product prices and availability are being confirmed. Ask our team before visiting.</p>';
+      return;
+    }
+    const prods = (PNC && PNC.PRODUCTS ? PNC.PRODUCTS.slice() : []).slice(0, 4);
     host.innerHTML = prods.map(function (p) {
       const badge = p.badge ? '<span class="badge tag tag--yellow">' + esc(p.badge) + "</span>" : "";
       return '<div class="card product reveal in">' +
         '<div class="product-art">' + badge + D.icon(p.icon) +
         "</div>" +
         '<div class="product-body">' +
-          '<div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;<small>(' + p.rating + ")</small></div>" +
           "<h3>" + esc(p.name) + "</h3>" +
           "<p>" + esc(p.desc) + "</p>" +
           '<div class="product-foot">' +

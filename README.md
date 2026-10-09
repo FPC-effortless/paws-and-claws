@@ -200,7 +200,7 @@ The build creates `dist/` containing only the public HTML and assets. Vercel pub
 
 ## Important limitations
 
-The site is for a physical store in Amasoma. Staff can record walk-in sales, cash or bank-transfer payments, returns/refunds, customer and pet records, and appointments while connected to the internet. In-store customers do not need an online account. The optional free Puppy Pass account connects online pet and appointment tools; the other membership tiers are local demo concepts, with no live subscription billing. Exact street directions, phone number, opening hours, and actual naira catalog prices still need to be set by the store.
+The site is for a physical store in Amasoma. Staff can record walk-in sales, cash or bank-transfer payments, returns/refunds, customer and pet records, and appointments while connected to the internet. In-store customers do not need an online account. The optional free Puppy Pass account connects online pet and appointment tools; the other membership tiers are local demo concepts, with no live subscription billing. Exact street directions, phone number, opening hours, and actual naira catalog prices still need to be set by the store. Until a super admin reviews the product, service, and pet records and checks **Publish verified catalog and service prices** in Site & Staff, hosted pages and public API responses hide the demo catalog, and catalog-price sales, appointments, and pet listing inquiries are blocked. Staff can still record a walk-in sale with a custom line and a price confirmed at the counter.
 
 Deploy the Convex schema and functions before publishing a frontend update that uses the in-store operations.
 

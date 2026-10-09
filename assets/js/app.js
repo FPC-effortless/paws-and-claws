@@ -107,6 +107,7 @@
 
     rebind() {
       this.items = readCart();
+      if (global.PNC_DB?.catalogReady && !global.PNC_DB.catalogReady()) this.items = [];
       this.render();
     },
 
@@ -116,6 +117,7 @@
       const p = productById(id);
       if (!p) return;
       const D = global.PNC_DB;
+      if (D?.catalogReady && !D.catalogReady()) { toast("Ask the store for confirmed prices before adding items.", "err"); return; }
       const serverProduct = D && D.db && D.db.products ? D.db.products.find(x => x.id === id) : null;
       const stock = serverProduct ? Number(serverProduct.stock) : Infinity;
       const line = this.items.find((i) => i.id === id);

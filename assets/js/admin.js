@@ -786,6 +786,7 @@
     set("#cms-email", cms.email);
     set("#cms-addr", cms.address);
     set("#cms-enote", cms.emergencyNote);
+    $("#cmsCatalogConfirmed").checked = cms.catalogConfirmed === true;
     const hoursHost = $("#cmsHours");
     if (hoursHost) {
       const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -857,7 +858,8 @@
         email: String(fd.get("email") || "").trim(),
         address: String(fd.get("address") || "").trim(),
         emergencyNote: String(fd.get("emergencyNote") || "").trim(),
-        hours: configured ? hours : []
+        hours: configured ? hours : [],
+        catalogConfirmed: $("#cmsCatalogConfirmed").checked
       }));
       if (res && res.error) return toast(res.error, "err");
       $("#cmsMsg").style.color = "var(--ok)";

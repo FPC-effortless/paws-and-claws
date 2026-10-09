@@ -4,16 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Paws &amp; Claws — Pet Care, Shop &amp; Adoption, All in One Place</title>
-  <meta name="description" content="Book vet, grooming, sitting and training appointments, shop pet supplies, adopt pets, and manage your member portal — all at Paws &amp; Claws.">
+  <meta name="description" content="Visit the Paws &amp; Claws pet store in Amasoma. Ask about supplies, pet care and appointments, or manage your pets and messages online.">
   <link rel="icon" href="assets/brand/favicon.ico" sizes="any">
   <link rel="icon" href="assets/brand/favicon-32.png" type="image/png" sizes="32x32">
   <link rel="apple-touch-icon" href="assets/brand/favicon-180.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/style.css?v=20261009-store3">
-  <link rel="stylesheet" href="assets/css/pages.css?v=20261009-store3">
-  <link rel="stylesheet" href="assets/css/platform.css?v=20261009-store3">
+  <link rel="stylesheet" href="assets/css/style.css?v=20261009-store4">
+  <link rel="stylesheet" href="assets/css/pages.css?v=20261009-store4">
+  <link rel="stylesheet" href="assets/css/platform.css?v=20261009-store4">
 </head>
 <body>
   <header class="site-header"></header>
@@ -26,7 +26,7 @@
           <h1 id="heroTitle">Everything your <em>best friend</em> needs, all under one woof.</h1>
           <p class="lead" id="heroLead">Visit our physical store for pet supplies and care. Shop and pay in person, or plan your visit and manage appointments online. No membership is required to shop.</p>
           <div class="hero-cta">
-            <a class="btn btn-primary btn-lg" href="services.html#book">Book an appointment</a>
+            <a class="btn btn-primary btn-lg" id="heroBookingLink" href="services.html#book">Book an appointment</a>
             <a class="btn btn-ghost btn-lg" href="contact.html">Visit the store &amp; hours</a>
           </div>
           <div class="hero-stats" id="heroStats"></div>
@@ -56,13 +56,13 @@
         <div class="sec-head center">
           <span class="eyebrow">One platform, five ways to pamper</span>
           <h2>Everything pet care, under one roof</h2>
-          <p class="lead">From a last-minute nail trim to a new best friend, it all happens here — and it all stays in sync with your member account.</p>
+          <p class="lead">Explore the store online, contact our team, and manage your pet care visits. A member account is optional for in-store shopping.</p>
         </div>
         <div class="grid g-4">
-          <a class="card cat-card reveal" href="services.html"><span class="cat-ico">&#128197;</span><h3>Book a visit</h3><p>Vet, grooming, sitting &amp; training with real-time availability</p></a>
+          <a class="card cat-card reveal" href="services.html"><span class="cat-ico">&#128197;</span><h3>Book a visit</h3><p>Explore care services and available times</p></a>
           <a class="card cat-card reveal" href="shop.html"><span class="cat-ico">&#128722;</span><h3>Shop the store</h3><p>Browse the product catalog and check local availability</p></a>
-          <a class="card cat-card reveal" href="pets.html"><span class="cat-ico">&#128062;</span><h3>Adopt a pet</h3><p>Verified listings from trusted breeders and shelters</p></a>
-          <a class="card cat-card reveal" href="account.html"><span class="cat-ico">&#128100;</span><h3>Member portal</h3><p>Pets, bookings, orders, messages and payment in one place</p></a>
+          <a class="card cat-card reveal" href="pets.html"><span class="cat-ico">&#128062;</span><h3>Ask about pets</h3><p>Check current pet listings and availability</p></a>
+          <a class="card cat-card reveal" href="account.html"><span class="cat-ico">&#128100;</span><h3>Member portal</h3><p>Pets, bookings, linked purchases and messages in one place</p></a>
         </div>
       </div>
     </section>
@@ -72,7 +72,7 @@
         <div class="sec-head center">
           <span class="eyebrow">In-store services</span>
           <h2>More than a shop</h2>
-          <p class="lead">Four departments, one care team. View service details and available appointment times before you book.</p>
+          <p class="lead">View confirmed service details and appointment times before you book.</p>
         </div>
         <div id="groupGrid" class="grid g-4"></div>
         <div class="center" style="margin-top:34px">
@@ -98,9 +98,9 @@
     <section id="bestsellers" style="padding-top:0">
       <div class="wrap">
         <div class="sec-head">
-          <span class="eyebrow">Member favorites</span>
-          <h2>This week's bestsellers</h2>
-          <p class="lead">The items our club members reorder again and again — and the reasons they love them.</p>
+          <span class="eyebrow">Store catalog</span>
+          <h2>Browse products</h2>
+          <p class="lead">See product information before visiting our Amasoma store. Confirm prices and availability with the team.</p>
         </div>
         <div class="grid g-4" id="featuredGrid"></div>
         <div class="center" style="margin-top:34px">
@@ -128,64 +128,11 @@
       </div>
     </section>
 
-    <section id="reviews">
-      <div class="wrap">
-        <div class="sec-head center">
-          <span class="eyebrow">Loud and proud</span>
-          <h2>Tail-wagging reviews</h2>
-        </div>
-        <div class="grid g-3">
-          <div class="card quote reveal">
-            <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
-            <p>"Booked a groom at 8am, my dog was fluffy by noon. The portal even sent vaccine reminders first."</p>
-            <div class="who"><span class="av">&#129489;&#8205;&#129466;</span><div><b>Priya R.</b><small>Club member &middot; 3 yrs</small></div></div>
-          </div>
-          <div class="card quote reveal">
-            <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
-            <p>"My picky Maine Coon finally eats something. The staff actually know cat nutrition, not just sales."</p>
-            <div class="who"><span class="av">&#129489;</span><div><b>Marcus D.</b><small>Club member &middot; 1 yr</small></div></div>
-          </div>
-          <div class="card quote reveal">
-            <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
-            <p>"We adopted Clover through the marketplace and the health records were already on file. Painless."</p>
-            <div class="who"><span class="av">&#128105;</span><div><b>Elena V.</b><small>Puppy Pass member</small></div></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="tips" style="padding-top:0">
-      <div class="wrap">
-        <div class="sec-head center">
-          <span class="eyebrow">Pet-care tips</span>
-          <h2>From our care team's notebook</h2>
-          <p class="lead">Short, practical reads written by the people who care for your pets.</p>
-        </div>
-        <div class="grid g-3">
-          <article class="card svc reveal">
-            <div class="ico">&#128062;</div><h3>How much exercise does my dog actually need?</h3>
-            <p>It depends on breed and age — but most dogs need 30 to 90 minutes a day. Here's how to tell if yours is getting enough.</p>
-            <div class="price-line">5 min read &middot; Dr. Dana Reyes, DVM</div>
-          </article>
-          <article class="card svc reveal">
-            <div class="ico">&#128049;</div><h3>Reading your cat's body language</h3>
-            <p>Tail flicks, slow blinks and ear angles tell you exactly how your cat feels. Learn the three signs of an overstimulated cat.</p>
-            <div class="price-line">4 min read &middot; Talia Okonjo, Groomer</div>
-          </article>
-          <article class="card svc reveal">
-            <div class="ico">&#128138;</div><h3>A vaccine schedule you can actually remember</h3>
-            <p>Core shots, boosters and lifestyle add-ons — plus how to keep records current so boarding and grooming never stall.</p>
-            <div class="price-line">6 min read &middot; Marcus Webb, DVM</div>
-          </article>
-        </div>
-      </div>
-    </section>
-
     <section style="padding-top:0">
       <div class="wrap">
         <div class="cta-band reveal">
           <h2>Ready to spoil them rotten?</h2>
-          <p>Join the Paws &amp; Claws club today — it's free to start, takes two minutes, and your pet gets a welcome treat in the mail.</p>
+          <p>Create a free account for pet profiles and appointments, or visit the store and shop as a walk-in customer.</p>
           <div class="hero-cta" style="justify-content:center;margin-top:24px">
             <a class="btn btn-ghost btn-lg" href="membership.html">Sign up free</a>
             <a class="btn btn-primary btn-lg" href="services.html#book">Book a visit</a>
@@ -194,29 +141,14 @@
       </div>
     </section>
 
-    <section style="padding-top:0">
-      <div class="wrap">
-        <div class="newsletter">
-          <span class="eyebrow" style="justify-content:center">The weekly snoot</span>
-          <h2>Treats in your inbox</h2>
-          <p>One short email a week: new arrivals, restock alerts, and the occasional discount code. No spam, promise.</p>
-          <form id="newsletterForm" novalidate>
-            <label class="sr-only" for="nl-email">Email address</label>
-            <input class="input" type="email" id="nl-email" name="email" placeholder="you@example.com" required>
-            <button class="btn btn-teal" type="submit">Subscribe</button>
-          </form>
-          <p class="hint" id="nl-msg" role="status" style="margin:14px 0 0"></p>
-        </div>
-      </div>
-    </section>
   </main>
 
-  <script src="assets/js/data.js?v=20261009-store3"></script>
-  <script src="assets/js/app.js?v=20261009-store3"></script>
-  <script src="assets/js/nav.js?v=20261009-store3"></script>
-  <script src="assets/js/convexClient.js?v=20261009-store3"></script>
+  <script src="assets/js/data.js?v=20261009-store4"></script>
+  <script src="assets/js/app.js?v=20261009-store4"></script>
+  <script src="assets/js/nav.js?v=20261009-store4"></script>
+  <script src="assets/js/convexClient.js?v=20261009-store4"></script>
   <!-- Clerk identity layer. The publishable key lives in clerk.js. -->
-  <script src="assets/js/clerk.js?v=20261009-store3"></script>
-  <script src="assets/js/home.js?v=20261009-store3"></script>
+  <script src="assets/js/clerk.js?v=20261009-store4"></script>
+  <script src="assets/js/home.js?v=20261009-store4"></script>
 </body>
 </html>

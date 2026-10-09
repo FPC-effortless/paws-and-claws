@@ -282,6 +282,7 @@ export default defineSchema({
     tagline: v.optional(v.string()),
     banner: v.optional(v.string()),
     heroTitle: v.optional(v.string()),
+    catalogConfirmed: v.optional(v.boolean()),
     emergencyHotline: v.string(),
     emergencyNote: v.string(),
     hours: v.any(),

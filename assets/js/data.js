@@ -321,6 +321,7 @@
         tagline: "Pet Co.",
         banner: "",
         heroTitle: "Everything your best friend needs, all under one woof.",
+        catalogConfirmed: false,
         emergencyHotline: "",
         emergencyNote: "For urgent pet health concerns, contact a local veterinary clinic. Online messages are not monitored for emergencies.",
         hours: [],
@@ -384,6 +385,7 @@
     if (templateHours) cms.hours = [];
     return cms;
   }
+  function catalogReady() { return !productionMode() || db?.cms?.catalogConfirmed === true; }
 
   function applyRemoteSnapshot(snapshot) {
     if (!productionMode() || !snapshot || typeof snapshot !== "object" || snapshot.version !== 1) return false;
@@ -1114,6 +1116,7 @@
     const admin = currentAdmin();
     if (!admin || !can("cms.edit")) return { error: "Not authorized." };
     if (patch.email && !isValidEmail(patch.email)) return { error: "Enter a valid store email." };
+    if (patch.catalogConfirmed !== undefined && typeof patch.catalogConfirmed !== "boolean") return { error: "Invalid catalog setting." };
     Object.assign(db.cms, patch);
     audit("CMS update", Object.keys(patch).join(", "));
     persist();
@@ -1493,7 +1496,7 @@ function prepareStoreSale(lines, products, method, options) {
   /* ------------------------------ export ------------------------------ */
   global.PNC_DB = {
     /* constants */
-    KEY, CURRENCY, DEPOSIT_RATE, PLAN_DISCOUNT, SPECIES, SEXES, ALTERED, VACCINES, TEMPERAMENTS,
+    KEY, CURRENCY, DEPOSIT_RATE, PLAN_DISCOUNT, SPECIES, SEXES, ALTERED, VACCINES, TEMPERAMENTS, catalogReady,
     ADMIN_ROLES, STAGES, DAY_START, DAY_END, STEP,
     get SERVICE_GROUPS() { return db?.serviceGroups || SERVICE_GROUPS; },
     get PRODUCTS() { return db?.products || PRODUCTS; },
