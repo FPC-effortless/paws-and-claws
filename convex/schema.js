@@ -180,6 +180,7 @@ export default defineSchema({
 
   services: defineTable({
     id: v.optional(v.string()),
+    active: v.optional(v.boolean()),
     group: v.string(),
     name: v.string(),
     icon: v.optional(v.string()),

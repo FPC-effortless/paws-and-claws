@@ -350,21 +350,13 @@
     }
   }
 
-  function publicSnapshot(source) {
-    const x = clone(source || seed());
-    x.owners = [];
-    x.pets = [];
-    x.bookings = [];
-    x.orders = [];
-    x.waitlist = [];
-    x.messages = [];
-    x.notifications = [];
-    x.payments = [];
-    x.audit = [];
-    x.admins = [];
-    x.inquiries = [];
-    x.contactMessages = [];
-    return x;
+  function emptyProductionSnapshot() {
+    return {
+      version: 1, owners: [], pets: [], bookings: [], orders: [], listings: [], products: [],
+      services: [], serviceGroups: [], providers: [], staffLeave: [], occupiedSlots: [], waitlist: [],
+      messages: [], notifications: [], payments: [], audit: [], admins: [], inquiries: [],
+      contactMessages: [], cms: null, inquiryCounter: 0
+    };
   }
 
   function remoteEnabled() {
@@ -372,25 +364,12 @@
     return productionMode() && clerkOn() && !!(cv && cv.active);
   }
 
-  // Replace only the shipped template contact details; preserve later CMS edits.
-  function normalizeStoreDetails(cms) {
-    if (!cms) return cms;
-    if (!cms.address || /Alder Brook|Riverton/.test(cms.address)) cms.address = "Amasoma";
-    if (/555/.test(cms.phone || "")) cms.phone = "";
-    if (/555/.test(cms.emergencyHotline || "")) { cms.emergencyHotline = ""; cms.emergencyNote = "For an urgent pet health concern, contact a local veterinary clinic. Our online messages are not monitored for emergencies."; }
-    if (/\.example$/.test(cms.email || "")) cms.email = "";
-    const templateHours = Array.isArray(cms.hours) && cms.hours.length === 7 &&
-      cms.hours.every((row, i) => row.day === ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][i] &&
-        row.open === (i === 6 ? "10:00 AM" : "9:00 AM") && row.close === (i === 6 ? "4:00 PM" : "7:00 PM"));
-    if (templateHours) cms.hours = [];
-    return cms;
-  }
   function catalogReady() { return !productionMode() || db?.cms?.catalogConfirmed === true; }
 
   function applyRemoteSnapshot(snapshot) {
     if (!productionMode() || !snapshot || typeof snapshot !== "object" || snapshot.version !== 1) return false;
     db = snapshot;
-    db.cms = normalizeStoreDetails(db.cms || seed().cms);
+    db.cms = db.cms || null;
     // Keep authenticated records in memory, not persistent browser storage.
     try { localStorage.removeItem(KEY); } catch {}
     try { if (global.PNC && global.PNC.onDbChange) global.PNC.onDbChange(); } catch {}
@@ -400,7 +379,7 @@
 
   function clearRemoteSnapshot() {
     if (!productionMode()) return;
-    db = publicSnapshot(seed());
+    db = emptyProductionSnapshot();
     try {
       localStorage.removeItem(KEY);
       localStorage.removeItem("pnc_convex_seeded");
@@ -441,7 +420,7 @@
   function load() {
     if (db) return db;
     if (productionMode()) {
-      db = publicSnapshot(seed());
+      db = emptyProductionSnapshot();
       try { localStorage.removeItem(KEY); } catch {}
       return db;
     }
@@ -1118,7 +1097,11 @@
     if (patch.siteName !== undefined && String(patch.siteName).trim().length < 2) return { error: "Enter a site name with at least 2 characters." };
     if (patch.email && !isValidEmail(patch.email)) return { error: "Enter a valid store email." };
     if (patch.catalogConfirmed !== undefined && typeof patch.catalogConfirmed !== "boolean") return { error: "Invalid catalog setting." };
-    Object.assign(db.cms, patch);
+    db.cms = Object.assign(db.cms || {
+      id: "site", siteName: "", tagline: "", banner: "", heroTitle: "",
+      emergencyHotline: "", emergencyNote: "", hours: [], toggles: {},
+      address: "", phone: "", email: "", catalogConfirmed: false
+    }, patch);
     audit("CMS update", Object.keys(patch).join(", "));
     persist();
     return db.cms;
@@ -1133,7 +1116,7 @@
     const values = { ...s, ...patch };
     const error = validateServiceValues(values);
     if (error) return { error };
-    ["name", "group", "price", "duration", "desc", "popular", "deposit", "requiresVaccine", "staff"].forEach((k) => {
+    ["name", "group", "price", "duration", "desc", "popular", "deposit", "requiresVaccine", "staff", "active"].forEach((k) => {
       if (patch[k] !== undefined) s[k] = ["price", "duration"].includes(k) ? Number(patch[k]) : ["name", "desc"].includes(k) ? String(patch[k]).trim() : patch[k];
     });
     audit("Service edited", s.name + " — " + money(s.price));
@@ -1158,6 +1141,7 @@
     if (!admin || !can("cms.edit")) return { error: "Not authorized." };
     const values = {
       id: uid("sv"), group: String(input.group || ""), name: String(input.name || "").trim(),
+      active: true,
       icon: String(input.icon || "&#128062;"), price: Number(input.price), duration: Number(input.duration),
       deposit: !!input.deposit, requiresVaccine: !!input.requiresVaccine,
       staff: Array.isArray(input.staff) ? input.staff.slice() : [], desc: String(input.desc || "").trim(),
@@ -1177,13 +1161,10 @@
     if (!admin || !can("cms.edit")) return { error: "Not authorized." };
     const service = byId(db.services, serviceId);
     if (!service) return { error: "Service not found." };
-    if ((db.bookings || []).some(b => b.serviceId === serviceId) || (db.waitlist || []).some(w => w.serviceId === serviceId)) {
-      return { error: "This service has booking history or a waitlist. Rename it or remove those records first." };
-    }
-    db.services = db.services.filter(s => s.id !== serviceId);
-    audit("Service deleted", service.name);
+    service.active = false;
+    audit("Service archived", service.name);
     persist();
-    return { ok: true, serviceId };
+    return { ok: true, serviceId, active: false };
   }
 
   function validateProviderValues(values, creating) {
@@ -1246,42 +1227,12 @@
     if (!admin || !can("staff.manage")) return { error: "Not authorized." };
     const provider = byId(db.providers || [], providerId);
     if (!provider) return { error: "Staff member not found." };
-    if (provider.active === false) return { error: "This staff member has already been removed from the public site." };
-    const affected = (db.services || []).filter(s => (s.staff || []).includes(providerId));
-    for (const service of affected) {
-      const remaining = service.staff.filter(id => id !== providerId && byId(db.providers || [], id)?.active !== false);
-      if (!remaining.length) return { error: "Assign another active team member to “" + service.name + "” before removing " + provider.name + "." };
-    }
-    if ((db.bookings || []).some(b => b.providerId === providerId && b.date >= todayISO() && !["cancelled", "completed", "no-show"].includes(b.status))) return { error: "Move or cancel this staff member’s upcoming appointments before removing them." };
-    affected.forEach(service => { service.staff = service.staff.filter(id => id !== providerId); });
-    const hasHistory = (db.bookings || []).some(b => b.providerId === providerId);
-    if (!hasHistory && !affected.length) {
-      db.providers = db.providers.filter(p => p.id !== providerId);
-      audit("Staff profile deleted", provider.id + " — " + provider.name);
-      persist();
-      return { ok: true, providerId, deleted: true };
-    }
+    if (provider.active === false) return { error: "This staff profile is already archived." };
     provider.active = false;
-    audit("Staff profile removed from site", provider.id + " — " + provider.name);
+    audit("Staff profile archived", provider.id + " — " + provider.name);
     persist();
-    return { ok: true, providerId };
+    return { ok: true, providerId, active: false };
   }
-  function initializeCatalog() {
-    if (remoteEnabled()) return remoteMutation("initializeCatalog", {});
-    if (productionMode()) return { error: "Secure backend is not available." };
-    const admin = currentAdmin();
-    if (!admin || admin.role !== "super" || !can("cms.edit")) return { error: "Not authorized." };
-    const groups = SERVICE_GROUPS.filter(g => !(db.serviceGroups || []).some(row => row.id === g.id));
-    const providers = PROVIDERS.filter(p => !(db.providers || []).some(row => row.id === p.id));
-    const services = SERVICES.filter(s => !(db.services || []).some(row => row.id === s.id));
-    db.serviceGroups = (db.serviceGroups || []).concat(clone(groups));
-    db.providers = (db.providers || []).concat(clone(providers));
-    db.services = (db.services || []).concat(clone(services));
-    audit("Catalog initialized", groups.length + " departments, " + providers.length + " staff, " + services.length + " services");
-    persist();
-    return { ok: true, groupsAdded: groups.length, providersAdded: providers.length, servicesAdded: services.length };
-  }
-
   /* ------------------------- staff & waitlist ------------------------- */
   function addLeave(providerId, date, reason) {
     if (remoteEnabled()) return remoteMutation("addLeave", { providerId, date, reason });
@@ -1677,7 +1628,7 @@ function prepareStoreSale(lines, products, method, options) {
     /* inventory */
     adjustStock, updateProduct,
     /* cms */
-    updateCMS, updateService, createService, deleteService, updateProvider, createProvider, deleteProvider, initializeCatalog,
+    updateCMS, updateService, createService, deleteService, updateProvider, createProvider, deleteProvider,
     /* staff */
     addLeave, removeLeave, joinWaitlist, removeWaitlist,
     /* crm */

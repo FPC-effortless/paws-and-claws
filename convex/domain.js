@@ -218,8 +218,7 @@ async function getService(ctx, id) {
   return await ctx.db.query("services").filter(q => q.eq(q.field("id"), id)).first();
 }
 async function getProvider(ctx, id) {
-  return (await ctx.db.query("providers").filter(q => q.eq(q.field("id"), id)).first()) ||
-    PROVIDERS.find(p => p.id === id) || null;
+  return await ctx.db.query("providers").filter(q => q.eq(q.field("id"), id)).first();
 }
 async function getPet(ctx, id) {
   return await ctx.db.query("pets").filter(q => q.eq(q.field("id"), id)).first();
@@ -296,7 +295,7 @@ async function bootstrapData(ctx) {
     version: 1,
     owners: [], pets: [], bookings: [], orders: [], listings: await addImageUrls(await ctx.db.query("listings").collect()),
     products: (await addImageUrls(await ctx.db.query("products").collect())).map(({ cost, ...p }) => p),
-    services: await addImageUrls(await ctx.db.query("services").collect()),
+    services: (await addImageUrls(await ctx.db.query("services").collect())).filter(service => service.active !== false),
     serviceGroups: await ctx.db.query("serviceGroups").collect(),
     providers: (await ctx.db.query("providers").collect()).filter(provider => provider.active !== false),
     staffLeave: (await ctx.db.query("staffLeave").collect()).map(l => ({ providerId: l.providerId, date: l.date })),
@@ -320,6 +319,7 @@ async function bootstrapData(ctx) {
     if (admin.role === "super") {
       out.admins = (await ctx.db.query("admins").collect()).map(({ _id, clerkId, ...safe }) => safe);
       out.providers = await ctx.db.query("providers").collect();
+      out.services = await addImageUrls(await ctx.db.query("services").collect());
       out.owners = await ctx.db.query("owners").collect();
       out.pets = await addImageUrls(await ctx.db.query("pets").collect());
       out.bookings = await ctx.db.query("bookings").collect();
@@ -398,7 +398,7 @@ const OPS = new Set([
   "ensureOwner","markNotificationRead","markNotificationsRead","updateOwner","addPet","updatePet",
   "removePet","addVaccine","setVaccineStatus","createBooking","rescheduleBooking","cancelBooking",
   "setBookingStatus","addBookingNote","placeOrder","setOrderStage","refund","setListingStatus",
-  "adjustStock","updateProduct","updateCMS","updateService","createService","deleteService","updateProvider","createProvider","deleteProvider","initializeCatalog","addLeave","removeLeave",
+  "adjustStock","updateProduct","updateCMS","updateService","createService","deleteService","updateProvider","createProvider","deleteProvider","addLeave","removeLeave",
   "joinWaitlist","removeWaitlist","posCharge","addPaymentMethod","removePaymentMethod",
   "setPrimaryPayment","submitContact","submitInquiry","createOwner","sendMessage","markMessageRead","setContactStatus","staffBooking","recordBookingPayment","refundStoreSale"
 ]);
@@ -665,7 +665,7 @@ export const mutate = mutation({
       const owner = staff ? await getOwnerById(ctx, p.ownerId) : await ownerFor(ctx, true);
       const service = await getService(ctx, p.serviceId);
       const pet = await getPet(ctx, p.petId);
-      if (!owner || !service || !pet || pet.ownerId !== owner.id) throw new Error("Invalid booking request.");
+      if (!owner || !service || service.active === false || !pet || pet.ownerId !== owner.id) throw new Error("Invalid booking request.");
       if (service.duration >= 24) throw new Error("This service requires overnight scheduling; please contact the store.");
       if (service.deposit && !staff) throw new Error("This booking requires a payment processor that is not connected yet.");
       const required = pet.species === "Cat" ? ["Rabies","FVRCP"] : ["Rabies","DHPP","Bordetella"];
@@ -725,7 +725,7 @@ export const mutate = mutation({
       if (!activeBookingStatus(booking.status)) throw new Error("Cannot reschedule a closed booking.");
       const service = await getService(ctx, booking.serviceId);
       const provider = await getProvider(ctx, p.providerId || booking.providerId);
-      if (!service || !provider || provider.active === false || !(service.staff || []).includes(provider.id)) throw new Error("Invalid provider for this service.");
+      if (!service || service.active === false || !provider || provider.active === false || !(service.staff || []).includes(provider.id)) throw new Error("Invalid provider for this service.");
       const ok = await slotAvailable(ctx, service, provider, String(p.date), Number(p.hour), booking.id);
       if (!ok) throw new Error("That time slot is no longer available.");
       await ctx.db.patch(booking._id, { date: String(p.date), hour: Number(p.hour), providerId: provider.id });
@@ -929,8 +929,7 @@ export const mutate = mutation({
       if (p.patch?.toggles !== undefined) patch.toggles = p.patch.toggles;
       if (cms) await ctx.db.patch(cms._id, patch);
       else {
-        cms = { ...DEFAULT_CMS, ...patch };
-        cms.id = DEFAULT_CMS.id;
+        cms = { id: "site", siteName: "", emergencyHotline: "", emergencyNote: "", hours: [], toggles: {}, address: "", phone: "", email: "", ...patch };
         await ctx.db.insert("cms", cms);
       }
       await audit(ctx, admin, "CMS update", Object.keys(patch).join(", "));
@@ -944,6 +943,10 @@ export const mutate = mutation({
       if (!s) throw new Error("Service not found.");
       const input = p.patch || {};
       const patch = {};
+      if (input.active !== undefined) {
+        if (typeof input.active !== "boolean") throw new Error("Choose whether this service is active.");
+        patch.active = input.active;
+      }
       if (input.name !== undefined) patch.name = String(input.name).trim();
       if (input.group !== undefined) {
         const group = await ctx.db.query("serviceGroups").filter(q => q.eq(q.field("id"), String(input.group))).first();
@@ -994,7 +997,7 @@ export const mutate = mutation({
       if (!Number.isFinite(price) || price < 0) throw new Error("Invalid service price.");
       if (!Number.isFinite(duration) || duration <= 0 || duration > 24) throw new Error("Invalid service duration.");
       const service = {
-        id: uid("sv"), group: groupId, name, icon: String(input.icon || "&#128062;"),
+        id: uid("sv"), active: true, group: groupId, name, icon: String(input.icon || "&#128062;"),
         price: round2(price), duration, deposit: !!input.deposit, requiresVaccine: !!input.requiresVaccine,
         staff, desc: String(input.desc || "").trim(), popular: !!input.popular
       };
@@ -1008,12 +1011,9 @@ export const mutate = mutation({
       requirePermission(admin, "cms.edit");
       const s = await getService(ctx, p.serviceId);
       if (!s) throw new Error("Service not found.");
-      const bookings = await ctx.db.query("bookings").collect();
-      const waitlist = await ctx.db.query("waitlist").collect();
-      if (bookings.some(b => b.serviceId === s.id) || waitlist.some(w => w.serviceId === s.id)) throw new Error("This service has booking history or a waitlist. Rename it or remove those records first.");
-      await ctx.db.delete(s._id);
-      await audit(ctx, admin, "Service deleted", s.id + " — " + s.name);
-      return { ok: true, serviceId: s.id };
+      await ctx.db.patch(s._id, { active: false });
+      await audit(ctx, admin, "Service archived", s.id + " — " + s.name);
+      return { ok: true, serviceId: s.id, active: false };
     }
 
     if (op === "updateProvider") {
@@ -1073,51 +1073,10 @@ export const mutate = mutation({
       requirePermission(admin, "staff.manage");
       const provider = await ctx.db.query("providers").filter(q => q.eq(q.field("id"), String(p.providerId || ""))).first();
       if (!provider) throw new Error("Staff member not found.");
-      if (provider.active === false) throw new Error("This staff member has already been removed from the public site.");
-      const services = await ctx.db.query("services").collect();
-      const bookings = await ctx.db.query("bookings").collect();
-      const affectedServices = services.filter(s => (s.staff || []).includes(provider.id));
-      for (const service of affectedServices) {
-        const remaining = (service.staff || []).filter(id => id !== provider.id);
-        const activeProviders = await ctx.db.query("providers").collect();
-        if (!remaining.some(id => activeProviders.some(item => item.id === id && item.active !== false))) {
-          throw new Error("Assign another active team member to “" + service.name + "” before removing " + provider.name + ".");
-        }
-      }
-      if (bookings.some(b => b.providerId === provider.id && b.date >= today() && activeBookingStatus(b.status))) {
-        throw new Error("Move or cancel this staff member’s upcoming appointments before removing them.");
-      }
-      for (const service of affectedServices) await ctx.db.patch(service._id, { staff: service.staff.filter(id => id !== provider.id) });
-      const hasHistory = bookings.some(b => b.providerId === provider.id);
-      if (!hasHistory && !affectedServices.length) {
-        await ctx.db.delete(provider._id);
-        await audit(ctx, admin, "Staff profile deleted", provider.id + " — " + provider.name);
-        return { ok: true, providerId: provider.id, deleted: true };
-      }
+      if (provider.active === false) throw new Error("This staff profile is already archived.");
       await ctx.db.patch(provider._id, { active: false });
-      await audit(ctx, admin, "Staff profile removed from site", provider.id + " — " + provider.name);
+      await audit(ctx, admin, "Staff profile archived", provider.id + " — " + provider.name);
       return { ok: true, providerId: provider.id, active: false };
-    }
-
-    if (op === "initializeCatalog") {
-      const admin = await adminFor(ctx);
-      requirePermission(admin, "cms.edit");
-      if (admin.role !== "super") throw new Error("Only a super admin can initialize the catalog.");
-      const existingGroups = await ctx.db.query("serviceGroups").collect();
-      const existingProviders = await ctx.db.query("providers").collect();
-      const existingServices = await ctx.db.query("services").collect();
-      let groupsAdded = 0, providersAdded = 0, servicesAdded = 0;
-      for (const group of SERVICE_GROUPS) {
-        if (!existingGroups.some(row => row.id === group.id)) { await ctx.db.insert("serviceGroups", group); groupsAdded++; }
-      }
-      for (const provider of PROVIDERS) {
-        if (!existingProviders.some(row => row.id === provider.id)) { await ctx.db.insert("providers", provider); providersAdded++; }
-      }
-      for (const service of SERVICE_CATALOG) {
-        if (!existingServices.some(row => row.id === service.id)) { await ctx.db.insert("services", service); servicesAdded++; }
-      }
-      await audit(ctx, admin, "Catalog initialized", groupsAdded + " departments, " + providersAdded + " staff, " + servicesAdded + " services");
-      return { ok: true, groupsAdded, providersAdded, servicesAdded };
     }
 
     if (op === "addLeave") {

@@ -225,7 +225,7 @@
                 <div class="panel-head"><h2>Site content</h2><span class="muted">Changes appear on public pages after saving</span></div>
                 <form id="cmsForm" novalidate>
                   <div class="field"><label for="cms-site-name">Site name</label>
-                    <input class="input" id="cms-site-name" name="siteName" placeholder="Paws &amp; Claws"></div>
+                    <input class="input" id="cms-site-name" name="siteName" required minlength="2" autocomplete="organization"></div>
                   <div class="field"><label for="cms-banner">Announcement banner</label>
                     <input class="input" id="cms-banner" name="banner" placeholder="Free shipping this week &mdash; leave empty for none"></div>
                   <div class="field"><label for="cms-hero">Homepage hero headline</label>
@@ -256,7 +256,6 @@
               </div>
               <div class="admin-panel pos-pad">
                 <div class="panel-head"><h2>Services</h2><span class="muted">Add, edit or remove bookable services</span></div>
-                <div id="svcInitialize" class="hint" style="display:none;margin-bottom:12px">Production has no catalog records yet. Initialize the approved service departments, staff profiles and service baseline, then review prices before publishing.</div>
                 <form id="svcForm" novalidate>
                   <div class="field"><label for="svcPick">Service</label>
                     <select class="input" id="svcPick"></select></div>
@@ -281,7 +280,7 @@
                   <div class="field"><label for="svcDesc">Description</label>
                     <textarea class="input" id="svcDesc" rows="2"></textarea></div>
                   <div class="field"><label for="svcImage">Service image</label><input class="input" id="svcImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif"><p class="hint">JPG, PNG, WEBP or GIF up to 8 MB.</p></div>
-                  <div class="form-grid"><button class="btn btn-primary" type="submit" id="svcSave">Save service</button><button class="btn btn-ghost" type="button" id="svcNew">New service</button><button class="btn btn-ghost" type="button" id="svcDelete" style="color:var(--danger)">Delete service</button></div>
+                  <div class="form-grid"><button class="btn btn-primary" type="submit" id="svcSave">Save service</button><button class="btn btn-ghost" type="button" id="svcNew">New service</button><button class="btn btn-ghost" type="button" id="svcDelete" style="color:var(--danger)">Archive service</button></div>
                   <p class="hint" id="svcMsg" role="status" style="margin:10px 0 0"></p>
                 </form>
               </div>
@@ -305,7 +304,7 @@
                   </div>
                   <div class="field"><label>Regular days off</label><div id="staffOff" class="checkrow"></div></div>
                   <div class="field"><label for="staffBio">Bio / customer-facing description</label><textarea class="input" id="staffBio" rows="2"></textarea></div>
-                  <div class="form-grid"><button class="btn btn-primary" type="submit" id="staffSave">Save staff member</button><button class="btn btn-ghost" type="button" id="staffNew">New staff member</button><button class="btn btn-ghost" type="button" id="staffDelete" style="color:var(--danger)">Remove from site</button></div>
+                  <div class="form-grid"><button class="btn btn-primary" type="submit" id="staffSave">Save staff member</button><button class="btn btn-ghost" type="button" id="staffNew">New staff member</button><button class="btn btn-ghost" type="button" id="staffDelete" style="color:var(--danger)">Archive staff profile</button></div>
                   <p class="hint" id="staffMsg" role="status" style="margin:10px 0 0"></p>
                 </form>
                 <form id="leaveForm" class="leave-form" novalidate>

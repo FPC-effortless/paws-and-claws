@@ -845,8 +845,7 @@
 
   /* ============================== CMS ============================== */
   function renderCMS() {
-    const cms = D.db.cms;
-    if (!cms) return;
+    const cms = D.db.cms || {};
     const set = function (id, val) { const el = $(id); if (el) el.value = val == null ? "" : val; };
     set("#cms-site-name", cms.siteName);
     set("#cms-banner", cms.banner);
@@ -879,7 +878,7 @@
     if (pick) {
       const cur = pick.value;
       pick.innerHTML = '<option value="">Choose a service</option>' + D.db.services.map(function (s) {
-        return '<option value="' + s.id + '">' + esc(s.name) + " (" + money(s.price) + ")</option>";
+        return '<option value="' + s.id + '">' + esc(s.name) + (s.active === false ? " (archived)" : "") + " (" + money(s.price) + ")</option>";
       }).join("");
       if (cur && D.byId(D.db.services, cur)) pick.value = cur;
       const group = $("#svcGroup");
@@ -893,23 +892,6 @@
       fillServiceForm();
       pick.onchange = fillServiceForm;
     }
-    const initializer = $("#svcInitialize");
-    if (initializer) {
-      const empty = !(D.db.services || []).length && !(D.db.providers || []).length && !(D.db.serviceGroups || []).length;
-      initializer.style.display = empty ? "block" : "none";
-      if (empty && !$("#svcInitBtn")) initializer.insertAdjacentHTML("beforeend", ' <button class="btn btn-teal btn-sm" type="button" id="svcInitBtn">Initialize approved baseline</button>');
-      const initButton = $("#svcInitBtn");
-      if (initButton) initButton.onclick = async function () {
-        if (initButton.disabled) return;
-        if (!window.confirm("Add the approved service departments, staff profiles and service baseline to production? You can edit them afterward.")) return;
-        initButton.disabled = true;
-        const r = await Promise.resolve(D.initializeCatalog());
-        if (r && r.error) { initButton.disabled = false; return toast(r.error, "err"); }
-        toast("Catalog initialized");
-        renderCMS();
-      };
-    }
-
     renderStaff();
     renderRoles();
     renderAdminAccess();
@@ -929,7 +911,7 @@
     const vaccine = $("#svcVaccine"); if (vaccine) vaccine.checked = !!(s && s.requiresVaccine);
     const staff = $("#svcStaff");
     if (staff) Array.from(staff.options).forEach(function (o) { o.selected = !!(s && (s.staff || []).includes(o.value)); });
-    const del = $("#svcDelete"); if (del) del.disabled = !s;
+    const del = $("#svcDelete"); if (del) { del.disabled = !s; del.textContent = s && s.active === false ? "Restore service" : "Archive service"; }
     const save = $("#svcSave"); if (save) save.textContent = s ? "Save service" : "Create service";
   }
 
@@ -1016,10 +998,12 @@
       const id = $("#svcPick").value;
       if (!id) return;
       const s = D.byId(D.db.services, id);
-      if (!s || !window.confirm("Delete " + s.name + "? Services with booking history cannot be deleted.")) return;
-      const r = await Promise.resolve(D.deleteService(id));
+      if (!s) return;
+      const restoring = s.active === false;
+      if (!window.confirm((restoring ? "Restore " : "Archive ") + s.name + "? Booking history will be retained.")) return;
+      const r = await Promise.resolve(D.updateService(id, { active: restoring }));
       if (r && r.error) return toast(r.error, "err");
-      toast("Service deleted");
+      toast(restoring ? "Service restored" : "Service archived");
       renderCMS();
     };
 
@@ -1051,11 +1035,11 @@
       const id = staffPick.value, p = D.byId(D.PROVIDERS || [], id);
       if (!id || !p) return;
       const reactivating = p.active === false;
-      if (!window.confirm(reactivating ? "Restore " + p.name + " to the public care team?" : "Remove " + p.name + " from the public care team? Their booking history will be retained.")) return;
+      if (!window.confirm(reactivating ? "Restore " + p.name + " to the public care team?" : "Archive " + p.name + " from the public care team? Their profile and booking history will be retained.")) return;
       const r = await Promise.resolve(reactivating ? D.updateProvider(id, { active: true }) : D.deleteProvider(id));
       if (r && r.error) { $("#staffMsg").style.color = "var(--danger)"; $("#staffMsg").textContent = r.error; return toast(r.error, "err"); }
-      $("#staffMsg").style.color = "var(--ok)"; $("#staffMsg").textContent = reactivating ? "Staff member restored to the site." : "Staff member removed from public pages; their history is retained.";
-      toast(reactivating ? "Staff member restored" : "Staff member removed from site"); renderCMS();
+      $("#staffMsg").style.color = "var(--ok)"; $("#staffMsg").textContent = reactivating ? "Staff member restored to the site." : "Staff member archived; profile and history retained.";
+      toast(reactivating ? "Staff member restored" : "Staff member archived"); renderCMS();
     };
 
     const lf = $("#leaveForm");
