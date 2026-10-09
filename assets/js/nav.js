@@ -19,6 +19,7 @@
     { href: "shop.html", label: "Shop", match: ["shop.html"] },
     { href: "membership.html", label: "Club", match: ["account.html", "membership.html"] },
     { href: "pets.html", label: "Pets", match: ["pets.html"] },
+    { href: "events.html", label: "Events", match: ["events.html"] },
     { href: "contact.html", label: "Contact", match: ["contact.html"] }
   ];
 
@@ -126,6 +127,7 @@
         "<div><h4>Company</h4><ul>" +
           '<li><a href="services.html">Services &amp; Booking</a></li>' +
           '<li><a href="membership.html">Membership</a></li>' +
+          '<li><a href="events.html">Community &amp; Events</a></li>' +
           '<li><a href="account.html">Member Portal</a></li>' +
           '<li><a href="contact.html">Contact &amp; Emergency</a></li>' +
         "</ul></div>" +

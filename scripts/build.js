@@ -40,7 +40,7 @@ const outputDirectory = path.resolve(projectRoot, "dist");
 if (path.dirname(outputDirectory) !== projectRoot) throw new Error("Invalid static output directory.");
 fs.rmSync(outputDirectory, { recursive: true, force: true });
 fs.mkdirSync(outputDirectory, { recursive: true });
-for (const page of ["index.html", "services.html", "shop.html", "pets.html", "membership.html", "account.html", "contact.html"]) {
+for (const page of ["index.html", "services.html", "shop.html", "pets.html", "membership.html", "events.html", "account.html", "contact.html"]) {
   fs.copyFileSync(path.join(projectRoot, page), path.join(outputDirectory, page));
 }
 fs.mkdirSync(path.join(outputDirectory, "admin"));
