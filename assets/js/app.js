@@ -15,7 +15,7 @@
       return owner ? "pnc_cart_" + owner.id : STORE_KEYS.cart;
     } catch { return STORE_KEYS.cart; }
   }
-  const CURRENCY = "$";
+  const CURRENCY = "\u20a6";
 
   /* ------------------------------ utils ------------------------------ */
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -89,21 +89,31 @@
   /* --------------------------- product data --------------------------- */
   /* data.js is loaded before app.js on every page, so the catalog has
      exactly one source of truth. */
-  const PRODUCTS = (global.PNC_DB && global.PNC_DB.PRODUCTS) || [];
-  const PRODUCT_BY_ID = (global.PNC_DB && global.PNC_DB.PRODUCT_BY_ID) || {};
+  const products = () => (global.PNC_DB && global.PNC_DB.PRODUCTS) || [];
+  const productById = (id) => products().find(p => p.id === id);
+  function readCart() {
+    const stored = read(cartKey(), []);
+    if (!Array.isArray(stored)) return [];
+    const lines = new Map();
+    for (const line of stored) {
+      if (!line || !productById(line.id) || !Number.isSafeInteger(line.qty) || line.qty <= 0) continue;
+      lines.set(line.id, { id: line.id, qty: Math.min(999, (lines.get(line.id)?.qty || 0) + line.qty) });
+    }
+    return Array.from(lines.values());
+  }
   /* ------------------------------ cart -------------------------------- */
   const Cart = {
-    items: read(STORE_KEYS.cart, []),
+    items: readCart(),
 
     rebind() {
-      this.items = read(cartKey(), []);
+      this.items = readCart();
       this.render();
     },
 
     save() { write(cartKey(), this.items); this.render(); },
 
     add(id, qty = 1) {
-      const p = PRODUCT_BY_ID[id];
+      const p = productById(id);
       if (!p) return;
       const D = global.PNC_DB;
       const serverProduct = D && D.db && D.db.products ? D.db.products.find(x => x.id === id) : null;
@@ -138,7 +148,7 @@
     clear() { this.items = []; this.save(); },
 
     get count() { return this.items.reduce((n, i) => n + i.qty, 0); },
-    get subtotal() { return this.items.reduce((n, i) => n + (PRODUCT_BY_ID[i.id] ? PRODUCT_BY_ID[i.id].price * i.qty : 0), 0); },
+    get subtotal() { return this.items.reduce((n, i) => n + (productById(i.id) ? productById(i.id).price * i.qty : 0), 0); },
     /* Members get their plan discount at checkout (see PNC_DB.placeOrder).
        Rates live in data.js so the data layer stays the source of truth. */
     get discountRate() {
@@ -168,10 +178,11 @@
           "</div>";
       } else {
         body.innerHTML = this.items.map((i) => {
-          const p = PRODUCT_BY_ID[i.id];
+          const p = productById(i.id);
+          if (!p) return '';
           return (
             '<div class="cart-line">' +
-              '<div class="cart-thumb">' + p.icon + "</div>" +
+              '<div class="cart-thumb">' + (global.PNC_DB.icon ? global.PNC_DB.icon(p.icon) : esc(p.icon)) + "</div>" +
               '<div class="cart-line-main">' +
                 '<h4>' + esc(p.name) + "</h4>" +
                 '<span class="cart-line-price">' + money(p.price) + " each</span>" +
@@ -318,5 +329,5 @@
   });
 
   /* ------------------------------- API -------------------------------- */
-  global.PNC = { Cart, PLANS, PRODUCTS, PRODUCT_BY_ID, money, esc, toast, openModal, closeModal, isValidEmail, $, $$ };
+  global.PNC = { Cart, PLANS, get PRODUCTS() { return products(); }, get PRODUCT_BY_ID() { return Object.fromEntries(products().map(p => [p.id, p])); }, money, esc, toast, openModal, closeModal, isValidEmail, $, $$ };
 })(window);

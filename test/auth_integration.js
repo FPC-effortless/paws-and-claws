@@ -7,7 +7,8 @@ const read = (name) => fs.readFileSync(path.join(__dirname, "..", "assets", "js"
 const events = [];
 let signedIn = { id: "user_first", primaryEmailAddress: { emailAddress: "first@example.test" } };
 let clerkListener;
-const client = { setAuth(callback) { this.tokenCallback = callback; }, query: async () => ({ version: 1, owners: [], admins: [] }),
+let cleared = 0, applied = 0;
+const client = { setAuth(callback, onAuth) { this.tokenCallback = callback; this.authChange = onAuth; }, query: async () => ({ version: 1, owners: [], admins: [] }),
   mutation: async () => ({ ok: true }), close: async () => {} };
 const Clerk = {
   user: signedIn,
@@ -25,6 +26,7 @@ const sandbox = {
   sessionStorage: { getItem: () => null },
   __internal_ClerkUICtor: function () {},
   Clerk, convex: { ConvexClient: function () { return client; } },
+  PNC_DB: { productionMode: () => true, clearRemoteSnapshot() { cleared++; }, applyRemoteSnapshot() { applied++; } },
   addEventListener(type, fn) { (events[type] ||= []).push(fn); },
   dispatchEvent(event) { for (const fn of events[event.type] || []) fn(event); }
 };
@@ -40,6 +42,18 @@ vm.runInContext(read("convexClient.js"), sandbox);
   assert.equal(sandbox.PNC_CLERK.clerk.user.id, "user_first", "the Clerk SDK is exposed on the bridge");
   assert.equal(typeof client.tokenCallback, "function", "Convex receives a token getter");
   assert.equal(await client.tokenCallback(), "example-jwt", "Clerk template token is passed through");
+  client.authChange(true);
+  let finishSnapshot;
+  client.query = () => new Promise(resolve => { finishSnapshot = resolve; });
+  const beforeClear = cleared, beforeApply = applied;
+  const pendingSync = sandbox.PNC_CONVEX.syncBootstrap();
+  await new Promise(resolve => setImmediate(resolve));
+  client.authChange(false);
+  assert.equal(cleared,beforeClear+1,"expired backend auth clears private browser records");
+  finishSnapshot({version:1,owners:[{id:'private'}],admins:[]});
+  assert.equal(await pendingSync,false,"a snapshot arriving after auth loss is discarded");
+  assert.equal(applied,beforeApply,"stale private records cannot return to the browser cache");
+  client.query = async () => ({version:1,owners:[],admins:[]});
   await sandbox.PNC_CLERK.signOut();
   assert.equal(sandbox.PNC_CLERK.currentOwner(), null, "sign-out clears identity");
   assert.equal(await client.tokenCallback(), null, "no Clerk session means no token");

@@ -64,7 +64,15 @@
   function demoRequested() {
     if (productionHost()) return false;
     try {
-      if (global.location && new URLSearchParams(global.location.search).get("demo") === "1") return true;
+      const requested = global.location && new URLSearchParams(global.location.search).get("demo");
+      if (requested === "1") {
+        global.sessionStorage?.setItem?.(DEMO_FLAG, "1");
+        return true;
+      }
+      if (requested === "0") {
+        global.sessionStorage?.removeItem?.(DEMO_FLAG);
+        return false;
+      }
       if (global.sessionStorage && global.sessionStorage.getItem(DEMO_FLAG) === "1") return true;
     } catch {}
     return false;
@@ -172,7 +180,7 @@
          key. Clerk is not initialised; the auth bridge below
          short-circuits and the local store provides demo identity.
          No Clerk session is ever minted here. */
-      if (!configured() || demoRequested()) {
+      if (demoRequested() || !configured()) {
         if (productionHost()) {
           api.unavailable = true;
           api.loaded = true;

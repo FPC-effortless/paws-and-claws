@@ -69,10 +69,9 @@
 
     const top = Math.max(1, ...catalog().map(p => p.price));
     const range = $('#priceRange');
-    if (range) { range.max = String(top); range.value = String(top); }
-    state.maxPrice = null;
+    if (range) { range.max = String(Math.max(top, state.maxPrice || 0)); range.value = String(state.maxPrice ?? top); }
     const readout = $('#priceReadout');
-    if (readout) readout.textContent = 'Any price';
+    if (readout) readout.textContent = state.maxPrice === null ? 'Any price' : 'Up to ' + D.money(state.maxPrice);
   }
 
   function syncFacets() {
@@ -102,7 +101,7 @@
   function card(p) {
     return '<article class="product-card" data-id="' + p.id + '">' +
       '<div class="product-art">' +
-        '<span class="product-emoji" aria-hidden="true">' + p.icon + '</span>' +
+        '<span class="product-emoji" aria-hidden="true">' + (D.icon ? D.icon(p.icon) : D.esc(p.icon)) + '</span>' +
         badge(p) +
       '</div>' +
       '<div class="product-body">' +
@@ -111,7 +110,7 @@
         '<p>' + D.esc(p.desc || '') + '</p>' +
         '<div class="product-meta">' +
           ((p.species || []).length ? '<span>' + D.speciesIcon(p.species[0]) + ' ' + D.esc(p.species.join(', ')) + '</span>' : '') +
-          '<span>' + (p.age || []).map(D.titleCase).join(', ') + '</span>' +
+          '<span>' + D.esc((p.age || []).map(D.titleCase).join(', ')) + '</span>' +
           ((p.size || []).length ? '<span>Size ' + D.esc(p.size.join('/')) + '</span>' : '') +
         '</div>' +
         '<div class="price-row">' +
@@ -181,7 +180,7 @@
     if (note) {
       note.textContent = D.productionMode && D.productionMode()
         ? 'Online ordering and fulfillment are not available yet.'
-        : (v === 'pickup' ? 'Demo pickup at 142 Alder Brook Lane' : 'Demo delivery within Riverton');
+        : (v === 'pickup' ? 'Demo pickup at our Amasoma store' : 'Demo delivery');
     }
     PNC.toast((D.productionMode && D.productionMode()) ? 'Online ordering is not available yet' : (v === 'pickup' ? 'Demo pickup selected' : 'Demo delivery selected'));
   }
@@ -220,6 +219,7 @@
 
   /* ---------- init ---------- */
   function init() {
+    window.addEventListener('pnc:data-ready', function () { buildFacets(); render(); });
     $('#toggleFilters').addEventListener('click', function () {
       const open = $('#shopFilters').classList.toggle('filters-open');
       this.setAttribute('aria-expanded', String(open));
@@ -228,13 +228,13 @@
     buildFacets();
     render();
 
-    $$('.f-chip').forEach(function (b) {
-      b.addEventListener('click', function () {
+    document.addEventListener('click', function (e) {
+        const b = e.target.closest('.f-chip');
+        if (!b) return;
         const set = state[b.dataset.f];
         if (!set) return;
         if (set.has(b.dataset.v)) set.delete(b.dataset.v); else set.add(b.dataset.v);
         render();
-      });
     });
 
     $('#activeChips').addEventListener('click', function (e) {
@@ -291,7 +291,7 @@
     const m = member();
     if (D.productionMode && D.productionMode()) {
       const lead = $('#shopLead');
-      if (lead) lead.textContent = 'Browse products and check local availability. Online checkout is not available yet.';
+      if (lead) lead.textContent = 'Browse our range, then visit our Amasoma store. Pay in naira by cash or bank transfer; no account required. Online checkout is not available yet.';
     }
     if (m) {
       const lead = $('#shopLead');

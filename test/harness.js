@@ -58,8 +58,9 @@ const slots = slotsForToday(svcToday.id);
 assert(slots.length > 0, "slotsFor " + svcToday.id + " today -> " + slots.length + " slots");
 const open = slots.filter((s) => s.available);
 assert(open.length > 0, "at least one open slot today");
-const det = D.slotsFor(D.db, "sv-haircut", D.addDays(2));
-assert(det.some((s) => s.providerId === "Rosa"), "haircut slots include Rosa on +2d");
+const det = Array.from({length: 7}, (_, i) => D.slotsFor(D.db, "sv-haircut", D.addDays(i + 1)))
+  .find(day => day.some(s => s.providerId === "Rosa")) || [];
+assert(det.some((s) => s.providerId === "Rosa"), "haircut slots include Rosa on a working day this week");
 
 /* vaccines gate booking */
 const charlie = D.byId(D.db.pets, "pt-1");

@@ -13,7 +13,7 @@
   function esc(s) { return PNC ? PNC.esc(s) : D.esc(s); }
 
   function telHref(num) {
-    return "tel:+1" + String(num || "").replace(/[^0-9]/g, "");
+    return "tel:" + String(num || "").replace(/[^+0-9]/g, "");
   }
 
   /* ------------------------------ CMS -------------------------------- */
@@ -22,23 +22,24 @@
     if (!cms) return;
 
     const hot = $("#emergHotline");
-    if (hot) hot.textContent = "Call " + cms.emergencyHotline;
+    if (hot) hot.textContent = cms.emergencyHotline ? "Call " + cms.emergencyHotline : "Need urgent veterinary care?";
     const note = $("#emergNote");
     if (note) note.textContent = cms.emergencyNote;
     const call = $("#emergCall");
     if (call) {
+      call.hidden = !cms.emergencyHotline;
       call.href = telHref(cms.emergencyHotline);
       call.innerHTML = "&#128222; Call " + esc(cms.emergencyHotline);
     }
     const h2 = $("#cmsHotline2");
-    if (h2) h2.textContent = cms.emergencyHotline + " · 24/7";
+    if (h2) h2.textContent = cms.emergencyHotline || "Please contact a local veterinary clinic";
 
     const addr = $("#cmsAddress");
     if (addr) addr.textContent = cms.address;
     const ph = $("#cmsPhone");
-    if (ph) ph.textContent = cms.phone;
+    if (ph) ph.textContent = cms.phone || "Phone number coming soon";
     const em = $("#cmsEmail");
-    if (em) em.textContent = cms.email;
+    if (em) em.textContent = cms.email || "Use the contact form below";
 
     document.title = "Contact & Emergency — " + cms.siteName;
   }
@@ -48,24 +49,31 @@
     const cms = D.db.cms;
     const body = $("#hoursBody");
     if (!body || !cms) return;
+    const hours = Array.isArray(cms.hours) ? cms.hours : [];
+    const status = $("#openNow");
+    if (!hours.length) {
+      body.innerHTML = '<tr><td colspan="2">Opening hours will be confirmed.</td></tr>';
+      if (status) status.textContent = 'Please contact the team before visiting.';
+      return;
+    }
 
-    const now = new Date();
+    const now = new Date(new Date().toLocaleString("en-US", {timeZone:"Africa/Lagos"}));
     const jsDow = now.getDay(); /* 0 = Sun */
     const names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     const todayName = names[jsDow];
-    const rows = cms.hours.slice(1).concat(cms.hours.slice(0, 1)); /* Mon..Sun */
+    const rows = hours;
 
     body.innerHTML = rows.map(function (h) {
       const isToday = h.day === todayName;
       return '<tr class="' + (isToday ? "is-today" : "") + '">' +
         "<th scope=\"row\">" + esc(h.day) + (isToday ? " <span class=\"tag tag--yellow\">Today</span>" : "") + "</th>" +
-        "<td>" + esc(h.open) + " &ndash; " + esc(h.close) + "</td>" +
+        "<td>" + (h.open === "Closed" ? "Closed" : esc(h.open) + " &ndash; " + esc(h.close)) + "</td>" +
       "</tr>";
     }).join("");
 
-    const today = cms.hours.find(function (h) { return h.day === todayName; });
-    const status = $("#openNow");
+    const today = hours.find(function (h) { return h.day === todayName; });
     if (!today) return;
+    if (today.open === "Closed") { status.textContent = "Closed today"; return; }
     const mins = now.getHours() + now.getMinutes() / 60;
     const openM = toMin(today.open);
     const closeM = toMin(today.close);
@@ -75,8 +83,8 @@
       status.innerHTML = '<span style="color:var(--ink-soft);font-weight:700">&#128992; Closed</span> — opens at ' + esc(today.open);
     } else {
       const tmr = names[(jsDow + 1) % 7];
-      const tmrRow = cms.hours.find(function (h) { return h.day === tmr; });
-      status.innerHTML = '<span style="color:var(--danger);font-weight:700">&#128308; Closed</span> — opens ' + esc(tmr) + " at " + esc(tmrRow ? tmrRow.open : "9:00 AM");
+      const tmrRow = hours.find(function (h) { return h.day === tmr; });
+      status.innerHTML = '<span style="color:var(--danger);font-weight:700">&#128308; Closed</span>' + (tmrRow && tmrRow.open !== "Closed" ? ' — opens ' + esc(tmr) + " at " + esc(tmrRow.open) : ' — see opening hours below');
     }
   }
 
@@ -165,6 +173,7 @@
     renderCMS();
     renderHours();
     mountForm();
+    window.addEventListener("pnc:data-ready", function () { renderCMS(); renderHours(); });
   }
 
   if (document.readyState === "loading") {

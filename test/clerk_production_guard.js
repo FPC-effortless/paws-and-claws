@@ -7,8 +7,8 @@ const vm = require("vm");
 const dispatched = [];
 const sandbox = {
   localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-  sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-  location: { hostname: "paws.example.com", search: "" },
+  sessionStorage: { getItem: () => '1', setItem() {}, removeItem() {} },
+  location: { hostname: "paws.example.com", search: "?demo=1" },
   document: {
     createElement() { throw new Error("network disabled in test"); },
     head: { appendChild() {} },

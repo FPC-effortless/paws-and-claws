@@ -116,7 +116,7 @@
     const vax = l.health || [];
     return '<article class="pet-card" data-id="' + l.id + '">' +
       '<div class="pet-art">' +
-        '<span class="pet-emoji" aria-hidden="true">' + l.icon + '</span>' +
+        '<span class="pet-emoji" aria-hidden="true">' + D.icon(l.icon) + '</span>' +
         statusPill(l) +
         '<span class="pet-price">' + D.money(l.price) + '</span>' +
       '</div>' +
@@ -226,20 +226,22 @@
     const email = $('#inqEmail').value.trim();
     if (name.length < 2) { PNC.toast('Please tell us your name', 'err'); $('#inqName').focus(); return; }
     if (!D.isValidEmail(email)) { PNC.toast('Enter a valid email address', 'err'); $('#inqEmail').focus(); return; }
-    const res = await Promise.resolve(D.submitInquiry(inqId, $('#inqMsg').value.trim()));
+    const button = e.target.querySelector('button[type="submit"]');
+    if (button.disabled) return;
+    button.disabled = true;
+    let res;
+    try { res = await Promise.resolve(D.submitInquiry(inqId, $('#inqMsg').value.trim(), { name, email })); }
+    finally { button.disabled = false; }
     if (res.error) { PNC.toast(res.error, 'err'); return; }
     const l = listings().find(x => x.id === inqId);
     PNC.closeModal();
-    PNC.toast('Inquiry ' + res.ref + ' sent — check your inbox');
-    if (member()) {
-      D.message(member().id, 'email', 'Inquiry ' + res.ref + ' about ' + l.name,
-        'Your inquiry about ' + l.name + ' has been recorded for the listing provider.', 'out');
-    }
+    PNC.toast('Inquiry ' + res.ref + ' saved for the team. They can reply using your contact details.');
     inqId = null;
   }
 
   /* ---------- init ---------- */
   function init() {
+    window.addEventListener('pnc:data-ready', function () { renderFacts(); render(); });
     buildFacets();
     renderFacts();
     render();

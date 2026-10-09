@@ -167,7 +167,7 @@
             PLAN_DISCOUNT[m.plan] + ' off everything</strong><small>Applied automatically at checkout</small></div></div>' +
           '<div class="perk"><span class="perk-ico">&#128666;</span><div><strong>' +
             'Free delivery, no minimum' +
-            '</strong><small>Within Riverton and nearby</small></div></div>' +
+            '</strong><small>Demo delivery only</small></div></div>' +
           '<div class="perk"><span class="perk-ico">&#129389;</span><div><strong>Birthday treat box</strong>' +
             '<small>Every pet, every year</small></div></div>' +
         '</div>' +
@@ -394,7 +394,7 @@
   function orderRow(o) {
     const lines = (o.items || []).map(function (i) {
       const p = D.PRODUCT_BY_ID[i.productId];
-      return '<div class="ord-line"><span>' + D.esc(p ? p.name : i.productId) +
+      return '<div class="ord-line"><span>' + D.esc(i.label || (p ? p.name : i.productId)) +
         '</span><span class="muted small">&times;' + i.qty + '</span><span>' +
         D.money(i.price * i.qty) + '</span></div>';
     }).join('');
@@ -402,7 +402,7 @@
     return '<div class="order-card">' +
       '<div class="order-head">' +
         '<div><b>' + D.esc(o.id) + '</b><span class="muted small"> &middot; ' +
-          D.fmtDate(o.placedAt) + ' &middot; ' + D.titleCase(o.fulfillment) + '</span></div>' +
+          D.fmtDate(o.placedAt) + ' &middot; ' + (o.fulfillment === "pos" ? "In-store" : D.titleCase(o.fulfillment)) + '</span></div>' +
         '<span class="status-pill ' + (stage === 'done' || stage === 'delivered' ? 'available' :
           stage === 'cancelled' ? 'sold' : 'reserved') + '">' + D.titleCase(stage) + '</span>' +
       '</div>' +

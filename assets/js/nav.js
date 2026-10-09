@@ -91,7 +91,7 @@
             '<div class="cart-foot" id="cartDrawer" hidden>' +
               '<div class="row" id="cartSubtotal" hidden></div>' +
               '<div class="row" id="cartDiscount" hidden></div>' +
-              '<div class="row"><span>Total</span><span id="cartTotal">$0.00</span></div>' +
+              '<div class="row"><span>Total</span><span id="cartTotal">&#8358;0.00</span></div>' +
               '<div class="row"><span>Delivery</span><span>Calculated at checkout</span></div>' +
               '<button class="btn btn-primary btn-block" id="cartCheckout">Proceed to checkout</button>' +
               '<p class="cart-note">Demo store — no payment is processed.</p>' +
@@ -111,8 +111,7 @@
       '<footer class="site-footer"><div class="wrap"><div class="footer-grid">' +
         "<div>" +
           '<div class="footer-brand">' + mark + "Paws &amp; Claws</div>" +
-          "<p>Your neighborhood pet shop since 2011. Family-owned, pet-obsessed, and always happy to see you.</p>" +
-          '<div class="socials"><a href="#" aria-label="Instagram">' + g + '</a><a href="#" aria-label="Facebook">' + f + '</a><a href="#" aria-label="TikTok">' + t + "</a></div>" +
+          "<p>Visit our pet store in Amasoma for supplies and care. Plan appointments and contact our team online.</p>" +
         "</div>" +
         "<div><h4>Shop</h4><ul>" +
           '<li><a href="shop.html?cat=Food">Food &amp; Treats</a></li>' +
@@ -228,19 +227,25 @@
     if (btn) btn.setAttribute("aria-expanded", "false");
   }
 
+  function renderCmsChrome() {
+    const header = $(".site-header"), cms = D.db.cms;
+    if (!header || !cms) return;
+    let banner = $(".site-banner");
+    if (cms.banner) {
+      if (!banner) { banner = document.createElement("div"); banner.className = "site-banner"; header.before(banner); }
+      banner.textContent = cms.banner;
+    } else if (banner) banner.remove();
+    const visit = $("#footerVisit ul");
+    if (visit) visit.innerHTML = "<li>" + D.esc(cms.address || "").replace(/, /g, "<br>") + "</li>" +
+      (Array.isArray(cms.hours) && cms.hours.length ? cms.hours.map(h =>
+        "<li>" + D.esc(String(h.day).slice(0, 3)) + ": " + (h.open === "Closed" ? "Closed" : D.esc(h.open) + " – " + D.esc(h.close)) + "</li>").join("") : "<li>Opening hours to be confirmed</li>") +
+      (cms.phone ? "<li>" + D.esc(cms.phone) + "</li>" : "");
+  }
+
   /* ---------- mount ---------- */
   function mount() {
     const header = $(".site-header");
     if (!header) return;
-
-    /* banner (CMS controlled) */
-    const cms = D.db.cms;
-    if (cms && cms.banner) {
-      const b = document.createElement("div");
-      b.className = "site-banner";
-      b.innerHTML = D.esc(cms.banner);
-      header.parentNode.insertBefore(b, header);
-    }
 
     header.innerHTML = navHTML();
 
@@ -248,16 +253,7 @@
     if (!$("#cartModal")) document.body.insertAdjacentHTML("beforeend", cartModalHTML());
     if (!$(".site-footer")) document.body.insertAdjacentHTML("beforeend", footerHTML());
 
-    /* footer "visit us" from CMS */
-    const fu = $("#footerVisit ul");
-    if (fu && cms) {
-      fu.innerHTML =
-        "<li>" + D.esc(cms.address || "").replace(/, /g, "<br>") + "</li>" +
-        cms.hours.slice(0, 6).map(function (h) {
-          return "<li>" + D.esc(h.day.slice(0, 3)) + ": " + D.esc(h.open) + " – " + D.esc(h.close) + "</li>";
-        }).join("") +
-        "<li>" + D.esc(cms.phone || "") + "</li>";
-    }
+    renderCmsChrome();
 
     const cartBtn = $("#cartBtn");
     if (cartBtn) cartBtn.addEventListener("click", function () { PNC.openModal("cartModal"); });
@@ -308,7 +304,7 @@
 
     /* sync member zone: prefer the new DB session */
     syncMemberZone();
-    window.addEventListener("pnc:data-ready", function () { syncMemberZone(); renderBell(); });
+    window.addEventListener("pnc:data-ready", function () { syncMemberZone(); renderBell(); renderCmsChrome(); });
     window.addEventListener("pnc:auth", function () { syncMemberZone(); renderBell(); });
     window.addEventListener("storage", function () { renderBell(); syncMemberZone(); });
   }

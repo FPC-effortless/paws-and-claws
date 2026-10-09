@@ -282,9 +282,6 @@
           "<b>" + x.ico + " " + esc(x.t) + "</b>" +
           "<p style='margin:3px 0 0'>" + esc(x.s) + "</p></button>";
       }).join("") : emptyState("&#9989;", "All clear", "Nothing needs your attention right now.");
-      $$("[data-goto]", ah).forEach(function (b) {
-        b.addEventListener("click", function () { go(b.dataset.goto); });
-      });
     }
 
     /* revenue breakdown */
@@ -330,6 +327,7 @@
   function renderBookings() {
     const host = $("#bkTable");
     if (!host) return;
+    window.PNC_STORE.renderBookingForm();
     const list = bookingRows();
 
     const fh = $("#bkFilters");
@@ -371,7 +369,10 @@
           '<td class="num">' + money(b.paid) + " / " + money(b.total) + "</td>" +
           '<td><div style="display:flex;gap:5px;flex-wrap:wrap">' +
             (canManage && ["pending", "confirmed"].includes(b.status)
-              ? '<button class="mini-btn primary" data-bkdone="' + b.id + '">Complete</button>' : "") +
+              ? '<button class="mini-btn primary" data-bkdone="' + b.id + '">Complete</button><button class="mini-btn" data-bkreschedule="' + b.id + '">Reschedule</button>' : "") +
+            (canManage && b.status === "pending" ? '<button class="mini-btn" data-bkconfirm="' + b.id + '">Confirm</button>' : '') +
+            (allowed("payments.take") && canManage && !["cancelled", "no-show"].includes(b.status) && b.paid < b.total
+              ? '<button class="mini-btn" data-bkpay="' + esc(b.id) + '">Record payment</button>' : "") +
             (allowed("bookings.notes")
               ? '<button class="mini-btn warn" data-bknote="' + b.id + '">Note</button>' : "") +
             (canManage && ["pending", "confirmed"].includes(b.status)
@@ -406,6 +407,27 @@
       });
     });
 
+    $$("[data-bkconfirm]").forEach(function (button) {
+      button.addEventListener("click", async function () {
+        const r = await D.setBookingStatus(button.dataset.bkconfirm, "confirmed");
+        if (r.error) return toast(r.error, "err");
+        toast("Booking confirmed"); renderBookings();
+      });
+    });
+    $$("[data-bkreschedule]").forEach(function (button) {
+      button.addEventListener("click", async function () {
+        const booking = D.byId(D.db.bookings, button.dataset.bkreschedule);
+        if (!booking) return;
+        const date = window.prompt("New date (YYYY-MM-DD):", booking.date);
+        if (!date) return;
+        const time = window.prompt("New time (e.g. 9, 9.5, 14):", String(booking.hour));
+        if (time === null) return;
+        const r = await D.rescheduleBooking(booking.id, date, Number(time));
+        if (r.error) return toast(r.error, "err");
+        toast("Booking rescheduled"); renderBookings();
+      });
+    });
+
     renderWaitlist();
   }
 
@@ -424,7 +446,7 @@
       const pet = petOfId(w.petId) || {};
       return '<div class="kan-card">' +
         '<div class="row"><b>' + esc(pet.petName || "—") + " · " + esc(svcOfId(w.serviceId).name) + "</b>" +
-        '<button class="mini-btn danger" data-wlrm="' + w.id + '">Clear</button></div>' +
+        (allowed("bookings.manage") ? '<button class="mini-btn danger" data-wlrm="' + w.id + '">Clear</button>' : '') + '</div>' +
         "<p>" + esc(own.fullName || "—") + " · " + esc(providerName(w.providerId)) + "</p>" +
         (w.note ? "<p style='margin-top:3px'>\"" + esc(w.note) + "\"</p>" : "") +
       "</div>";
@@ -522,6 +544,7 @@
                     : "") + "</td></tr>";
               }).join("") + "</tbody></table>"
             : '<p class="hint" style="margin:8px 0 0">No vaccine records on file.</p>') +
+          (allowed("crm.edit") ? '<button class="mini-btn" data-store-vaccine="' + esc(p.id) + '">Add vaccine record</button>' : "") +
           (pend ? '<p class="hint" style="margin:8px 0 0;color:var(--yellow)">' + pend + " pending record(s)</p>" : "") +
         "</div></div>";
     }).join("") + "</div>";
@@ -553,9 +576,10 @@
     const edit = allowed("crm.edit");
     host.innerHTML = '<h2>' + (o ? esc(o.fullName) : "New customer") + '</h2>' +
       (edit ? '<form id="ownerForm"><div class="field"><label for="ownerName">Full name</label><input class="input" id="ownerName" required minlength="2" value="' + esc(o?.fullName || "") + '"></div>' +
-      '<div class="field"><label for="ownerEmail">Email</label><input class="input" id="ownerEmail" type="email" required value="' + esc(o?.email || "") + '"></div>' +
+      '<div class="field"><label for="ownerEmail">Email (optional for walk-ins)</label><input class="input" id="ownerEmail" type="email" value="' + esc(o?.email || "") + '"></div>' +
       '<div class="field"><label for="ownerPhone">Phone</label><input class="input" id="ownerPhone" type="tel" value="' + esc(o?.phone || "") + '"></div>' +
       '<button class="btn btn-teal" type="submit">Save customer</button><p class="hint">Creates a customer record. Account access uses the customer’s own sign-in.</p></form>' : '') +
+      (o && edit ? '<form id="storePetForm"><h3>Register a pet for this customer</h3><input type="hidden" name="ownerId" value="' + esc(o.id) + '"><div class="field"><label for="storePetName">Pet name</label><input class="input" id="storePetName" name="petName" required maxlength="120"></div><div class="field"><label for="storePetSpecies">Species</label><select class="input" id="storePetSpecies" name="species">' + D.SPECIES.map(x => '<option>' + esc(x) + '</option>').join('') + '</select></div><div class="field"><label for="storePetBreed">Breed</label><input class="input" id="storePetBreed" name="breed"></div><button class="btn btn-teal" type="submit">Save pet</button><p role="status"></p></form>' : '') +
       (o && allowed("messages.send") ? '<form id="ownerMessageForm"><h3>Send a portal message</h3><p class="hint">Delivered to the member inbox; no email or SMS is sent.</p>' +
       '<div class="field"><label for="messageSubject">Subject</label><input class="input" id="messageSubject" required maxlength="200"></div>' +
       '<div class="field"><label for="messageBody">Message</label><textarea class="input" id="messageBody" required maxlength="4000"></textarea></div>' +
@@ -585,85 +609,8 @@
   }
 
   /* ============================== POS =============================== */
-  let posLines = [{ label: "", amount: "" }];
-
-  function renderPOS() {
-    const sel = $("#posOwner");
-    if (sel) {
-      const cur = sel.value;
-      sel.innerHTML = D.db.owners.map(function (o) {
-        return '<option value="' + o.id + '">' + esc(o.fullName) + " — " + esc(o.email) + "</option>";
-      }).join("");
-      if (cur && D.byId(D.db.owners, cur)) sel.value = cur;
-    }
-    renderPosLines();
-    renderOrders();
-  }
-
-  function renderPosLines() {
-    const host = $("#posLines");
-    if (!host) return;
-    host.innerHTML = posLines.map(function (l, i) {
-      return '<div class="pos-line">' +
-        '<input class="input" placeholder="Item / service" data-pl="' + i + '" data-k="label" value="' + esc(l.label) + '">' +
-        '<input class="input" placeholder="0.00" type="number" min="0" step="0.01" data-pl="' + i + '" data-k="amount" value="' + esc(l.amount) + '">' +
-        '<button type="button" class="mini-btn danger" data-plrm="' + i + '" aria-label="Remove line">&#10005;</button>' +
-      "</div>";
-    }).join("");
-    $$("[data-pl]", host).forEach(function (inp) {
-      inp.addEventListener("input", function () {
-        const l = posLines[Number(inp.dataset.pl)];
-        l[inp.dataset.k] = inp.dataset.k === "amount" ? inp.value : inp.value;
-        sumPos();
-      });
-    });
-    $$("[data-plrm]", host).forEach(function (b) {
-      b.addEventListener("click", function () {
-        posLines.splice(Number(b.dataset.plrm), 1);
-        if (!posLines.length) posLines.push({ label: "", amount: "" });
-        renderPosLines();
-        sumPos();
-      });
-    });
-    sumPos();
-  }
-
-  function sumPos() {
-    const total = posLines.reduce(function (n, l) { return n + (Number(l.amount) || 0); }, 0);
-    const t = $("#posTotal");
-    if (t) t.textContent = money(total);
-  }
-
-  function mountPOS() {
-    const add = $("#posAddLine");
-    if (add) add.addEventListener("click", function () {
-      posLines.push({ label: "", amount: "" });
-      renderPosLines();
-    });
-
-    const form = $("#posForm");
-    if (form) form.addEventListener("submit", async function (e) {
-      e.preventDefault();
-      const ownerId = $("#posOwner").value;
-      const lines = posLines.filter(function (l) { return Number(l.amount) > 0; });
-      if (!lines.length) {
-        $("#posMsg").style.color = "var(--danger)";
-        $("#posMsg").textContent = "Add at least one line with an amount.";
-        return toast("Add at least one line with an amount", "err");
-      }
-      const r = await Promise.resolve(D.posCharge(ownerId, lines, $("#posMethod").value));
-      if (r.error) {
-        $("#posMsg").style.color = "var(--danger)";
-        $("#posMsg").textContent = r.error;
-        return toast(r.error, "err");
-      }
-      $("#posMsg").style.color = "var(--ok)";
-      $("#posMsg").textContent = "Recorded payment " + money(r.total) + " — order " + r.order.id;
-      toast("Recorded payment " + money(r.total));
-      posLines = [{ label: "", amount: "" }];
-      renderPOS();
-    });
-  }
+  function renderPOS() { window.PNC_STORE.renderPOS(); renderOrders(); }
+  function mountPOS() { window.PNC_STORE.mountPOS(); }
 
   function renderOrders() {
     const host = $("#orderHost");
@@ -681,20 +628,23 @@
       const own = ownerOfId(o.ownerId) || {};
       const items = (o.items || []).map(function (it) {
         const p = D.PRODUCT_BY_ID[it.productId];
-        return esc(p ? p.name : it.productId) + " ×" + it.qty;
+        return esc(it.label || (p ? p.name : it.productId)) + " ×" + it.qty;
       }).join(", ");
       const stage = o.stage || (o.status === "delivered" ? "done" : "pending");
       const idx = STAGES.indexOf(stage);
       return '<div class="order-card">' +
         '<div class="order-head"><span><b class="oid">' + esc(o.id) + "</b> " +
-          '<span class="odate">' + esc(own.fullName || "—") + " · " + D.fmtDate(o.placedAt) + "</span></span>" +
+          '<span class="odate">' + esc(own.fullName || "Walk-in customer") + " · " + (o.fulfillment === "pos" ? "In-store · " : "Online · ") + D.fmtDate(o.placedAt) + "</span></span>" +
           pill(o.status === "delivered" ? "delivered" : o.status, o.status === "cancelled" ? "danger" : "") + "</div>" +
         '<div class="order-line"><span class="thumb">&#128230;</span><span>' + items + "</span></div>" +
         '<div class="order-foot"><span class="tot">' + money(o.total) + "</span>" +
         '<span style="display:flex;gap:5px;flex-wrap:wrap">' +
-          (idx > 0 && o.status !== "cancelled"
+          (o.fulfillment === 'pos' ? '<button class="mini-btn" data-receipt="' + esc(o.id) + '">Receipt</button>' : '') +
+          (o.fulfillment === 'pos' && o.paid > 0 && allowed("payments.refund")
+            ? '<button class="mini-btn danger" data-store-refund="' + esc(o.id) + '">Record refund</button>' : '') +
+          (idx > 0 && !["cancelled", "refunded"].includes(o.status) && o.stage !== "done"
             ? '<button class="mini-btn" data-ostage="' + o.id + ":" + STAGES[idx - 1] + '">&larr; ' + esc(STAGES[idx - 1]) + "</button>" : "") +
-          (idx < STAGES.length - 1 && o.status !== "cancelled"
+          (idx >= 0 && idx < STAGES.length - 1 && !["cancelled", "refunded"].includes(o.status) && o.stage !== "done"
             ? '<button class="mini-btn primary" data-ostage="' + o.id + ":" + STAGES[idx + 1] + '">' + esc(STAGES[idx + 1]) + " &rarr;</button>" : "") +
           (allowed("payments.refund") && !production && o.status !== "cancelled" && o.status !== "delivered"
             ? '<button class="mini-btn danger" data-orefund="' + o.id + '">Refund</button>' : "") +
@@ -790,7 +740,7 @@
     }
     host.innerHTML = '<div class="pet-tile-grid">' + list.map(function (l) {
       return '<div class="pet-tile">' +
-        '<div class="pet-tile-art">' + l.icon + "</div>" +
+        '<div class="pet-tile-art">' + D.icon(l.icon) + "</div>" +
         '<div class="pet-tile-body">' +
           "<h3>" + esc(l.name) + ' <span class="sub">' + esc(l.breed) + "</span></h3>" +
           '<div class="meta" style="font-size:.8rem;color:var(--ink-soft)">' +
@@ -813,6 +763,14 @@
         render();
       });
     });
+    const inquiries = D.db.inquiries || [];
+    host.insertAdjacentHTML("beforeend", '<h3>Pet inquiries</h3>' + (inquiries.length ? inquiries.map(function (i) {
+      const owner = ownerOfId(i.ownerId) || {};
+      const listing = D.byId(list, i.listingId) || {};
+      return '<article class="kan-card"><b>' + esc(i.ref) + ' · ' + esc(listing.name || i.listingId) + '</b><p>' +
+        esc(i.name || owner.fullName || 'Guest') + ' · ' + esc(i.email || owner.email || 'Contact details unavailable') +
+        '</p><p>' + esc(i.message) + '</p></article>';
+    }).join('') : '<p class="hint">No pet inquiries yet.</p>'));
   }
 
   /* ============================== CMS ============================== */
@@ -828,6 +786,22 @@
     set("#cms-email", cms.email);
     set("#cms-addr", cms.address);
     set("#cms-enote", cms.emergencyNote);
+    const hoursHost = $("#cmsHours");
+    if (hoursHost) {
+      const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+      const to24 = function (value) {
+        const parts = String(value || "").match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+        if (!parts) return "";
+        const hour = Number(parts[1]) % 12 + (parts[3].toUpperCase() === "PM" ? 12 : 0);
+        return String(hour).padStart(2, "0") + ":" + parts[2];
+      };
+      hoursHost.innerHTML = days.map(function (day) {
+        const row = (cms.hours || []).find(h => h.day === day) || {};
+        return '<div class="store-hour-row" data-hour-day="' + day + '"><b>' + day + '</b>' +
+          '<label>Opens<input class="input" type="time" data-hour-open value="' + esc(to24(row.open)) + '"></label>' +
+          '<label>Closes<input class="input" type="time" data-hour-close value="' + esc(to24(row.close)) + '"></label></div>';
+      }).join("");
+    }
 
     const pick = $("#svcPick");
     if (pick) {
@@ -860,6 +834,20 @@
     if (form) form.addEventListener("submit", async function (e) {
       e.preventDefault();
       const fd = new FormData(form);
+      const asClock = function (value) {
+        const parts = String(value).split(":").map(Number);
+        return String(parts[0] % 12 || 12) + ":" + String(parts[1]).padStart(2, "0") + (parts[0] >= 12 ? " PM" : " AM");
+      };
+      const hours = [];
+      let configured = false;
+      for (const row of $$("[data-hour-day]", form)) {
+        const open = row.querySelector("[data-hour-open]").value;
+        const close = row.querySelector("[data-hour-close]").value;
+        if (!!open !== !!close) return toast("Enter both opening and closing times for " + row.dataset.hourDay + ".", "err");
+        if (open && close && close <= open) return toast("Closing time must be after opening time for " + row.dataset.hourDay + ".", "err");
+        configured ||= !!open;
+        hours.push({day: row.dataset.hourDay, open: open ? asClock(open) : "Closed", close: close ? asClock(close) : "Closed"});
+      }
       const res = await Promise.resolve(D.updateCMS({
         banner: String(fd.get("banner") || "").trim(),
         heroTitle: String(fd.get("heroTitle") || "").trim(),
@@ -868,7 +856,8 @@
         phone: String(fd.get("phone") || "").trim(),
         email: String(fd.get("email") || "").trim(),
         address: String(fd.get("address") || "").trim(),
-        emergencyNote: String(fd.get("emergencyNote") || "").trim()
+        emergencyNote: String(fd.get("emergencyNote") || "").trim(),
+        hours: configured ? hours : []
       }));
       if (res && res.error) return toast(res.error, "err");
       $("#cmsMsg").style.color = "var(--ok)";
@@ -929,7 +918,7 @@
     host.innerHTML = providers.map(function (p) {
       const mine = leave.filter(function (l) { return l.providerId === p.id; });
       return '<div class="kan-card">' +
-        '<div class="row"><b>' + p.icon + " " + esc(p.name) + "</b>" +
+        '<div class="row"><b>' + D.icon(p.icon) + " " + esc(p.name) + "</b>" +
           pill(p.role, "primary") + "</div>" +
         "<p>" + esc(p.title) + " · " + D.fmtTime(p.start) + "–" + D.fmtTime(p.end) + "</p>" +
         (mine.length
@@ -1065,6 +1054,12 @@
   }
 
   function mountShell() {
+    document.addEventListener("click", function (e) {
+      const shortcut = e.target.closest("[data-goto]");
+      if (!shortcut) return;
+      e.preventDefault();
+      go(shortcut.dataset.goto);
+    });
     const t = $("#sideToggle");
     if (t) t.addEventListener("click", function () {
       $("#adminSide").classList.toggle("open");
@@ -1080,7 +1075,13 @@
       render();
     });
     const dr = $("#dashRefresh");
-    if (dr) dr.addEventListener("click", function () { render(); toast("Dashboard refreshed"); });
+    if (dr) dr.addEventListener("click", async function () {
+      dr.disabled = true;
+      try {
+        if (D.productionMode() && !(await window.PNC_CONVEX?.syncBootstrap())) return toast("Could not refresh secure data. Please try again.", "err");
+        render(); toast("Dashboard refreshed");
+      } finally { dr.disabled = false; }
+    });
     const nob = $("#newOwnerBtn");
     if (nob) nob.addEventListener("click", function () { openOwner(null); });
     document.addEventListener("submit", async function (e) {
@@ -1117,6 +1118,7 @@
     mountPOS();
     mountCMS();
     mountSearch();
+    window.addEventListener("pnc:store-saved", render);
 
     /* Clerk loads asynchronously from a CDN; re-mount the gate and
        re-evaluate the staff session once it reports ready. */

@@ -9,6 +9,7 @@ const vaccine = v.object({
 });
 
 export default defineSchema({
+  submissionLimits: defineTable({ key: v.string(), windowStart: v.number(), count: v.number() }).index("by_key", ["key"]),
   owners: defineTable({
     id: v.optional(v.string()),
     clerkId: v.optional(v.string()),
@@ -58,6 +59,7 @@ export default defineSchema({
     deposit: v.number(),
     total: v.number(),
     paid: v.number(),
+    storePayments: v.optional(v.array(v.object({requestId: v.string(), amount: v.number(), method: v.string(), reference: v.string(), at: v.string()}))),
     paymentStatus: v.optional(v.string()),
     completedAt: v.optional(v.string()),
     intake: v.optional(v.any()),
@@ -118,9 +120,14 @@ export default defineSchema({
     placedAt: v.string(),
     items: v.array(v.object({
       productId: v.string(),
+      label: v.optional(v.string()),
       qty: v.number(),
       price: v.number(),
     })),
+    requestId: v.optional(v.string()),
+    reference: v.optional(v.string()),
+    tendered: v.optional(v.number()),
+    change: v.optional(v.number()),
     fulfillment: v.string(),
     address: v.optional(v.string()),
     status: v.string(),
@@ -128,12 +135,14 @@ export default defineSchema({
     total: v.number(),
     paid: v.number(),
     refunded: v.optional(v.number()),
+    storeRefunds: v.optional(v.array(v.object({requestId: v.string(), amount: v.number(), method: v.string(), reason: v.string(), at: v.string()}))),
     paymentStatus: v.optional(v.string()),
     method: v.optional(v.string()),
     discountRate: v.optional(v.number()),
   })
     .index("by_external_id", ["id"])
-    .index("by_ownerId", ["ownerId"]),
+    .index("by_ownerId", ["ownerId"])
+    .index("by_requestId", ["requestId"]),
 
   listings: defineTable({
     id: v.optional(v.string()),
@@ -257,6 +266,8 @@ export default defineSchema({
     id: v.optional(v.string()),
     ref: v.string(),
     ownerId: v.optional(v.string()),
+    name: v.optional(v.string()),
+    email: v.optional(v.string()),
     listingId: v.string(),
     message: v.string(),
     status: v.string(),

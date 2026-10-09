@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/style.css?v=20261008-audit1">
-  <link rel="stylesheet" href="assets/css/pages.css?v=20261008-audit1">
+  <link rel="stylesheet" href="assets/css/style.css?v=20261009-store3">
+  <link rel="stylesheet" href="assets/css/pages.css?v=20261009-store3">
 </head>
 <body>
 
@@ -27,10 +27,10 @@
             <div>
               <span class="eyebrow">Paws &amp; Claws Club</span>
               <h1>Account tools for every pet parent</h1>
-              <p class="lead" style="color:#cfe6e3">Create an account to manage pet profiles and appointments. Paid plans, delivery perks and member rewards are not available on this site yet.</p>
+              <p class="lead" style="color:#cfe6e3">You do not need a subscription or online account to shop at our physical store. An optional free account keeps pet profiles, appointments and linked purchase history together. Paid memberships are not offered yet.</p>
               <div class="hero-cta">
                 <a class="btn btn-primary btn-lg" href="#join">Join now — it's free</a>
-                <a class="btn btn-ghost btn-lg" href="#plans">Compare plans</a>
+                <a class="btn btn-ghost btn-lg" href="#plans">Account options</a>
               </div>
             </div>
             <div style="text-align:center">
@@ -49,7 +49,7 @@
         <div class="sec-head center">
           <span class="eyebrow">Pick your pack</span>
           <h2>Create a free account</h2>
-          <p class="lead">Create a free account to manage pet profiles and appointments. Paid memberships are not available until subscription billing is connected.</p>
+          <p class="lead">Create an optional free account to manage your visits online. Shopping and paying in store never requires a subscription.</p>
         </div>
         <div class="plan-grid" id="planGrid"></div>
         <p class="hint center" style="margin-top:22px">Paid subscriptions and plan changes are currently unavailable.</p>
@@ -121,8 +121,8 @@
                 <label id="planLabel">Choose a demo plan</label>
                 <div class="plan-picker" role="radiogroup" aria-labelledby="planLabel">
                   <label class="plan-pick"><input type="radio" name="plan" value="puppy" checked><b>Puppy Pass</b><span>Free</span></label>
-                  <label class="plan-pick"><input type="radio" name="plan" value="adult"><b>Adult (demo)</b><span>$9/mo demo</span></label>
-                  <label class="plan-pick"><input type="radio" name="plan" value="senior"><b>Senior (demo)</b><span>$19/mo demo</span></label>
+                  <label class="plan-pick"><input type="radio" name="plan" value="adult"><b>Adult (demo)</b><span>Demo only</span></label>
+                  <label class="plan-pick"><input type="radio" name="plan" value="senior"><b>Senior (demo)</b><span>Demo only</span></label>
                 </div>
               </div>
 
@@ -191,13 +191,13 @@
 
 
 
-  <script src="assets/js/data.js?v=20261008-audit1"></script>
-  <script src="assets/js/app.js?v=20261008-audit1"></script>
-  <script src="assets/js/nav.js?v=20261008-audit1"></script>
-  <script src="assets/js/convexClient.js?v=20261008-audit1"></script>
+  <script src="assets/js/data.js?v=20261009-store3"></script>
+  <script src="assets/js/app.js?v=20261009-store3"></script>
+  <script src="assets/js/nav.js?v=20261009-store3"></script>
+  <script src="assets/js/convexClient.js?v=20261009-store3"></script>
   <!-- Clerk identity layer. The publishable key lives in clerk.js;
        without one the local forms below stay as the demo path. -->
-  <script src="assets/js/clerk.js?v=20261008-audit1"></script>
+  <script src="assets/js/clerk.js?v=20261009-store3"></script>
   <script>
     document.addEventListener("pnc:ready", function () {
       var grid = document.getElementById("planGrid");
@@ -208,13 +208,14 @@
           { id: "puppy", name: "Puppy Pass", price: "Free", period: "forever", badge: "", featured: false,
             blurb: "A free account for pet profiles and appointments.",
             perks: ["Member account", "Pet profiles", "Appointment booking"] },
-          { id: "adult", name: "Adult Adventurer", price: PNC_DB.productionMode() ? "Unavailable" : "$9", period: PNC_DB.productionMode() ? "" : "per month", badge: "Most popular", featured: true,
+          { id: "adult", name: "Adult Adventurer", price: "Demo only", period: "", badge: "", featured: false,
             blurb: PNC_DB.productionMode() ? "Paid subscriptions are not connected yet." : "Demo tier for testing local membership discounts.",
             perks: PNC_DB.productionMode() ? ["Billing setup required"] : ["Demo discount rules", "No real subscription is created"] },
-          { id: "senior", name: "Senior Snuggler", price: PNC_DB.productionMode() ? "Unavailable" : "$19", period: PNC_DB.productionMode() ? "" : "per month", badge: "Best value", featured: false,
+          { id: "senior", name: "Senior Snuggler", price: "Demo only", period: "", badge: "", featured: false,
             blurb: PNC_DB.productionMode() ? "Paid subscriptions are not connected yet." : "Demo tier for testing local membership discounts.",
             perks: PNC_DB.productionMode() ? ["Billing setup required"] : ["Demo discount rules", "No real subscription is created"] }
         ];
+        if (PNC_DB.productionMode()) plans = plans.filter(function (pl) { return pl.id === "puppy"; });
         grid.innerHTML = plans.map(function (pl) {
           var isCur = pl.id === currentPlan;
           return '<div class="plan' + (pl.featured ? " featured" : "") + (isCur ? " current" : "") + '">' +

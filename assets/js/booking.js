@@ -22,7 +22,7 @@
     return (
       '<div class="card svc-card reveal in" data-svc-card="' + s.id + '">' +
         '<div class="flex gap12" style="align-items:flex-start">' +
-          '<span class="ico" style="width:52px;height:52px;border-radius:14px;display:grid;place-items:center;font-size:1.5rem;background:var(--ocean-100);flex:none">' + s.icon + "</span>" +
+          '<span class="ico" style="width:52px;height:52px;border-radius:14px;display:grid;place-items:center;font-size:1.5rem;background:var(--ocean-100);flex:none">' + D.icon(s.icon) + "</span>" +
           "<div><h3>" + esc(s.name) + "</h3>" +
           '<div class="svc-meta">' +
             (s.popular ? '<span class="tag tag--yellow">Popular</span>' : "") +
@@ -54,7 +54,7 @@
       const items = [{ id: "all", name: "All services" }].concat(D.SERVICE_GROUPS);
       nav.innerHTML = items.map((g) =>
         '<button class="chip' + (g.id === activeGroup ? " active" : "") + '" data-group="' + g.id + '">' +
-        (g.icon ? g.icon + " " : "") + esc(g.name).replace(/&amp;/g, "&") + "</button>"
+        (g.icon ? D.icon(g.icon) + " " : "") + esc(g.name) + "</button>"
       ).join("");
     }
   }
@@ -67,7 +67,7 @@
       return (
         '<div class="card svc-card reveal in">' +
           '<div class="flex gap12" style="align-items:flex-start">' +
-            '<span class="pi" style="width:52px;height:52px;border-radius:14px;display:grid;place-items:center;font-size:1.5rem;background:var(--yellow-100);flex:none">' + p.icon + "</span>" +
+            '<span class="pi" style="width:52px;height:52px;border-radius:14px;display:grid;place-items:center;font-size:1.5rem;background:var(--yellow-100);flex:none">' + D.icon(p.icon) + "</span>" +
             "<div><h3>" + esc(p.name) + "</h3>" +
             '<p class="small muted" style="margin:2px 0 0">' + esc(p.title) + "</p></div>" +
           "</div>" +
@@ -148,7 +148,7 @@
       const list = D.db.services.filter((s) => s.group === g.id);
       return (
         '<div style="grid-column:1/-1;display:flex;align-items:center;gap:10px;margin-top:8px">' +
-          '<span style="font-size:1.3rem">' + g.icon + "</span>" +
+          '<span style="font-size:1.3rem">' + D.icon(g.icon) + "</span>" +
           '<b style="font-family:var(--font-display);font-size:1.05rem">' + g.name + "</b>" +
           '<span class="small muted">' + esc(g.blurb) + "</span>" +
         "</div>"
@@ -157,7 +157,7 @@
       const on = W.serviceId === s.id;
       return (
         '<button class="pick' + (on ? " on" : "") + '" data-pick="' + s.id + '">' +
-          '<span class="pi">' + s.icon + "</span>" +
+          '<span class="pi">' + D.icon(s.icon) + "</span>" +
           "<span><b>" + esc(s.name) + "</b><small>" + money(s.price) + " · " + s.duration + " hr" + (s.duration === 1 ? "" : "s") +
           (s.requiresVaccine ? " · vaccines required" : "") + "</small></span>" +
         "</button>"
@@ -239,7 +239,8 @@
       if (!o) { PNC.toast("Create a free account to join the waitlist", "err"); window.location.href = "membership.html#join"; return; }
       const svc2 = D.SERVICE_BY_ID[W.serviceId];
       const r = await Promise.resolve(D.joinWaitlist(W.serviceId, svc2.staff[0], "No slot on " + W.date));
-      if (!r.error) { PNC.toast("Added to the waitlist — we'll text you!"); renderBell(); }
+      if (r.error) return PNC.toast(r.error, "err");
+      PNC.toast("Added to the waitlist. Contact the team for availability updates."); renderBell();
     });
   }
 
@@ -406,6 +407,12 @@
 
   /* ---------------------------- events ------------------------------ */
   document.addEventListener("pnc:nav-ready", function () {
+    window.addEventListener("pnc:data-ready", function () {
+      renderStats(); renderServices(); renderProviders(); renderQuickBook();
+      if (W.step === 1) renderStep1();
+      if (W.step === 2) renderStep2();
+      refreshNext();
+    });
     renderStats();
     renderServices();
     renderProviders();

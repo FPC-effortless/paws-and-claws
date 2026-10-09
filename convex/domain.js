@@ -1,7 +1,8 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
-const PLANS = { puppy: 0.05, adult: 0.15, senior: 0.25 };
+// No live subscription benefits have been configured. Demo discounts stay local.
+const PLANS = { puppy: 0, adult: 0, senior: 0 };
 const ROLES = ["super", "desk", "provider", "retail"];
 const PERMS = {
   super: { everything: true },
@@ -54,6 +55,34 @@ function parseDate(s) {
 function uid(prefix) {
   return prefix + "-" + crypto.randomUUID().replace(/-/g, "").slice(0, 12);
 }
+function prepareStoreSale(lines, products, method, options) {
+  if (!Array.isArray(lines) || !lines.length || lines.length > 100) throw new Error("Add between 1 and 100 sale lines.");
+  if (!["Cash", "Bank transfer"].includes(method)) throw new Error("Choose cash or bank transfer.");
+  if (!/^[a-zA-Z0-9_-]{8,100}$/.test(options.requestId || "")) throw new Error("A sale reference is required. Refresh and try again.");
+  const quantities = new Map();
+  const items = lines.map(line => {
+    const qty = Number(line.qty === undefined ? 1 : line.qty);
+    if (!Number.isInteger(qty) || qty < 1 || qty > 9999) throw new Error("Quantity must be a whole number between 1 and 9,999.");
+    const product = line.productId ? products.find(p => p.id === line.productId) : null;
+    if (line.productId && !product) throw new Error("Product no longer exists.");
+    const label = String(product ? product.name : line.label || "").trim().slice(0, 120);
+    const price = Number(product ? product.price : line.amount);
+    if (!label || !Number.isFinite(price) || price <= 0 || price > 1000000) throw new Error("Each line needs a description and a positive price.");
+    if (product) quantities.set(product.id, (quantities.get(product.id) || 0) + qty);
+    return {productId: product ? product.id : "pos", label, qty, price: Math.round(price * 100) / 100};
+  });
+  for (const [id, qty] of quantities) {
+    const product = products.find(p => p.id === id);
+    if (!Number.isInteger(product.stock) || qty > product.stock) throw new Error("Not enough stock for " + product.name + ".");
+  }
+  const total = Math.round(items.reduce((sum, item) => sum + item.qty * item.price, 0) * 100) / 100;
+  if (total <= 0 || total > 1000000) throw new Error("Sale total must be between 0.01 and 1,000,000.");
+  const tendered = method === "Cash" && options.tendered !== undefined && options.tendered !== "" ? Number(options.tendered) : total;
+  if (!Number.isFinite(tendered) || tendered < total || tendered > 1000000) throw new Error("Cash received must cover the total.");
+  return { items, total, quantities, tendered: Math.round(tendered * 100) / 100,
+    change: Math.round((tendered - total) * 100) / 100, reference: String(options.reference || "").trim().slice(0, 120) };
+}
+
 function round2(n) { return Math.round(n * 100) / 100; }
 function hash01(str) {
   let h = 0x811c9dc5;
@@ -64,12 +93,17 @@ function hash01(str) {
   return h / 0x100000000;
 }
 function dateOnly(s) { return String(s).slice(0, 10); }
+function validDateOnly(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s))) return false;
+  const d = parseDate(s);
+  return d.getFullYear() === Number(s.slice(0, 4)) && d.getMonth() + 1 === Number(s.slice(5, 7)) && d.getDate() === Number(s.slice(8, 10));
+}
 
 function validatePetInput(input) {
   if (input.petName !== undefined && !String(input.petName).trim()) throw new Error("Give your pet a name.");
   if (input.weightKg !== undefined && (!Number.isFinite(Number(input.weightKg)) || Number(input.weightKg) < 0)) throw new Error("Weight must be a non-negative number.");
   if (input.species !== undefined && !["Dog","Cat","Bird","Rabbit","Reptile","Small Mammal","Fish"].includes(input.species)) throw new Error("Choose a valid species.");
-  if (input.dob && (!/^\d{4}-\d{2}-\d{2}$/.test(input.dob) || Number.isNaN(parseDate(input.dob).getTime()) || dateOnly(parseDate(input.dob).toISOString()) !== input.dob || input.dob > today())) throw new Error("Enter a valid birth date that is not in the future.");
+  if (input.dob && (!validDateOnly(input.dob) || input.dob > today())) throw new Error("Enter a valid birth date that is not in the future.");
 }
 
 async function identity(ctx) {
@@ -78,19 +112,24 @@ async function identity(ctx) {
   return id;
 }
 
+// Email can claim an unlinked record only after the identity provider has
+// verified it. A record already bound to another subject cannot be reclaimed.
+async function recordForIdentity(ctx, table, id) {
+  const bound = await ctx.db.query(table).withIndex("by_clerkId", q => q.eq("clerkId", id.subject)).first();
+  if (bound) return bound;
+  if (!id.email || id.emailVerified !== true) return null;
+  const candidate = await ctx.db.query(table).withIndex("by_email", q => q.eq("email", id.email.trim().toLowerCase())).first();
+  return candidate && (!candidate.clerkId || candidate.clerkId === id.subject) ? candidate : null;
+}
+
 async function ownerFor(ctx, allowCreate = false) {
   const id = await identity(ctx);
-  const staffByClerk = await ctx.db.query("admins").withIndex("by_clerkId", q => q.eq("clerkId", id.subject)).first();
-  const staffByEmail = !staffByClerk && id.email
-    ? await ctx.db.query("admins").withIndex("by_email", q => q.eq("email", id.email.toLowerCase())).first()
-    : null;
-  if (staffByClerk || staffByEmail) return null;
+  if (await recordForIdentity(ctx, "admins", id)) return null;
 
-  let owner = await ctx.db.query("owners").withIndex("by_clerkId", q => q.eq("clerkId", id.subject)).first();
-  if (!owner && id.email) {
-    owner = await ctx.db.query("owners").withIndex("by_email", q => q.eq("email", id.email.toLowerCase())).first();
-  }
+  let owner = await recordForIdentity(ctx, "owners", id);
   if (!owner && allowCreate) {
+    if (!id.email || id.emailVerified !== true) throw new Error("Verify your email before creating your member profile.");
+    if (await ctx.db.query("owners").withIndex("by_email", q => q.eq("email", id.email.trim().toLowerCase())).first()) throw new Error("This email is already linked to another account. Contact support.");
     owner = {
       id: "ow-" + crypto.randomUUID().slice(0, 8),
       clerkId: id.subject,
@@ -110,10 +149,7 @@ async function ownerFor(ctx, allowCreate = false) {
 
 async function adminFor(ctx) {
   const id = await identity(ctx);
-  let admin = await ctx.db.query("admins").withIndex("by_clerkId", q => q.eq("clerkId", id.subject)).first();
-  if (!admin && id.email) {
-    admin = await ctx.db.query("admins").withIndex("by_email", q => q.eq("email", id.email.toLowerCase())).first();
-  }
+  const admin = await recordForIdentity(ctx, "admins", id);
   if (!admin || !ROLES.includes(admin.role)) return null;
   return admin;
 }
@@ -168,7 +204,7 @@ function serviceProviders(service, providers) {
 async function slotAvailable(ctx, service, provider, date, hour, ignoreBookingId) {
   if (service.duration >= 24) return false;
   const d = parseDate(date);
-  if (Number.isNaN(d.getTime()) || dateOnly(d.toISOString()) !== date) return false;
+  if (!validDateOnly(date)) return false;
   if (date < today()) return false;
   if (provider.off && provider.off.includes(d.getDay())) return false;
   const leave = await ctx.db.query("staffLeave").filter(q => q.eq(q.field("providerId"), provider.id)).collect();
@@ -176,7 +212,6 @@ async function slotAvailable(ctx, service, provider, date, hour, ignoreBookingId
   const t = Number(hour);
   if (!Number.isFinite(t) || Math.round(t * 2) !== t * 2) return false;
   if (t < Math.max(DAY_START, provider.start) || t + service.duration > Math.min(DAY_END, provider.end)) return false;
-  if (hash01(date + "|" + provider.id + "|" + t) <= 0.22) return false;
   const bookings = await ctx.db.query("bookings").filter(q => q.eq(q.field("providerId"), provider.id)).collect();
   return !bookings.some(b => b.id !== ignoreBookingId && b.date === date && activeBookingStatus(b.status) &&
     t < b.hour + b.duration && b.hour < t + service.duration);
@@ -195,16 +230,30 @@ async function audit(ctx, admin, action, detail) {
   });
 }
 
+async function limitSubmission(ctx, id, email) {
+  const now = Date.now();
+  // A bounded row per sender avoids scanning contact/inquiry history.
+  const key = id ? "user:" + id.subject : "email:" + email;
+  const row = await ctx.db.query("submissionLimits").withIndex("by_key", q => q.eq("key", key)).first();
+  if (row && now - row.windowStart < 10 * 60 * 1000) {
+    if (row.count >= 5) throw new Error("Too many messages. Please wait ten minutes before trying again.");
+    await ctx.db.patch(row._id, { count: row.count + 1 });
+  } else if (row) await ctx.db.patch(row._id, { windowStart: now, count: 1 });
+  else await ctx.db.insert("submissionLimits", { key, windowStart: now, count: 1 });
+}
+
 async function bootstrapData(ctx) {
   const id = await ctx.auth.getUserIdentity();
   const publicData = {
     version: 1,
     owners: [], pets: [], bookings: [], orders: [], listings: await ctx.db.query("listings").collect(),
-    products: await ctx.db.query("products").collect(),
+    products: (await ctx.db.query("products").collect()).map(({ cost, ...p }) => p),
     services: await ctx.db.query("services").collect(),
     serviceGroups: await ctx.db.query("serviceGroups").collect(),
     providers: await ctx.db.query("providers").collect(),
-    staffLeave: await ctx.db.query("staffLeave").collect(),
+    staffLeave: (await ctx.db.query("staffLeave").collect()).map(l => ({ providerId: l.providerId, date: l.date })),
+    occupiedSlots: (await ctx.db.query("bookings").collect()).filter(b => b.date >= today() && activeBookingStatus(b.status))
+      .map(b => ({ providerId: b.providerId, date: b.date, hour: b.hour, duration: b.duration })),
     waitlist: [], messages: [], notifications: [], payments: [],
     audit: [], admins: [], inquiries: [], contactMessages: [],
     cms: (await ctx.db.query("cms").first()) || null,
@@ -216,6 +265,7 @@ async function bootstrapData(ctx) {
   if (admin) {
     const out = { ...publicData };
     out.admins = [admin];
+    if (permission(admin, "inventory.edit")) out.products = await ctx.db.query("products").collect();
     if (admin.role === "super") {
       out.owners = await ctx.db.query("owners").collect();
       out.pets = await ctx.db.query("pets").collect();
@@ -272,7 +322,7 @@ async function bootstrapData(ctx) {
   if (!owner) return publicData;
   return {
     ...publicData,
-    owners: [owner],
+    owners: [(({ notes, ...profile }) => profile)(owner)],
     pets: (await ctx.db.query("pets").collect()).filter(p => p.ownerId === owner.id),
     bookings: (await ctx.db.query("bookings").collect()).filter(b => b.ownerId === owner.id).map(({ internalNotes, ...b }) => b),
     orders: (await ctx.db.query("orders").collect()).filter(o => o.ownerId === owner.id),
@@ -295,7 +345,7 @@ const OPS = new Set([
   "setBookingStatus","addBookingNote","placeOrder","setOrderStage","refund","setListingStatus",
   "adjustStock","updateProduct","updateCMS","updateService","addLeave","removeLeave",
   "joinWaitlist","removeWaitlist","posCharge","addPaymentMethod","removePaymentMethod",
-  "setPrimaryPayment","submitContact","submitInquiry","createOwner","sendMessage","markMessageRead","setContactStatus"
+  "setPrimaryPayment","submitContact","submitInquiry","createOwner","sendMessage","markMessageRead","setContactStatus","staffBooking","recordBookingPayment","refundStoreSale"
 ]);
 
 export const mutate = mutation({
@@ -311,8 +361,8 @@ export const mutate = mutation({
       const input = p.input || {};
       const fullName = String(input.fullName || "").trim();
       const email = String(input.email || "").trim().toLowerCase();
-      if (fullName.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a full name and valid email.");
-      if (await ctx.db.query("owners").withIndex("by_email", q => q.eq("email", email)).first()) throw new Error("An account with this email already exists.");
+      if (fullName.length < 2 || fullName.length > 120 || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) throw new Error("Enter a full name and valid email.");
+      if (email && await ctx.db.query("owners").withIndex("by_email", q => q.eq("email", email)).first()) throw new Error("An account with this email already exists.");
       const owner = { id: uid("ow"), fullName, email, phone: String(input.phone || ""), address: "", emergencyContact: "", notes: "", plan: "puppy", createdAt: today() };
       await ctx.db.insert("owners", owner);
       await audit(ctx, admin, "Customer created", owner.id);
@@ -393,10 +443,11 @@ export const mutate = mutation({
       if (!admin && patch.email !== undefined && String(patch.email).trim().toLowerCase() !== String(target.email).toLowerCase()) {
         throw new Error("Change your email through your identity provider.");
       }
+      if (!admin && patch.notes !== undefined) throw new Error("Internal customer notes can only be edited by staff.");
       if (patch.email !== undefined) {
         patch.email = patch.email.trim().toLowerCase();
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(patch.email)) throw new Error("Enter a valid email address.");
-        const duplicate = await ctx.db.query("owners").withIndex("by_email", q => q.eq("email", patch.email)).first();
+        if ((patch.email || !admin || target.clerkId) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(patch.email)) throw new Error("Enter a valid email address.");
+        const duplicate = patch.email ? await ctx.db.query("owners").withIndex("by_email", q => q.eq("email", patch.email)).first() : null;
         if (duplicate && duplicate._id !== target._id) throw new Error("An account with this email already exists.");
       }
       if (patch.fullName !== undefined && patch.fullName.trim().length < 2) throw new Error("Name is too short.");
@@ -476,14 +527,17 @@ export const mutate = mutation({
 
     if (op === "addVaccine") {
       const owner = await ownerFor(ctx, true);
+      const admin = await adminFor(ctx);
+      if (admin) requirePermission(admin, "crm.edit");
       const pet = await getPet(ctx, p.petId);
-      if (!pet || pet.ownerId !== owner?.id) throw new Error("Not authorized.");
+      if (!pet || (!admin && pet.ownerId !== owner?.id)) throw new Error("Not authorized.");
       const name = String(p.name || "").trim();
       const date = String(p.date || "");
-      if (!["Rabies", "DHPP", "Bordetella", "FVRCP", "Leptospirosis", "Canine Influenza"].includes(name) || !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(parseDate(date).getTime()) || dateOnly(parseDate(date).toISOString()) !== date || date > today()) throw new Error("Invalid vaccine record.");
+      if (!["Rabies", "DHPP", "Bordetella", "FVRCP", "Leptospirosis", "Canine Influenza"].includes(name) || !validDateOnly(date) || date > today()) throw new Error("Invalid vaccine record.");
       const vaccines = Array.isArray(pet.vaccines) ? pet.vaccines.slice() : [];
       vaccines.push({ name, date, lot: String(p.lot || ""), status: "pending" });
       await ctx.db.patch(pet._id, { vaccines });
+      if (admin) await audit(ctx, admin, "Vaccine record added", pet.id + " — " + name);
       return { ok: true };
     }
 
@@ -501,13 +555,15 @@ export const mutate = mutation({
       return { ok: true };
     }
 
-    if (op === "createBooking") {
-      const owner = await ownerFor(ctx, true);
+    if (op === "createBooking" || op === "staffBooking") {
+      const staff = op === "staffBooking" ? await adminFor(ctx) : null;
+      if (op === "staffBooking") requirePermission(staff, "bookings.manage");
+      const owner = staff ? await getOwnerById(ctx, p.ownerId) : await ownerFor(ctx, true);
       const service = await getService(ctx, p.serviceId);
       const pet = await getPet(ctx, p.petId);
       if (!owner || !service || !pet || pet.ownerId !== owner.id) throw new Error("Invalid booking request.");
       if (service.duration >= 24) throw new Error("This service requires overnight scheduling; please contact the store.");
-      if (service.deposit) throw new Error("This booking requires a payment processor that is not connected yet.");
+      if (service.deposit && !staff) throw new Error("This booking requires a payment processor that is not connected yet.");
       const required = pet.species === "Cat" ? ["Rabies","FVRCP"] : ["Rabies","DHPP","Bordetella"];
       if (service.requiresVaccine) {
         const have = (pet.vaccines || []).filter(v => v.status === "approved").map(v => v.name);
@@ -518,19 +574,39 @@ export const mutate = mutation({
       if (!provider || !(service.staff || []).includes(provider.id)) throw new Error("Specialist is not available for this service.");
       const ok = await slotAvailable(ctx, service, provider, String(p.date), Number(p.hour));
       if (!ok) throw new Error("That time slot is no longer available.");
-      const rate = PLANS[owner.plan] || 0;
+      const rate = staff ? 0 : PLANS[owner.plan] || 0;
       const total = round2(service.price * (1 - rate));
       const deposit = service.deposit ? round2(total * 0.30) : 0;
       const booking = {
         id: uid("bk"), ownerId: owner.id, petId: pet.id, serviceId: service.id,
         providerId: provider.id, date: String(p.date), hour: Number(p.hour), duration: service.duration,
         status: "confirmed", deposit, total, paid: 0, paymentStatus: service.deposit ? "pending" : "not_required",
-        intake: p.intake || {}, createdAt: today(), createdBy: "self", discountRate: rate
+        intake: p.intake || {}, createdAt: today(), createdBy: staff ? "staff" : "self", discountRate: rate
       };
       await ctx.db.insert("bookings", booking);
+      if (staff) await audit(ctx, staff, "In-store appointment", booking.id);
       await notify(ctx, owner.id, "booking", "Booking confirmed: " + service.name, pet.petName + " is booked for " + booking.date + ".");
-      await ctx.db.insert("messages", { id: uid("msg"), ownerId: owner.id, direction: "out", channel: "portal", subject: "Appointment confirmation", body: service.name + " for " + pet.petName + " on " + booking.date + ". " + (deposit ? "Deposit due: $" + deposit.toFixed(2) + "." : "No deposit is required."), read: false, createdAt: today() });
+      await ctx.db.insert("messages", { id: uid("msg"), ownerId: owner.id, direction: "out", channel: "portal", subject: "Appointment confirmation", body: service.name + " for " + pet.petName + " on " + booking.date + ". " + (deposit ? "Deposit due: NGN " + deposit.toFixed(2) + "." : "No deposit is required."), read: false, createdAt: today() });
       return { ok: true, bookingId: booking.id };
+    }
+
+    if (op === "recordBookingPayment") {
+      const admin = await adminFor(ctx);
+      requirePermission(admin, "payments.take");
+      requirePermission(admin, "bookings.manage");
+      const booking = await getBooking(ctx, p.bookingId);
+      if (!booking || ["cancelled", "no-show"].includes(booking.status)) throw new Error("Appointment is not payable.");
+      const options = p.options || {};
+      const payments = booking.storePayments || [];
+      if (!/^[a-zA-Z0-9_-]{8,100}$/.test(options.requestId || "")) throw new Error("A payment reference is required.");
+      if (payments.some(x => x.requestId === options.requestId)) return {ok: true, bookingId: booking.id};
+      const amount = Number(p.amount);
+      if (!Number.isFinite(amount) || amount <= 0 || round2(amount) !== amount || amount > round2(booking.total - booking.paid)) throw new Error("Payment must be positive and cannot exceed the outstanding balance.");
+      if (!["Cash", "Bank transfer"].includes(p.method)) throw new Error("Invalid payment method.");
+      payments.push({requestId: options.requestId, amount, method: p.method, reference: String(options.reference || "").slice(0, 120), at: new Date().toISOString()});
+      await ctx.db.patch(booking._id, {paid: round2(booking.paid + amount), paymentStatus: booking.paid + amount >= booking.total ? "paid" : "partial", storePayments: payments});
+      await audit(ctx, admin, "Appointment payment", booking.id + " — NGN " + amount.toFixed(2));
+      return {ok: true, bookingId: booking.id};
     }
 
     if (op === "rescheduleBooking") {
@@ -641,6 +717,7 @@ export const mutate = mutation({
       const stage = String(p.stage || "");
       if (!stages.includes(stage)) throw new Error("Invalid order stage.");
       const current = order.stage || "pending";
+      if (["cancelled", "refunded"].includes(order.status) || current === "done") throw new Error("Closed orders cannot be changed.");
       const i = stages.indexOf(current);
       if (Math.abs(stages.indexOf(stage) - i) > 1) throw new Error("Invalid order transition.");
       const patch = { stage };
@@ -648,7 +725,7 @@ export const mutate = mutation({
       await ctx.db.patch(order._id, patch);
       await notify(ctx, order.ownerId, "order", "Order " + order.id + " updated", "Status: " + stage + ".");
       await audit(ctx, admin, "Order stage", order.id + " -> " + stage);
-      return { ok: true };
+      return { ok: true, orderId: order.id };
     }
 
     if (op === "refund") {
@@ -666,7 +743,7 @@ export const mutate = mutation({
       if (!["available","reserved","sold"].includes(status)) throw new Error("Invalid listing status.");
       await ctx.db.patch(l._id, { status });
       await audit(ctx, admin, "Listing status", l.name + " -> " + status);
-      return { ok: true };
+      return { ok: true, listingId: l.id };
     }
 
     if (op === "adjustStock") {
@@ -678,7 +755,7 @@ export const mutate = mutation({
       const stock = Math.max(0, product.stock + delta);
       await ctx.db.patch(product._id, { stock, lowStock: stock <= product.lowAt });
       await audit(ctx, admin, "Stock adjusted", product.name + " " + (delta >= 0 ? "+" : "") + delta);
-      return { ok: true };
+      return { ok: true, productId: product.id };
     }
 
     if (op === "updateProduct") {
@@ -707,9 +784,10 @@ export const mutate = mutation({
       }
       if (input.desc !== undefined) patch.desc = String(input.desc);
       if (input.icon !== undefined) patch.icon = String(input.icon);
+      patch.lowStock = (patch.stock ?? product.stock) <= (patch.lowAt ?? product.lowAt);
       await ctx.db.patch(product._id, patch);
       await audit(ctx, admin, "Product edited", product.id);
-      return { ok: true };
+      return { ok: true, productId: product.id };
     }
 
     if (op === "updateCMS") {
@@ -721,7 +799,23 @@ export const mutate = mutation({
       for (const k of ["siteName","tagline","banner","heroTitle","emergencyHotline","emergencyNote","phone","email","address"]) {
         if (p.patch?.[k] !== undefined) patch[k] = String(p.patch[k]);
       }
-      if (p.patch?.hours !== undefined) patch.hours = p.patch.hours;
+      if (p.patch?.hours !== undefined) {
+        const hours = p.patch.hours;
+        const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+        const minutes = value => {
+          const match = String(value).match(/^(1[0-2]|[1-9]):([0-5]\d) (AM|PM)$/);
+          return match ? (Number(match[1]) % 12 + (match[3] === "PM" ? 12 : 0)) * 60 + Number(match[2]) : null;
+        };
+        if (!Array.isArray(hours) || (hours.length !== 0 && hours.length !== 7)) throw new Error("Enter a complete opening-hours schedule.");
+        for (let i = 0; i < hours.length; i++) {
+          const row = hours[i];
+          if (!row || row.day !== days[i] || typeof row.open !== "string" || typeof row.close !== "string") throw new Error("Invalid opening-hours day.");
+          if (row.open === "Closed" && row.close === "Closed") continue;
+          const start = minutes(row.open), end = minutes(row.close);
+          if (start === null || end === null || end <= start) throw new Error("Invalid opening hours for " + row.day + ".");
+        }
+        patch.hours = hours;
+      }
       if (p.patch?.toggles !== undefined) patch.toggles = p.patch.toggles;
       await ctx.db.patch(cms._id, patch);
       await audit(ctx, admin, "CMS update", Object.keys(patch).join(", "));
@@ -750,7 +844,7 @@ export const mutate = mutation({
       if (input.popular !== undefined) patch.popular = !!input.popular;
       await ctx.db.patch(s._id, patch);
       await audit(ctx, admin, "Service edited", s.id);
-      return { ok: true };
+      return { ok: true, serviceId: s.id };
     }
 
     if (op === "addLeave") {
@@ -758,7 +852,8 @@ export const mutate = mutation({
       requirePermission(admin, "staff.manage");
       const provider = await getProvider(ctx, p.providerId);
       const date = String(p.date || "");
-      if (!provider || !/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today()) throw new Error("Invalid leave date.");
+      if (!provider || !validDateOnly(date) || date < today()) throw new Error("Invalid leave date.");
+      if ((await ctx.db.query("bookings").collect()).some(b => b.providerId === provider.id && b.date === date && activeBookingStatus(b.status))) throw new Error("Reschedule or cancel this specialist's appointments before blocking the day.");
       const existing = (await ctx.db.query("staffLeave").filter(q => q.eq(q.field("providerId"), provider.id)).collect()).some(x => x.date === date);
       if (existing) throw new Error("Leave is already booked for that day.");
       await ctx.db.insert("staffLeave", { id: uid("lv"), providerId: provider.id, date, reason: String(p.reason || "Blocked"), createdAt: today() });
@@ -802,25 +897,47 @@ export const mutate = mutation({
     if (op === "posCharge") {
       const admin = await adminFor(ctx);
       requirePermission(admin, "payments.take");
-      const owner = await getOwnerById(ctx, p.ownerId);
-      if (!owner) throw new Error("Owner not found.");
-      const lines = Array.isArray(p.lines) ? p.lines : [];
-      const normalized = lines.map(x => {
-        const amount = Number(x.amount);
-        if (!Number.isFinite(amount) || amount <= 0) throw new Error("Invalid POS amount.");
-        return { label: String(x.label || "POS item").slice(0, 120), amount: round2(amount) };
-      });
-      if (!normalized.length) throw new Error("No POS lines.");
-      const total = round2(normalized.reduce((n, x) => n + x.amount, 0));
+      const options = p.options || {};
+      const ownerId = String(p.ownerId || "");
+      if (ownerId && !await getOwnerById(ctx, ownerId)) throw new Error("Customer not found.");
+      if (!/^[a-zA-Z0-9_-]{8,100}$/.test(options.requestId || "")) throw new Error("A sale reference is required.");
+      const previous = await ctx.db.query("orders").withIndex("by_requestId", q => q.eq("requestId", options.requestId)).first();
+      if (previous) return {ok: true, orderId: previous.id, total: previous.total};
+      const products = await ctx.db.query("products").collect();
+      const sale = prepareStoreSale(p.lines, products, p.method, options);
       const order = {
-        id: uid("or"), ownerId: owner.id, placedAt: today(),
-        items: normalized.map(x => ({ productId: "pos", qty: 1, price: x.amount })),
+        id: uid("or"), ownerId, placedAt: new Date().toISOString(), items: sale.items,
         fulfillment: "pos", address: "", status: "delivered", stage: "done",
-        total, paid: total, paymentStatus: "recorded", method: String(p.method || "Cash").slice(0, 30)
+        total: sale.total, paid: sale.total, paymentStatus: "recorded", method: p.method,
+        requestId: options.requestId, reference: sale.reference, tendered: sale.tendered, change: sale.change
       };
+      for (const [id, qty] of sale.quantities) {
+        const product = products.find(x => x.id === id);
+        await ctx.db.patch(product._id, {stock: product.stock - qty});
+      }
       await ctx.db.insert("orders", order);
-      await audit(ctx, admin, "POS charge", order.id + " — $" + total.toFixed(2));
-      return { ok: true, orderId: order.id, total };
+      await audit(ctx, admin, "In-store sale", order.id + " — NGN " + sale.total.toFixed(2));
+      return { ok: true, orderId: order.id, total: sale.total };
+    }
+
+    if (op === "refundStoreSale") {
+      const admin = await adminFor(ctx);
+      requirePermission(admin, "payments.refund");
+      const order = await ctx.db.query("orders").withIndex("by_external_id", q => q.eq("id", p.orderId)).first();
+      if (!order || order.fulfillment !== "pos") throw new Error("In-store sale not found.");
+      const options = p.options || {};
+      if (!/^[a-zA-Z0-9_-]{8,100}$/.test(options.requestId || "")) throw new Error("A refund reference is required.");
+      const refunds = order.storeRefunds || [];
+      if (refunds.some(x => x.requestId === options.requestId)) return {ok: true, orderId: order.id};
+      const amount = Number(p.amount);
+      const reason = String(options.reason || "").trim().slice(0, 500);
+      if (!Number.isFinite(amount) || amount <= 0 || round2(amount) !== amount || amount > order.paid) throw new Error("Refund must be positive and cannot exceed the amount paid.");
+      if (!["Cash", "Bank transfer"].includes(p.method) || !reason) throw new Error("Enter the refund method and reason.");
+      refunds.push({requestId: options.requestId, amount, method: p.method, reason, at: new Date().toISOString()});
+      const paid = round2(order.paid - amount);
+      await ctx.db.patch(order._id, {paid, refunded: round2((order.refunded || 0) + amount), status: paid === 0 ? "refunded" : order.status, storeRefunds: refunds});
+      await audit(ctx, admin, "In-store refund recorded", order.id + " — NGN " + amount.toFixed(2));
+      return {ok: true, orderId: order.id};
     }
 
     if (op === "addPaymentMethod" || op === "removePaymentMethod" || op === "setPrimaryPayment") {
@@ -833,9 +950,10 @@ export const mutate = mutation({
       const email = String(p.email || "").trim().toLowerCase();
       const subject = String(p.subject || "").trim().slice(0, 200);
       const message = String(p.body || "").trim().slice(0, 4000);
-      if (name.length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || message.length < 10) {
+      if (name.length < 2 || name.length > 120 || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || message.length < 10) {
         throw new Error("Invalid contact message.");
       }
+      await limitSubmission(ctx, identityValue, email);
       const matchedOwner = identityValue ? await ownerFor(ctx, false) : null;
       await ctx.db.insert("contactMessages", {
         id: uid("ct"), name, email, subject, body: message, ownerId: matchedOwner?.id,
@@ -857,10 +975,15 @@ export const mutate = mutation({
       const listing = await ctx.db.query("listings").filter(q => q.eq(q.field("id"), p.listingId)).first();
       if (!listing || listing.status !== "available") throw new Error("Listing is not available.");
       const message = String(p.message || "").trim().slice(0, 2000);
+      const name = String(p.name || owner?.fullName || "").trim();
+      const email = String(p.email || owner?.email || "").trim().toLowerCase();
+      if (name.length < 2 || name.length > 120 || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter your name and a valid email so the team can reply.");
+      await limitSubmission(ctx, identityValue, email);
       const count = (await ctx.db.query("inquiries").collect()).length + 1;
       const ref = "INQ-" + String(count).padStart(4, "0");
-      await ctx.db.insert("inquiries", { id: uid("inq"), ref, ownerId: owner?.id || "guest", listingId: listing.id, message, status: "new", createdAt: today() });
+      await ctx.db.insert("inquiries", { id: uid("inq"), ref, ownerId: owner?.id || "guest", name, email, listingId: listing.id, message, status: "new", createdAt: today() });
       if (owner) await notify(ctx, owner.id, "listing", "Inquiry " + ref + " sent", "We'll contact you about " + listing.name + ".");
+      if (owner) await ctx.db.insert("messages", { id: uid("msg"), ownerId: owner.id, direction: "out", channel: "portal", subject: "Inquiry " + ref + " about " + listing.name, body: "Your inquiry was saved for the team. They can reply using your contact details.", read: false, createdAt: new Date().toISOString() });
       return { ok: true, ref };
     }
 

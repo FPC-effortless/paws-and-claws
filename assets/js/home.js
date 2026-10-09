@@ -21,16 +21,16 @@
     const t = $("#heroTitle");
     if (t && cms.heroTitle) t.innerHTML = esc(cms.heroTitle);
     const lead = $("#heroLead");
-    if (lead && cms.tagline) lead.textContent = cms.tagline;
+    if (lead) lead.textContent = "Visit our physical store for pet supplies and care. Walk in to shop, speak with our team, or book an appointment online before your visit. No membership is required to shop in person.";
+    const visit = $("#storeVisitDetails");
+    if (visit) visit.textContent = [cms.address, cms.phone].filter(Boolean).join(" · ");
 
     const host = $("#heroStats");
     if (!host) return;
-    const orders = D.db.orders || [];
-    const pets = D.db.pets || [];
     host.innerHTML = [
-      { b: "12k+", s: "Happy pets served" },
-      { b: "4.8&#9733;", s: "Average review" },
-      { b: (4200 + pets.length + orders.length).toLocaleString(), s: "Club members" }
+      { b: "Visit", s: "Shop and pay in store" },
+      { b: "Book", s: "Plan your next appointment" },
+      { b: "Connect", s: "Manage pet care online" }
     ].map(function (x) {
       return "<div><b>" + x.b + "</b><span>" + x.s + "</span></div>";
     }).join("");
@@ -44,9 +44,9 @@
       const svc = (D.SERVICES || []).filter(function (s) { return s.group === g.id; });
       const from = svc.length ? Math.min.apply(null, svc.map(function (s) { return s.price; })) : 0;
       return '<a class="card cat-card reveal" href="services.html#' + g.id + '">' +
-        '<span class="cat-ico">' + g.icon + "</span>" +
-        "<h3>" + g.name + "</h3>" +
-        "<p>" + g.blurb + "</p>" +
+        '<span class="cat-ico">' + D.icon(g.icon) + "</span>" +
+        "<h3>" + esc(g.name) + "</h3>" +
+        "<p>" + esc(g.blurb) + "</p>" +
         '<span class="tag tag--yellow">From ' + money(from) + "</span>" +
         "</a>";
     }).join("");
@@ -72,7 +72,7 @@
     host.innerHTML = list.map(function (l) {
       return '<article class="pet-card">' +
         '<div class="pet-art">' +
-          '<span class="pet-emoji" aria-hidden="true">' + l.icon + "</span>" +
+          '<span class="pet-emoji" aria-hidden="true">' + D.icon(l.icon) + "</span>" +
           '<span class="pet-price">' + money(l.price) + "</span>" +
         "</div>" +
         '<div class="pet-body">' +
@@ -100,8 +100,7 @@
     host.innerHTML = prods.map(function (p) {
       const badge = p.badge ? '<span class="badge tag tag--yellow">' + esc(p.badge) + "</span>" : "";
       return '<div class="card product reveal in">' +
-        '<div class="product-art">' + badge + p.icon +
-          '<button class="fav" aria-label="Add to wishlist"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-9.4A4.1 4.1 0 0 1 12 7.6 4.1 4.1 0 0 1 19 10.6c0 5-7 9.4-7 9.4Z"/></svg></button>' +
+        '<div class="product-art">' + badge + D.icon(p.icon) +
         "</div>" +
         '<div class="product-body">' +
           '<div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;<small>(' + p.rating + ")</small></div>" +
@@ -109,7 +108,7 @@
           "<p>" + esc(p.desc) + "</p>" +
           '<div class="product-foot">' +
             '<span class="product-price">' + money(p.price) + "</span>" +
-            '<button class="add-btn" data-add="' + p.id + '">' +
+            '<button class="add-btn" data-add="' + p.id + '"' + (p.stock <= 0 ? ' disabled' : '') + '>' +
               '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Add' +
             "</button>" +
           "</div>" +
@@ -132,9 +131,8 @@
         msg.textContent = "Please enter a valid email address.";
         return;
       }
-      msg.style.color = "var(--ok)";
-      msg.textContent = "You're subscribed! Watch for the weekly snoot.";
-      email.value = "";
+      msg.style.color = "var(--ink-soft)";
+      msg.textContent = "Newsletter signup is not available yet. Please contact the store for updates.";
     });
   }
 
@@ -146,6 +144,10 @@
     renderListings();
     renderBestsellers();
     mountNewsletter();
+    window.addEventListener("pnc:data-ready", function () {
+      renderHero(); renderGroups(); renderListings(); renderBestsellers();
+      $$(".reveal").forEach(el => el.classList.add("in"));
+    });
   }
 
   if (document.readyState === "loading") {

@@ -13,6 +13,7 @@
   let observedClerk = null;
   let boundSession = undefined;
   let sessionVersion = 0;
+  let serverAuthenticated = false;
 
   function configured() {
     return String(global.__PNC_CONVEX_URL__ || DEFAULT_URL).trim() || null;
@@ -62,6 +63,11 @@
             }
           },
           function (authenticated) {
+            if (!authenticated && serverAuthenticated) {
+              sessionVersion++;
+              if (global.PNC_DB?.clearRemoteSnapshot) global.PNC_DB.clearRemoteSnapshot();
+            }
+            serverAuthenticated = authenticated;
             global.dispatchEvent(new CustomEvent("pnc:convex-auth", { detail: { authenticated } }));
           }
         );
@@ -100,12 +106,15 @@
     },
 
     async mutate(op, payload) {
+      const version = sessionVersion;
       if (!(await api.connect())) return { error: "Secure backend is not configured." };
       try {
-        return await api.client.mutation("domain:mutate", {
+        const result = await api.client.mutation("domain:mutate", {
           op: String(op),
           payload: payload || {}
         });
+        if (version !== sessionVersion) return { error: "Your session changed. Refresh and check the action's status before retrying." };
+        return result;
       } catch (err) {
         return { error: String(err && err.message || err || "Secure operation failed.") };
       }
@@ -118,6 +127,7 @@
       api.client = null;
       api.enabled = false;
       authConfigured = false;
+      serverAuthenticated = false;
       boundSession = undefined;
       sessionVersion++;
     }

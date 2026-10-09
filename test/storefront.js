@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const root = path.join(__dirname, '..');
+let savedCart = null;
 const nodes = new Map();
 function node(selector) {
   if (!nodes.has(selector)) nodes.set(selector, {
@@ -25,7 +26,7 @@ const document = {
   addEventListener(event, callback) { (events[event] ||= []).push(callback); },
 };
 const context = { document, addEventListener: document.addEventListener, console, URLSearchParams, setTimeout() {},
-  location: { search: '' }, localStorage: { getItem: () => null, setItem() {} },
+  location: { search: '' }, localStorage: { getItem: () => savedCart, setItem() {} },
   PNC_DB: { PRODUCTS: products, PRODUCT_BY_ID: Object.fromEntries(products.map(p => [p.id, p])),
     db: { products }, currentOwner: () => null, money: n => '$' + n.toFixed(2),
     esc: s => String(s), titleCase: s => s, speciesIcon: () => '' },
@@ -50,12 +51,21 @@ const event = { target: { closest: selector => selector === '[data-add]' ? add :
 for (const handler of events.click) handler(event);
 assert.equal(context.PNC.Cart.count, 1);
 assert.equal(node('#cartDrawer').hidden, false);
-assert.equal(node('#cartTotal').textContent, '$10.00');
+assert.equal(node('#cartTotal').textContent, '\u20a610.00');
 add.disabled = true;
 for (const handler of events.click) handler(event);
 assert.equal(context.PNC.Cart.count, 1);
 context.PNC.Cart.clear();
 assert.equal(node('#cartDrawer').hidden, true);
+savedCart = JSON.stringify([{id:'removed-product',qty:2},{id:'one',qty:-4},{id:'one',qty:'2'},{id:'one',qty:2},{id:'one',qty:3}]);
+context.PNC.Cart.rebind();
+assert.equal(context.PNC.Cart.count,5,'invalid saved lines are removed and duplicates merged');
+products[0].price=12;
+context.PNC.Cart.render();
+assert.equal(node('#cartTotal').textContent,'\u20a660.00','cart uses the latest catalog price');
+savedCart = '{}';
+context.PNC.Cart.rebind();
+assert.equal(context.PNC.Cart.count,0,'a corrupted cart cannot break page initialization');
 for (const page of ['index.html','shop.html','pets.html','account.html','membership.html','services.html','contact.html','admin/index.html']) {
   const html = fs.readFileSync(path.join(root, page), 'utf8');
   assert(html.indexOf('js/data.js') < html.indexOf('js/app.js'), page + ' must load catalog before cart');

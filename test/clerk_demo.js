@@ -23,7 +23,7 @@ const sandbox = {
   CustomEvent, URLSearchParams,
   atob: (s) => Buffer.from(s, "base64").toString("ascii"),
 };
-sandbox.PNC_CLERK_PUBLISHABLE_KEY = ""; // Exercise missing-key local demo mode.
+sandbox.PNC_CLERK_PUBLISHABLE_KEY = "pk_live_demo"; // Explicit demo must skip even a configured production SDK.
 sandbox.window = sandbox;
 sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
@@ -34,7 +34,7 @@ sandbox.document = {
   head: { appendChild() {} },
 };
 sandbox.location = { search: "?demo=1", origin: "http://localhost:8000", hostname: "localhost" };
-sandbox.sessionStorage = { getItem: () => null };
+sandbox.sessionStorage = { getItem: k => store[k] || null, setItem: (k,v) => store[k] = String(v), removeItem: k => delete store[k] };
 /* A page dispatches events; record them so the test can confirm the
    gate announces demo mode to its listeners. */
 const dispatched = [];
@@ -62,6 +62,10 @@ setTimeout(function () {
   assert(warns.length === 0, "no console noise on the explicit-demo path (CDN is never even fetched)");
   assert(dispatched.length === 1 && dispatched[0].type === "pnc:clerk", "announced pnc:clerk exactly once");
   assert(dispatched[0].detail.mode === "demo" && dispatched[0].detail.active === false, "announcement says demo/inactive");
+  assert(store.pnc_demo === '1', "local demo choice survives page navigation");
+  sandbox.location.search = '';
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "assets", "js", "clerk.js"), "utf8"), sandbox);
+  assert(sandbox.PNC_CLERK.demo, "navigation without demo query keeps the local demo session");
 
   console.log("\n== done ==");
   if (process.exitCode) console.error("FAILURES");

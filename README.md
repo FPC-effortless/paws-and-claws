@@ -77,6 +77,8 @@ Staff authorization is determined from the server-side Convex `admins` table. Do
 
 Activate Clerk's Convex integration in the Clerk Dashboard. The application requests a Clerk token using the template name **`convex`**. Use the integration's recommended template/configuration and make sure its audience is `convex`.
 
+The token must include the standard `email_verified` claim (available as `identity.emailVerified` in Convex). New member profiles and the first link to an email-based customer/staff record require a verified email. Records already linked to a Clerk subject can only be accessed by that subject; reassignments require a trusted administrator to update the backend record.
+
 Set the Convex deployment environment variable:
 
 ```bash
@@ -194,7 +196,13 @@ Pull requests run the same test job without updating the Vercel production deplo
 
 Vercel serves the static site with short-lived asset caching and basic browser security headers.
 
+The build creates `dist/` containing only the public HTML and assets. Vercel publishes this folder; backend code, tools, tests, dependencies, and local environment files are excluded. `npm run test:build` checks deployment isolation and referenced assets.
+
 ## Important limitations
+
+The site is for a physical store in Amasoma. Staff can record walk-in sales, cash or bank-transfer payments, returns/refunds, customer and pet records, and appointments while connected to the internet. In-store customers do not need an online account. The optional free Puppy Pass account connects online pet and appointment tools; the other membership tiers are local demo concepts, with no live subscription billing. Exact street directions, phone number, opening hours, and actual naira catalog prices still need to be set by the store.
+
+Deploy the Convex schema and functions before publishing a frontend update that uses the in-store operations.
 
 This repository is now designed to **fail safely** where a real financial/identity provider has not been integrated.
 

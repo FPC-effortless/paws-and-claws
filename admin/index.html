@@ -11,9 +11,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../assets/css/style.css?v=20261008-audit1">
-  <link rel="stylesheet" href="../assets/css/pages.css?v=20261008-audit1">
-  <link rel="stylesheet" href="../assets/css/platform.css?v=20261008-audit1">
+  <link rel="stylesheet" href="../assets/css/style.css?v=20261009-store3">
+  <link rel="stylesheet" href="../assets/css/pages.css?v=20261009-store3">
+  <link rel="stylesheet" href="../assets/css/platform.css?v=20261009-store3">
 </head>
 <body class="admin-body">
 
@@ -128,6 +128,7 @@
             <div><h1>Bookings &amp; Calendar</h1><p>Confirm, reschedule, complete and note appointments.</p></div>
             <div class="chip-filters" id="bkFilters"></div>
           </div>
+          <div id="storeBookingHost" class="admin-panel" hidden></div>
           <div class="admin-panel">
             <div class="panel-head"><h2 id="bkTitle">All appointments</h2><span class="muted" id="bkCount"></span></div>
             <div class="table-wrap"><table class="adm-table" id="bkTable"></table></div>
@@ -163,7 +164,7 @@
           </div>
           <div class="pos-cols">
             <div class="admin-panel pos-pad">
-                <div class="panel-head"><h2>Record in-person payment</h2></div>
+                <div class="panel-head"><h2>Walk-in checkout</h2></div>
               <form id="posForm" novalidate>
                 <div class="field">
                   <label for="posOwner">Customer</label>
@@ -174,18 +175,20 @@
                 <div class="field" style="margin-top:12px">
                   <label for="posMethod">Payment method</label>
                   <select class="input" id="posMethod">
-                    <option>Cash</option><option>Card</option><option>Store credit</option>
+                    <option>Cash</option><option>Bank transfer</option>
                   </select>
                 </div>
-                <div class="pos-total"><span>Total</span><b id="posTotal">$0.00</b></div>
+                <div class="field"><label for="posReference">Payment reference (optional)</label><input class="input" id="posReference" maxlength="120" placeholder="Transfer reference"></div>
+                <div class="field" id="posCashField"><label for="posTendered">Cash received (blank = exact amount)</label><input class="input" id="posTendered" type="number" min="0" step="0.01"></div>
+                <div class="pos-total"><span>Total</span><b id="posTotal">&#8358;0.00</b></div>
                 <button class="btn btn-primary btn-lg btn-block" type="submit">Record payment</button>
-                <p class="hint">This records a payment collected in person; it does not process a card.</p>
+                <p class="hint">Confirm payment has been received before saving. Cash and bank transfer payments are recorded here; no card is charged. Staff must be connected to the internet.</p>
                 <p class="hint" id="posMsg" role="status" style="margin:10px 0 0"></p>
               </form>
             </div>
             <div class="panel-stack">
               <div class="admin-panel">
-                <div class="panel-head"><h2>Online orders</h2><span class="muted" id="posOrderCount"></span></div>
+                <div class="panel-head"><h2>In-store &amp; online orders</h2><span class="muted" id="posOrderCount"></span></div>
                 <div id="orderHost"></div>
               </div>
             </div>
@@ -235,6 +238,10 @@
                   </div>
                   <div class="field"><label for="cms-enote">Emergency note</label>
                     <input class="input" id="cms-enote" name="emergencyNote"></div>
+                  <fieldset class="store-hours-editor"><legend>Store opening hours</legend>
+                    <p class="hint">Enter both times for each open day. Leave both blank for a closed day. Leave every day blank until the real hours are confirmed.</p>
+                    <div id="cmsHours"></div>
+                  </fieldset>
                   <button class="btn btn-primary btn-block" type="submit">Save content</button>
                   <p class="hint" id="cmsMsg" role="status" style="margin:10px 0 0"></p>
                 </form>
@@ -293,12 +300,13 @@
     </div>
   </div>
 
-  <script src="../assets/js/data.js?v=20261008-audit1"></script>
-  <script src="../assets/js/app.js?v=20261008-audit1"></script>
-  <script src="../assets/js/convexClient.js?v=20261008-audit1"></script>
+  <script src="../assets/js/data.js?v=20261009-store3"></script>
+  <script src="../assets/js/app.js?v=20261009-store3"></script>
+  <script src="../assets/js/convexClient.js?v=20261009-store3"></script>
   <!-- Clerk identity layer. The publishable key lives in clerk.js.
        Without a key the gate falls back to the demo accounts above. -->
-  <script src="../assets/js/clerk.js?v=20261008-audit1"></script>
-  <script src="../assets/js/admin.js?v=20261008-audit1"></script>
+  <script src="../assets/js/clerk.js?v=20261009-store3"></script>
+  <script src="../assets/js/store-admin.js?v=20261009-store3"></script>
+  <script src="../assets/js/admin.js?v=20261009-store3"></script>
 </body>
 </html>

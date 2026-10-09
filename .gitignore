@@ -7,3 +7,4 @@ convex/_generated/
 
 # Scratch / build tooling — never shipped
 tmp/
+dist/

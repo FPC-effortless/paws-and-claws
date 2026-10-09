@@ -23,7 +23,7 @@
   "use strict";
 
   const KEY = "pnc_db_v1";
-  const CURRENCY = "$";
+  const CURRENCY = "\u20a6";
   const DEPOSIT_RATE = 0.3; /* 30% deposit at booking checkout */
   /* Membership plan discount, applied to shop orders and bookings.
      Keep in sync with the PLAN_DISCOUNT labels in account.js. */
@@ -38,6 +38,9 @@
       (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
     );
   const money = (n) => CURRENCY + Number(n == null ? 0 : n).toFixed(2);
+  // Catalog icons are text/emoji, never executable HTML. Keep numeric entities
+  // used by the seed while escaping tags and attributes from edited records.
+  const icon = (s) => esc(s).replace(/&amp;#(\d+|x[0-9a-f]+);/gi, '&#$1;');
   const uid = (p) => p + "-" + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
   const isoDate = (d) => new Date(d).toISOString().slice(0, 10);
   const todayISO = () => isoDate(new Date());
@@ -52,7 +55,7 @@
   const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const fmtDate = (s) => {
     if (!s) return "—";
-    const d = parseD(s);
+    const d = parseD(String(s).slice(0, 10));
     return DOW[d.getDay()] + ", " + MON[d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear();
   };
   const fmtTime = (h) => {
@@ -185,18 +188,18 @@
     const svc = byId(db && db.services ? db.services : [], serviceId) || SERVICE_BY_ID[serviceId];
     if (!svc) return [];
     const out = [];
-    PROVIDERS.filter((p) => svc.staff.indexOf(p.id) !== -1).forEach((p) => {
+    (db.providers || PROVIDERS).filter((p) => svc.staff.indexOf(p.id) !== -1).forEach((p) => {
       if (!providerWorking(db, p, dateStr)) return;
       let t = Math.max(DAY_START, p.start);
       while (t + svc.duration <= Math.min(DAY_END, p.end)) {
         const seed = dateStr + "|" + p.id + "|" + t;
         const rnd = hash01(seed);
         /* 22% of start times are naturally unavailable */
-        const natural = rnd > 0.22;
+        const natural = productionMode() || rnd > 0.22;
         /* already booked by this provider at that start? */
-        const clash = (db.bookings || []).some(
+        const clash = (db.bookings || []).concat(db.occupiedSlots || []).some(
           (b) => b.providerId === p.id && b.date === dateStr &&
-            b.status !== "cancelled" && b.status !== "no-show" &&
+            b.status !== "cancelled" && b.status !== "no-show" && b.status !== "completed" &&
             t < b.hour + b.duration && b.hour < t + svc.duration
         );
         out.push({
@@ -309,7 +312,7 @@
         { id: "pm-3", ownerId: "ow-3", brand: "Mastercard", last4: "0905", expMonth: 4, expYear: 2027, primary: true }
       ],
       audit: [
-        { id: "au-1", adminEmail: "owner@pawsandclaws.example", action: "Refund issued", detail: "or-2001 — $12.00", at: addDays(-3) },
+        { id: "au-1", adminEmail: "owner@pawsandclaws.example", action: "Refund issued", detail: "or-2001 — NGN 12.00", at: addDays(-3) },
         { id: "au-2", adminEmail: "front@pawsandclaws.example", action: "Booking created", detail: "bk-1003 for Bruno", at: addDays(-2) }
       ],
       admins,
@@ -318,21 +321,13 @@
         tagline: "Pet Co.",
         banner: "",
         heroTitle: "Everything your best friend needs, all under one woof.",
-        emergencyHotline: "(555) 018-4400",
-        emergencyNote: "Staffed 24/7 by licensed vets. Members and non-members welcome.",
-        hours: [
-          { day: "Monday", open: "9:00 AM", close: "7:00 PM" },
-          { day: "Tuesday", open: "9:00 AM", close: "7:00 PM" },
-          { day: "Wednesday", open: "9:00 AM", close: "7:00 PM" },
-          { day: "Thursday", open: "9:00 AM", close: "7:00 PM" },
-          { day: "Friday", open: "9:00 AM", close: "7:00 PM" },
-          { day: "Saturday", open: "9:00 AM", close: "7:00 PM" },
-          { day: "Sunday", open: "10:00 AM", close: "4:00 PM" }
-        ],
+        emergencyHotline: "",
+        emergencyNote: "For urgent pet health concerns, contact a local veterinary clinic. Online messages are not monitored for emergencies.",
+        hours: [],
         toggles: { appointmentReminder: true, vaccineRenewal: true, abandonedCart: true, waitlistAlerts: true },
-        address: "142 Alder Brook Lane, Suite 3, Riverton, OR 97008",
-        phone: "(555) 018-4427",
-        email: "hello@pawsandclaws.example"
+        address: "Amasoma",
+        phone: "",
+        email: ""
       },
       inquiries: [],
       contactMessages: [],
@@ -376,9 +371,24 @@
     return productionMode() && clerkOn() && !!(cv && cv.active);
   }
 
+  // Replace only the shipped template contact details; preserve later CMS edits.
+  function normalizeStoreDetails(cms) {
+    if (!cms) return cms;
+    if (!cms.address || /Alder Brook|Riverton/.test(cms.address)) cms.address = "Amasoma";
+    if (/555/.test(cms.phone || "")) cms.phone = "";
+    if (/555/.test(cms.emergencyHotline || "")) { cms.emergencyHotline = ""; cms.emergencyNote = "For an urgent pet health concern, contact a local veterinary clinic. Our online messages are not monitored for emergencies."; }
+    if (/\.example$/.test(cms.email || "")) cms.email = "";
+    const templateHours = Array.isArray(cms.hours) && cms.hours.length === 7 &&
+      cms.hours.every((row, i) => row.day === ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][i] &&
+        row.open === (i === 6 ? "10:00 AM" : "9:00 AM") && row.close === (i === 6 ? "4:00 PM" : "7:00 PM"));
+    if (templateHours) cms.hours = [];
+    return cms;
+  }
+
   function applyRemoteSnapshot(snapshot) {
     if (!productionMode() || !snapshot || typeof snapshot !== "object" || snapshot.version !== 1) return false;
     db = snapshot;
+    db.cms = normalizeStoreDetails(db.cms || seed().cms);
     // Keep authenticated records in memory, not persistent browser storage.
     try { localStorage.removeItem(KEY); } catch {}
     try { if (global.PNC && global.PNC.onDbChange) global.PNC.onDbChange(); } catch {}
@@ -435,7 +445,7 @@
     }
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) { const parsed = JSON.parse(raw); if (parsed && parsed.version === 1) { db = parsed; return db; } }
+      if (raw) { const parsed = JSON.parse(raw); if (parsed && parsed.version === 1) { db = parsed; normalizeStoreDetails(db.cms); return db; } }
     } catch {}
     db = seed();
     persist();
@@ -494,10 +504,8 @@
 
   /* ------------------------------ stats ------------------------------- */
   function stats() {
-    const revenueServices = db.bookings.filter((b) => b.status !== "cancelled")
-      .reduce((n, b) => n + (b.paid || 0), 0);
-    const revenueRetail = db.orders.filter((o) => o.status !== "cancelled")
-      .reduce((n, o) => n + (o.paid || 0), 0);
+    const revenueServices = db.bookings.reduce((n, b) => n + (b.paid || 0), 0);
+    const revenueRetail = db.orders.reduce((n, o) => n + (o.paid || 0), 0);
     const lowStock = db.products.filter((p) => p.stock <= p.lowAt);
     const pending = db.orders.filter((o) => o.status === "open");
     return {
@@ -585,7 +593,7 @@
     const email = String(input.email || "").trim().toLowerCase();
     const pw = String(input.password || "");
     if (name.length < 2) return { error: "Please tell us your full name." };
-    if (!isValidEmail(email)) return { error: "Enter a valid email address." };
+    if ((email || !a || o.clerkId) && !isValidEmail(email)) return { error: "Enter a valid email address." };
     if (pw.length < 8) return { error: "Password must be at least 8 characters." };
     if (db.owners.some((o) => o.email === email)) return { error: "An account with this email already exists." };
     const owner = {
@@ -814,11 +822,12 @@
   }
 
   /* --------------------------- bookings API --------------------------- */
-  function createBooking(input) {
-    if (remoteEnabled()) return remoteMutation("createBooking", input);
+  function createBooking(input, staffMode = false) {
+    if (remoteEnabled()) return remoteMutation(staffMode ? "staffBooking" : "createBooking", input);
     if (productionMode()) return { error: "Secure backend is not available." };
-    const owner = currentOwner();
-    if (!owner) return { error: "Please sign in to book an appointment." };
+    if (staffMode && !can("bookings.manage")) return {error: "Not authorized."};
+    const owner = staffMode ? byId(db.owners, input.ownerId) : currentOwner();
+    if (!owner) return { error: "Please select a customer or sign in to book." };
     const svc = byId(db.services, input.serviceId);
     const pet = byId(db.pets, input.petId);
     if (!svc || !pet) return { error: "Pick a service and a pet to continue." };
@@ -836,24 +845,43 @@
     if (!slot) return { error: "That time slot is no longer available. Please pick another." };
 
     /* Members get their plan discount on the service total. */
-    const rate = discountRate(owner);
+    const rate = staffMode ? 0 : discountRate(owner);
     const total = Math.round(svc.price * (1 - rate) * 100) / 100;
     const deposit = svc.deposit ? Math.round(total * DEPOSIT_RATE * 100) / 100 : 0;
     const bk = {
       id: "bk-" + (1000 + db.bookings.length + 1),
       ownerId: owner.id, petId: pet.id, serviceId: svc.id, providerId: provider.id,
       date: input.date, hour: slot.hour, duration: svc.duration,
-      status: "confirmed", deposit, total, paid: deposit, paymentStatus: svc.deposit ? "demo-pending" : "not_required",
-      intake: input.intake || {}, createdAt: todayISO(), createdBy: "self",
+      status: "confirmed", deposit, total, paid: staffMode ? 0 : deposit, paymentStatus: staffMode ? "pending" : svc.deposit ? "demo-pending" : "not_required",
+      intake: input.intake || {}, createdAt: todayISO(), createdBy: staffMode ? "staff" : "self",
       discountRate: rate || undefined
     };
     db.bookings.push(bk);
     notify(owner.id, "booking", "Booking confirmed: " + svc.name,
       pet.petName + " is booked for " + fmtDT(bk.date, bk.hour) + " with " + provider.name + ".");
-    message(owner.id, "email", "Appointment confirmation", svc.name + " for " + pet.petName + " on " + fmtDT(bk.date, bk.hour) + ". Deposit " + money(deposit) + " received.", "out");
+    message(owner.id, "email", "Appointment confirmation", svc.name + " for " + pet.petName + " on " + fmtDT(bk.date, bk.hour) + ". Deposit " + money(deposit) + (staffMode ? " due at the store." : " received."), "out");
     audit("Booking created", bk.id + " — " + pet.petName + " · " + svc.name);
     persist();
     return { booking: bk };
+  }
+
+  function staffBooking(input) { return createBooking(input, true); }
+  function recordBookingPayment(bookingId, amount, method, options = {}) {
+    if (remoteEnabled()) return remoteMutation("recordBookingPayment", {bookingId, amount, method, options});
+    if (productionMode()) return {error: "Secure backend is not available."};
+    if (!can("payments.take") || !can("bookings.manage")) return {error: "Not authorized."};
+    const booking = byId(db.bookings, bookingId);
+    if (!booking || ["cancelled", "no-show"].includes(booking.status)) return {error: "Appointment is not payable."};
+    if (!/^[a-zA-Z0-9_-]{8,100}$/.test(options.requestId || "")) return {error: "A payment reference is required."};
+    const payments = booking.storePayments || [];
+    if (payments.some(x => x.requestId === options.requestId)) return {booking};
+    amount = Number(amount);
+    if (!Number.isFinite(amount) || amount <= 0 || Math.round(amount * 100) / 100 !== amount || amount > Math.round((booking.total - booking.paid) * 100) / 100) return {error: "Payment must be positive and cannot exceed the outstanding balance."};
+    if (!["Cash", "Bank transfer"].includes(method)) return {error: "Invalid payment method."};
+    payments.push({requestId: options.requestId, amount, method, reference: String(options.reference || "").slice(0,120), at: new Date().toISOString()});
+    booking.storePayments = payments; booking.paid = Math.round((booking.paid + amount) * 100) / 100;
+    booking.paymentStatus = booking.paid >= booking.total ? "paid" : "partial";
+    audit("Appointment payment", booking.id + " — " + money(amount)); persist(); return {booking};
   }
 
   function rescheduleBooking(bookingId, date, hour, providerId) {
@@ -1007,18 +1035,22 @@
   }
 
   /* ---------------------------- listings ------------------------------ */
-  function submitInquiry(listingId, message2) {
-    if (remoteEnabled()) return remoteMutation("submitInquiry", { listingId, message: message2 });
+  function submitInquiry(listingId, message2, contact = {}) {
+    if (remoteEnabled()) return remoteMutation("submitInquiry", { listingId, message: message2, name: contact.name, email: contact.email });
     if (productionMode()) return { error: "Secure backend is not available." };
     const owner = currentOwner();
     const l = byId(db.listings, listingId);
     if (!l) return { error: "Listing not found." };
     if (l.status !== "available") return { error: l.name + " is no longer available." };
+    const name = String(contact.name || owner?.fullName || "").trim();
+    const email = String(contact.email || owner?.email || "").trim().toLowerCase();
+    if (name.length < 2 || !isValidEmail(email)) return { error: "Enter your name and a valid email so the team can reply." };
     db.inquiryCounter = (db.inquiryCounter || 0) + 1;
     const ref = "INQ-" + String(db.inquiryCounter).padStart(4, "0");
     db.inquiries = db.inquiries || [];
-    db.inquiries.unshift({ id: uid("inq"), ref, ownerId: owner ? owner.id : null, listingId: l.id, message: String(message2 || "").trim().slice(0, 2000), status: "new", createdAt: todayISO() });
+    db.inquiries.unshift({ id: uid("inq"), ref, ownerId: owner ? owner.id : null, name, email, listingId: l.id, message: String(message2 || "").trim().slice(0, 2000), status: "new", createdAt: todayISO() });
     if (owner) notify(owner.id, "listing", "Inquiry " + ref + " sent", "Your inquiry about " + l.name + " was recorded for the listing provider.");
+    if (owner) message(owner.id, "portal", "Inquiry " + ref + " about " + l.name, "Your inquiry was saved for the team. They can reply using your contact details.", "out");
     audit("Purchase inquiry", ref + " — " + l.name);
     persist();
     return { ref };
@@ -1111,6 +1143,7 @@
     const admin = currentAdmin();
     if (!admin || !can("staff.manage")) return { error: "Not authorized." };
     if (!PROVIDER_BY_ID[providerId] || !validDateOnly(String(date)) || String(date) < todayISO()) return { error: "Invalid leave date." };
+    if (db.bookings.some(b => b.providerId === providerId && b.date === date && !["cancelled", "completed", "no-show"].includes(b.status))) return { error: "Reschedule or cancel this specialist's appointments before blocking the day." };
     if (db.staffLeave.some(l => l.providerId === providerId && l.date === date)) return { error: "Leave is already booked for that day." };
     db.staffLeave.push({ id: uid("lv"), providerId, date, reason: String(reason || "Blocked").slice(0, 240) });
     audit("Staff leave", providerId + " on " + fmtDate(date));
@@ -1157,8 +1190,8 @@
     if (productionMode()) return { error: "Secure backend is not available." };
     if (!can("crm.edit")) return { error: "Not authorized." };
     const fullName = String(input.fullName || "").trim(), email = String(input.email || "").trim().toLowerCase();
-    if (fullName.length < 2 || !isValidEmail(email)) return { error: "Enter a full name and valid email." };
-    if (db.owners.some(o => o.email === email)) return { error: "An account with this email already exists." };
+    if (fullName.length < 2 || fullName.length > 120 || (email && !isValidEmail(email))) return { error: "Enter a full name and valid email." };
+    if (email && db.owners.some(o => o.email === email)) return { error: "An account with this email already exists." };
     const owner = { id: uid("ow"), fullName, email, phone: String(input.phone || ""), address: "", emergencyContact: "", notes: "", plan: "puppy", createdAt: todayISO() };
     db.owners.push(owner); audit("Customer created", owner.id); persist(); return { owner };
   }
@@ -1202,8 +1235,8 @@
     if (patch && patch.plan !== undefined && !Object.prototype.hasOwnProperty.call(PLAN_DISCOUNT, patch.plan)) return { error: "Invalid membership plan." };
     if (patch && patch.email !== undefined) {
       const email = String(patch.email).trim().toLowerCase();
-      if (!isValidEmail(email)) return { error: "Enter a valid email address." };
-      if (db.owners.some(x => x.id !== ownerId && x.email === email)) return { error: "An account with this email already exists." };
+      if ((email || !a || o.clerkId) && !isValidEmail(email)) return { error: "Enter a valid email address." };
+      if (email && db.owners.some(x => x.id !== ownerId && x.email === email)) return { error: "An account with this email already exists." };
       patch.email = email;
     }
     ["fullName", "email", "phone", "emergencyContact", "address", "notes", "plan"].forEach((k) => {
@@ -1308,7 +1341,7 @@
     const actor = currentOwner();
     const p = byId(db.pets, petId);
     if (!p) return { error: "Pet not found." };
-    if (!actor || p.ownerId !== actor.id) return { error: "Not authorized." };
+    if (currentAdmin() ? !can("crm.edit") : !actor || p.ownerId !== actor.id) return { error: "Not authorized." };
     if (!VACCINES.includes(name) || !validDateOnly(date) || date > todayISO()) return { error: "Enter a valid vaccine and administration date." };
     p.vaccines = (p.vaccines || []).concat([{ name, date, lot: lot || "", status: "pending" }]);
     audit("Vaccine uploaded", p.petName + " — " + name + " (pending review)");
@@ -1349,30 +1382,76 @@
     return { owners, pets, bookings };
   }
 
+function prepareStoreSale(lines, products, method, options) {
+  if (!Array.isArray(lines) || !lines.length || lines.length > 100) throw new Error("Add between 1 and 100 sale lines.");
+  if (!["Cash", "Bank transfer"].includes(method)) throw new Error("Choose cash or bank transfer.");
+  if (!/^[a-zA-Z0-9_-]{8,100}$/.test(options.requestId || "")) throw new Error("A sale reference is required. Refresh and try again.");
+  const quantities = new Map();
+  const items = lines.map(line => {
+    const qty = Number(line.qty === undefined ? 1 : line.qty);
+    if (!Number.isInteger(qty) || qty < 1 || qty > 9999) throw new Error("Quantity must be a whole number between 1 and 9,999.");
+    const product = line.productId ? products.find(p => p.id === line.productId) : null;
+    if (line.productId && !product) throw new Error("Product no longer exists.");
+    const label = String(product ? product.name : line.label || "").trim().slice(0, 120);
+    const price = Number(product ? product.price : line.amount);
+    if (!label || !Number.isFinite(price) || price <= 0 || price > 1000000) throw new Error("Each line needs a description and a positive price.");
+    if (product) quantities.set(product.id, (quantities.get(product.id) || 0) + qty);
+    return {productId: product ? product.id : "pos", label, qty, price: Math.round(price * 100) / 100};
+  });
+  for (const [id, qty] of quantities) {
+    const product = products.find(p => p.id === id);
+    if (!Number.isInteger(product.stock) || qty > product.stock) throw new Error("Not enough stock for " + product.name + ".");
+  }
+  const total = Math.round(items.reduce((sum, item) => sum + item.qty * item.price, 0) * 100) / 100;
+  if (total <= 0 || total > 1000000) throw new Error("Sale total must be between 0.01 and 1,000,000.");
+  const tendered = method === "Cash" && options.tendered !== undefined && options.tendered !== "" ? Number(options.tendered) : total;
+  if (!Number.isFinite(tendered) || tendered < total || tendered > 1000000) throw new Error("Cash received must cover the total.");
+  return { items, total, quantities, tendered: Math.round(tendered * 100) / 100,
+    change: Math.round((tendered - total) * 100) / 100, reference: String(options.reference || "").trim().slice(0, 120) };
+}
+
   /* ----------------------------- POS ---------------------------------- */
   /* Charge a customer for products, a service and a booking in a
      single transaction — the "integrated checkout". */
-  function posCharge(ownerId, lines, method) {
-    if (remoteEnabled()) return remoteMutation("posCharge", { ownerId, lines, method });
+  function posCharge(ownerId, lines, method, options = {}) {
+    if (remoteEnabled()) return remoteMutation("posCharge", { ownerId, lines, method, options });
     if (productionMode()) return { error: "Secure backend is not available." };
-    const admin = currentAdmin();
-    if (!admin || !can("payments.take")) return { error: "Not authorized." };
-    if (!byId(db.owners, ownerId)) return { error: "Owner not found." };
-    if (!Array.isArray(lines) || !lines.length) return { error: "No POS lines." };
-    const normalized = lines.map(l => ({ label: String(l.label || l.productId || "POS item").trim().slice(0, 120), amount: Number(l.amount) }));
-    if (!normalized.length || normalized.some(l => !l.label || !Number.isFinite(l.amount) || l.amount <= 0)) return { error: "Invalid POS line." };
-    const total = Math.round(normalized.reduce((n, l) => n + l.amount, 0) * 100) / 100;
-    const o = {
-      id: "or-" + (2000 + db.orders.length + 1),
-      ownerId, placedAt: todayISO(),
-      items: normalized.map((l) => ({ productId: "pos", qty: 1, price: l.amount })),
-      fulfillment: "pos", address: "", status: "delivered", stage: "done",
-      total, paid: total, method: method || "Cash"
-    };
-    db.orders.push(o);
-    audit("POS charge", o.id + " — " + money(total) + " (" + (method || "Cash") + ")");
-    persist();
-    return { order: o, total };
+    if (!can("payments.take")) return { error: "Not authorized." };
+    ownerId = String(ownerId || "");
+    if (ownerId && !byId(db.owners, ownerId)) return {error: "Customer not found."};
+    const previous = db.orders.find(o => o.requestId && o.requestId === options.requestId);
+    if (previous) return {order: previous, total: previous.total};
+    let sale;
+    try { sale = prepareStoreSale(lines, db.products, method, options); }
+    catch (e) { return {error: e.message}; }
+    const order = { id: uid("or"), ownerId, placedAt: new Date().toISOString(), items: sale.items,
+      fulfillment: "pos", address: "", status: "delivered", stage: "done", total: sale.total, paid: sale.total,
+      method, paymentStatus: "recorded", requestId: options.requestId, reference: sale.reference,
+      tendered: sale.tendered, change: sale.change };
+    for (const [id, qty] of sale.quantities) byId(db.products, id).stock -= qty;
+    db.orders.push(order);
+    audit("In-store sale", order.id + " — " + money(sale.total)); persist();
+    return {order, total: sale.total};
+  }
+
+  function refundStoreSale(orderId, amount, method, options = {}) {
+    if (remoteEnabled()) return remoteMutation("refundStoreSale", {orderId, amount, method, options});
+    if (productionMode()) return {error: "Secure backend is not available."};
+    if (!can("payments.refund")) return {error: "Not authorized."};
+    const order = byId(db.orders, orderId);
+    if (!order || order.fulfillment !== "pos") return {error: "In-store sale not found."};
+    if (!/^[a-zA-Z0-9_-]{8,100}$/.test(options.requestId || "")) return {error: "A refund reference is required."};
+    const refunds = order.storeRefunds || [];
+    if (refunds.some(x => x.requestId === options.requestId)) return {order};
+    amount = Number(amount);
+    const reason = String(options.reason || "").trim().slice(0,500);
+    if (!Number.isFinite(amount) || amount <= 0 || Math.round(amount * 100) / 100 !== amount || amount > order.paid) return {error: "Refund must be positive and cannot exceed the amount paid."};
+    if (!["Cash", "Bank transfer"].includes(method) || !reason) return {error: "Enter the refund method and reason."};
+    refunds.push({requestId: options.requestId, amount, method, reason, at: new Date().toISOString()});
+    order.storeRefunds = refunds; order.paid = Math.round((order.paid - amount) * 100) / 100;
+    order.refunded = Math.round(((order.refunded || 0) + amount) * 100) / 100;
+    if (order.paid === 0) order.status = "refunded";
+    audit("In-store refund recorded", order.id + " — " + money(amount)); persist(); return {order};
   }
 
   /* ---------------------------- payments ------------------------------ */
@@ -1415,10 +1494,16 @@
   global.PNC_DB = {
     /* constants */
     KEY, CURRENCY, DEPOSIT_RATE, PLAN_DISCOUNT, SPECIES, SEXES, ALTERED, VACCINES, TEMPERAMENTS,
-    SERVICE_GROUPS, ADMIN_ROLES, STAGES, PRODUCTS, PRODUCT_BY_ID, SERVICES, SERVICE_BY_ID,
-    PROVIDERS, PROVIDER_BY_ID, DAY_START, DAY_END, STEP,
+    ADMIN_ROLES, STAGES, DAY_START, DAY_END, STEP,
+    get SERVICE_GROUPS() { return db?.serviceGroups || SERVICE_GROUPS; },
+    get PRODUCTS() { return db?.products || PRODUCTS; },
+    get PRODUCT_BY_ID() { return Object.fromEntries(this.PRODUCTS.map(p => [p.id, p])); },
+    get SERVICES() { return db?.services || SERVICES; },
+    get SERVICE_BY_ID() { return Object.fromEntries(this.SERVICES.map(s => [s.id, s])); },
+    get PROVIDERS() { return db?.providers || PROVIDERS; },
+    get PROVIDER_BY_ID() { return Object.fromEntries(this.PROVIDERS.map(p => [p.id, p])); },
     /* helpers */
-    esc, money, uid, isoDate, todayISO, addDays, fmtDate, fmtTime, fmtDT, daysBetween,
+    esc, icon, money, uid, isoDate, todayISO, addDays, fmtDate, fmtTime, fmtDT, daysBetween,
     isValidEmail, clone, titleCase, speciesIcon, initials, parseD, productionMode, applyRemoteSnapshot, clearRemoteSnapshot, clearRemoteSession,
     /* store */
     load, persist, reset, seed,
@@ -1437,7 +1522,7 @@
     /* admin auth + RBAC */
     adminLogin, adminLogout, session, currentAdmin, can, scopeOf, PERMS,
     /* booking */
-    createBooking, rescheduleBooking, cancelBooking, setBookingStatus, addBookingNote,
+    createBooking, staffBooking, recordBookingPayment, rescheduleBooking, cancelBooking, setBookingStatus, addBookingNote,
     /* orders */
     placeOrder, setOrderStage, refund,
     /* listings */
@@ -1451,7 +1536,7 @@
     /* crm */
     createOwner, sendMessage, markMessageRead, setContactStatus, updateOwner, addPet, updatePet, removePet, addVaccine, setVaccineStatus, searchCRM,
     /* pos + payments */
-    posCharge, addPaymentMethod, removePaymentMethod, setPrimaryPayment,
+    posCharge, refundStoreSale, addPaymentMethod, removePaymentMethod, setPrimaryPayment,
     /* raw accessor for admin views */
     get db() { return db; }
   };

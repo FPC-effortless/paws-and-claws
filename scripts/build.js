@@ -34,3 +34,16 @@ fs.copyFileSync(convexBundle, path.join(projectRoot, "assets", "js", "convex.bro
 copyBrowserRuntime("@clerk/clerk-js", "clerk.browser.js", "clerk-js");
 copyBrowserRuntime("@clerk/ui", "ui.browser.js", "clerk-ui");
 console.log("Copied Clerk and Convex browser SDKs into the deployment assets.");
+
+// Publish only the static website, never the checkout or local configuration.
+const outputDirectory = path.resolve(projectRoot, "dist");
+if (path.dirname(outputDirectory) !== projectRoot) throw new Error("Invalid static output directory.");
+fs.rmSync(outputDirectory, { recursive: true, force: true });
+fs.mkdirSync(outputDirectory, { recursive: true });
+for (const page of ["index.html", "services.html", "shop.html", "pets.html", "membership.html", "account.html", "contact.html"]) {
+  fs.copyFileSync(path.join(projectRoot, page), path.join(outputDirectory, page));
+}
+fs.mkdirSync(path.join(outputDirectory, "admin"));
+fs.copyFileSync(path.join(projectRoot, "admin", "index.html"), path.join(outputDirectory, "admin", "index.html"));
+fs.cpSync(path.join(projectRoot, "assets"), path.join(outputDirectory, "assets"), { recursive: true });
+console.log("Built the static website in dist/.");
