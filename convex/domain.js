@@ -128,7 +128,11 @@ async function ownerFor(ctx, allowCreate = false) {
 
   let owner = await recordForIdentity(ctx, "owners", id);
   if (!owner && allowCreate) {
-    if (!id.email || id.emailVerified !== true) throw new Error("Verify your email before creating your member profile.");
+    // A new profile is bound to the authenticated Clerk subject, so it does
+    // not need to trust an email claim. Email verification is still required
+    // by recordForIdentity before an unbound identity can claim an existing
+    // owner or staff row.
+    if (!id.email) throw new Error("Your account needs an email address before creating a member profile.");
     if (await ctx.db.query("owners").withIndex("by_email", q => q.eq("email", id.email.trim().toLowerCase())).first()) throw new Error("This email is already linked to another account. Contact support.");
     owner = {
       id: "ow-" + crypto.randomUUID().slice(0, 8),

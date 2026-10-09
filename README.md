@@ -77,7 +77,7 @@ Staff authorization is determined from the server-side Convex `admins` table. Do
 
 Activate Clerk's Convex integration in the Clerk Dashboard. The application requests a Clerk token using the template name **`convex`**. Use the integration's recommended template/configuration and make sure its audience is `convex`.
 
-The token must include the standard `email_verified` claim (available as `identity.emailVerified` in Convex). New member profiles and the first link to an email-based customer/staff record require a verified email. Records already linked to a Clerk subject can only be accessed by that subject; reassignments require a trusted administrator to update the backend record.
+The token should include the standard `email_verified` claim (available as `identity.emailVerified` in Convex). New member profiles are bound to the authenticated Clerk subject and can be created even if that claim is delayed; the first link to an existing email-based customer/staff record still requires a verified email. Records already linked to a Clerk subject can only be accessed by that subject; reassignments require a trusted administrator to update the backend record.
 
 Set the Convex deployment environment variable:
 
