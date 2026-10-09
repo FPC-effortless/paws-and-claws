@@ -899,9 +899,11 @@
       if (empty && !$("#svcInitBtn")) initializer.insertAdjacentHTML("beforeend", ' <button class="btn btn-teal btn-sm" type="button" id="svcInitBtn">Initialize approved baseline</button>');
       const initButton = $("#svcInitBtn");
       if (initButton) initButton.onclick = async function () {
+        if (initButton.disabled) return;
         if (!window.confirm("Add the approved service departments, staff profiles and service baseline to production? You can edit them afterward.")) return;
+        initButton.disabled = true;
         const r = await Promise.resolve(D.initializeCatalog());
-        if (r && r.error) return toast(r.error, "err");
+        if (r && r.error) { initButton.disabled = false; return toast(r.error, "err"); }
         toast("Catalog initialized");
         renderCMS();
       };
