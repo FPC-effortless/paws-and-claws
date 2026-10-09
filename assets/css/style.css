@@ -148,6 +148,7 @@ section { padding: clamp(56px, 8vw, 104px) 0; }
 /* ----------------------------- Header ---------------------------- */
 .site-header {
   position: sticky; top: 0; z-index: 100;
+  min-height: var(--nav-h);
   background: rgba(247,248,248,.86);
   backdrop-filter: blur(14px) saturate(140%);
   border-bottom: 1px solid transparent;
@@ -211,13 +212,15 @@ body.menu-open .burger span::after { top: 0; transform: rotate(-45deg); }
 @media (max-width: 900px) {
   .burger { display: grid; }
   .nav-links {
-    position: fixed; inset: var(--nav-h) 0 auto; flex-direction: column; align-items: stretch;
+    position: absolute; top: 100%; left: 0; right: 0; flex-direction: column; align-items: stretch;
     background: var(--paper); border-bottom: 1px solid var(--line); padding: 14px var(--gutter) 22px;
     box-shadow: var(--sh-2); gap: 6px; margin-left: 0;
-    visibility: hidden; transform: translateY(-130%); transition: transform .3s cubic-bezier(.4,0,.2,1); z-index: 99;
+    max-height: calc(100dvh - var(--nav-h)); overflow-y: auto;
+    visibility: hidden; opacity: 0; pointer-events: none;
+    transform: translateY(-8px); transition: transform .18s ease, opacity .18s ease; z-index: 99;
   }
-  body.menu-open .nav-links { visibility: visible; transform: translateY(0); }
-  .nav-links a { padding: 13px 16px; font-size: 1.05rem; border-radius: var(--r-md); }
+  body.menu-open .nav-links { visibility: visible; opacity: 1; pointer-events: auto; transform: none; }
+  .nav-links a { padding: 13px 16px; min-height: 48px; font-size: 1.05rem; border-radius: var(--r-md); }
   .nav-links .btn { margin-top: 8px; }
 }
 
@@ -317,12 +320,27 @@ textarea.input { resize: vertical; min-height: 110px; }
   .shop-filters { position: static; }
 }
 @media (max-width: 600px) {
+  :root { --nav-h: 64px; }
+  .site-header { background: var(--paper); backdrop-filter: none; }
+  .modal-backdrop { backdrop-filter: none; }
   .nav { gap: 8px; }
   .brand { font-size: 1rem; gap: 7px; white-space: nowrap; }
   .brand-img { width: 34px; height: 34px; }
   .nav-actions { gap: 6px; margin-left: auto; }
   #memberZone { display: none; }
   .nav-bell, .cart-btn, .burger { width: 40px; height: 40px; flex-shrink: 0; }
+  section { padding-block: 48px; }
+  .sec-head { margin-bottom: 26px; }
+  .btn { white-space: normal; text-align: center; min-height: 44px; }
+  .input, select.input, textarea.input, select { font-size: 16px; }
+  .modal-backdrop { padding: 8px; align-items: end; }
+  .modal { max-height: calc(100dvh - 16px); border-radius: 20px 20px 12px 12px; }
+  .modal-pad { padding: 24px 18px; }
+}
+
+@media (hover: none) {
+  .card:hover, .product-card:hover, .pet-card:hover,
+  .btn:hover, .add-btn:hover { transform: none; }
 }
 
 .nav-links .btn-teal { color: var(--white); }

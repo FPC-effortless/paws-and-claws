@@ -456,7 +456,7 @@
 .pet-meta { display: flex; gap: 12px; flex-wrap: wrap; font-size: .8rem; color: var(--ink-soft); font-weight: 600; padding: 7px 0; border-top: 1px dashed var(--paper-3); border-bottom: 1px dashed var(--paper-3); }
 .pet-bio { margin: 0; font-size: .86rem; color: var(--ink-soft); }
 
-.status-pill { position: absolute; top: 10px; left: 10px; border-radius: 999px; padding: 4px 11px; font-size: .7rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.pet-art > .status-pill { position: absolute; top: 10px; left: 10px; }
 .status-pill.available { background: var(--ok-soft); color: var(--ok); }
 .status-pill.reserved { background: var(--warn-soft); color: var(--warn); }
 .status-pill.sold { background: var(--paper-2); color: var(--ink-soft); }
@@ -743,6 +743,72 @@
 .store-hour-row { display:grid; grid-template-columns:minmax(80px,1fr) repeat(2,minmax(110px,1fr)); gap:10px; align-items:center; margin:8px 0; }
 .store-hour-row label { display:grid; gap:4px; }
 @media (max-width:650px) { .store-hour-row { grid-template-columns:1fr 1fr; } .store-hour-row b { grid-column:1/-1; } }
+
+/* Keep catalog controls compact and reachable on small screens. */
+.pet-filter-toggle { display: none; }
+@media (max-width: 900px) {
+  .pet-filter-toggle { display: inline-flex; width: 100%; }
+  .pet-facets:not(.filters-open) #petFilterOptions { display: none; }
+  .pet-facets.filters-open #petFilterOptions { padding-top: 18px; }
+}
+@media (max-width: 620px) {
+  .pet-facets, .shop-filters { padding: 14px; }
+  .shop-filter-toggle { width: 100%; }
+  .shop-toolbar { gap: 12px; }
+  .shop-toolbar select { max-width: 100%; font-size: 16px; }
+  .f-chip, .date-pill, .tag-btn { min-height: 44px; }
+  .acct-wrap { padding-inline: 12px; }
+  .acct-panels { padding: 18px 14px 24px; }
+  .acct-tab { min-height: 48px; }
+  .stat-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 380px) {
+  .brand { font-size: .9rem; gap: 5px; }
+  .brand-img { width: 30px; height: 30px; }
+  .nav { gap: 4px; }
+  .nav-actions { gap: 4px; }
+}
+
+/* Member portal and admin console should not inherit marketing-section spacing. */
+#acctApp, .admin-view { padding: 0; }
+.admin-gate { max-width: none; margin: 0; }
+.acct-tabs { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-inline: contain; }
+.acct-tab { scroll-snap-align: start; }
+.admin-side-close, .admin-side-backdrop { display: none; }
+
+@media (max-width: 900px) {
+  .admin-side { width: min(300px, 85vw); }
+  .admin-side-close {
+    display: grid; place-items: center; position: absolute; top: 14px; right: 12px;
+    width: 44px; height: 44px; border-radius: 12px; color: #fff;
+    background: rgba(255,255,255,.12); font-size: 1.6rem; line-height: 1;
+  }
+  .admin-side-backdrop:not([hidden]) { display: block; position: fixed; inset: 0; z-index: 25; background: rgba(5,47,68,.52); }
+  .admin-nav-open { overflow: hidden; }
+  .side-brand { padding-right: 44px; }
+}
+
+@media (max-width: 620px) {
+  .admin-topbar {
+    display: grid; grid-template-columns: 44px minmax(0,1fr);
+    gap: 8px 10px; padding: 10px 16px;
+  }
+  .side-toggle { grid-column: 1; grid-row: 1; width: 44px; height: 44px; }
+  .topbar-search { grid-column: 2; grid-row: 1; min-width: 0; max-width: none; }
+  .topbar-search input { min-height: 44px; font-size: 16px; }
+  .topbar-actions { grid-column: 1/-1; grid-row: 2; margin: 0; min-width: 0; }
+  .ad-user .who small { display: none; }
+  .admin-scroll { padding: 16px; }
+  .view-head { align-items: flex-start; }
+  .view-head .btn { min-height: 44px; }
+  .chip-filters .chip, .mini-btn { min-height: 40px; }
+  .table-wrap { overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: thin; }
+  .table-wrap::before { content: "Swipe to see all columns →"; display: block; position: sticky; left: 0; width: max-content; padding: 8px 12px 0; font-size: .75rem; font-weight: 700; color: var(--ink-soft); }
+  .adm-table { min-width: 640px; }
+  .acct-tabs { scroll-snap-type: x proximity; padding-inline: 12px; }
+  .acct-tab { min-height: 48px; }
+  .acct-head { padding-block: 28px; }
+}
 @media print {
   body:has(#storeDialog[open]) > :not(#storeDialog) { display:none !important; }
   #storeDialog[open] { position:static; width:100%; max-height:none; border:0; box-shadow:none; padding:0; overflow:visible; }

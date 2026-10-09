@@ -33,7 +33,7 @@
   }
 
   function brandImg(cls) {
-    return '<img class="' + cls + '" src="' + asset("brand/logo.jpg") +
+    return '<img class="' + cls + '" src="' + asset("brand/logo-112.webp") +
       '" width="42" height="42" alt="" loading="eager" decoding="async">';
   }
 
@@ -279,10 +279,17 @@
       document.body.classList.toggle("menu-open", open);
       burger.setAttribute("aria-expanded", String(open));
       burger.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+      if (open) $(".nav-links a").focus();
     }
     if (burger) burger.addEventListener("click", function () { setMenu(!document.body.classList.contains("menu-open")); });
     $$(".nav-links a").forEach(function (a) {
       a.addEventListener("click", function () { setMenu(false); });
+    });
+    document.addEventListener("click", function (e) {
+      if (document.body.classList.contains("menu-open") && !e.target.closest(".nav")) setMenu(false);
+    });
+    window.addEventListener("resize", function () {
+      if (window.innerWidth > 900 && document.body.classList.contains("menu-open")) setMenu(false);
     });
 
     document.addEventListener("keydown", function (e) {

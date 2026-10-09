@@ -76,6 +76,7 @@
       const on = b.dataset.gate === which;
       b.classList.toggle('active', on);
       b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.tabIndex = on ? 0 : -1;
     });
     $('#signInForm').style.display = which === 'signIn' ? '' : 'none';
     $('#signUpForm').style.display = which === 'signUp' ? '' : 'none';
@@ -124,11 +125,19 @@
       const on = b.dataset.tab === t;
       b.classList.toggle('active', on);
       b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.tabIndex = on ? 0 : -1;
     });
     $$('.acct-panel').forEach(p => {
       p.classList.toggle('active', p.dataset.panel === t);
     });
     renderTab(t);
+    const strip = $('.acct-tabs');
+    const selected = $('.acct-tab.active');
+    if (strip && selected && strip.scrollWidth > strip.clientWidth) {
+      const outer = strip.getBoundingClientRect();
+      const inner = selected.getBoundingClientRect();
+      strip.scrollLeft += inner.left - outer.left - (outer.width - inner.width) / 2;
+    }
     const h = window.location.hash.split('?')[0];
     if (h !== '#' + t) history.replaceState(null, '', '#' + t);
   }
@@ -578,11 +587,31 @@
   function init() {
     /* gate tabs */
     $$('.gate-tab').forEach(b => b.addEventListener('click', () => setGate(b.dataset.gate)));
+    $('.gate-tabs').addEventListener('keydown', function (e) {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+      const tabs = $$('.gate-tab');
+      const current = tabs.findIndex(b => b.getAttribute('aria-selected') === 'true');
+      const next = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 :
+        (current + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      e.preventDefault();
+      setGate(tabs[next].dataset.gate);
+      tabs[next].focus();
+    });
     $('#signInForm').addEventListener('submit', doSignIn);
     $('#signUpForm').addEventListener('submit', doSignUp);
 
     /* main tabs */
     $$('.acct-tab').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
+    $('.acct-tabs').addEventListener('keydown', function (e) {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+      const tabs = $$('.acct-tab');
+      const current = tabs.findIndex(b => b.dataset.tab === tab);
+      const next = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 :
+        (current + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+      e.preventDefault();
+      setTab(tabs[next].dataset.tab);
+      tabs[next].focus();
+    });
 
     /* account-level actions */
     $('#acctLogout').addEventListener('click', async function () {

@@ -10,7 +10,7 @@ for (const entry of ['.env.local', '.git', 'convex', 'test', 'tools', 'scripts',
 }
 for (const page of ['index.html','services.html','shop.html','pets.html','membership.html','account.html','contact.html','admin/index.html']) {
   const html = fs.readFileSync(path.join(output, page), 'utf8');
-  for (const match of html.matchAll(/(?:src|href)="([^"?#]+\.(?:js|css|ico|png|jpg))(?:[?#][^"]*)?"/g)) {
+  for (const match of html.matchAll(/(?:src|href)="([^"?#]+\.(?:js|css|ico|png|jpg|webp))(?:[?#][^"]*)?"/g)) {
     if (/^https?:/.test(match[1])) continue;
     const asset = path.resolve(path.dirname(path.join(output, page)), match[1]);
     assert(asset.startsWith(output + path.sep), 'asset must stay in the static output');

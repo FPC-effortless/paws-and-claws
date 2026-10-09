@@ -251,6 +251,12 @@
   /* ---------- init ---------- */
   function init() {
     window.addEventListener('pnc:data-ready', function () { renderFacts(); render(); });
+    const filterToggle = $('#togglePetFilters');
+    if (filterToggle) filterToggle.addEventListener('click', function () {
+      const open = $('#petFilters').classList.toggle('filters-open');
+      this.setAttribute('aria-expanded', String(open));
+      this.textContent = open ? 'Hide pet filters' : 'Show pet filters';
+    });
     buildFacets();
     renderFacts();
     render();

@@ -84,7 +84,7 @@
     const secs = visibleSections();
     host.innerHTML = secs.map(function (s) {
       return '<button type="button" data-section="' + s.id + '"' +
-        (s.id === state.section ? ' class="active"' : "") + ">" +
+        (s.id === state.section ? ' class="active" aria-current="page"' : "") + ">" +
         s.icon + "<span>" + s.label + "</span></button>";
     }).join("");
     $$("[data-section]", host).forEach(function (b) {
@@ -95,13 +95,35 @@
   function go(id) {
     if (!visibleSections().some(s => s.id === id)) id = "dashboard";
     state.section = id;
-    $("#adminSide").classList.remove("open");
+    setSidebar(false);
     $$(".admin-view").forEach(function (v) { v.classList.toggle("active", v.id === "view-" + id); });
-    $$("[data-section]").forEach(function (b) { b.classList.toggle("active", b.dataset.section === id); });
+    $$("[data-section]").forEach(function (b) {
+      const active = b.dataset.section === id;
+      b.classList.toggle("active", active);
+      if (active) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+    });
     render();
     const sc = $("#adminScroll");
     if (sc) sc.scrollTop = 0;
     try { history.replaceState(null, "", "#" + id); } catch (e) {}
+  }
+
+  function setSidebar(open) {
+    const side = $("#adminSide");
+    const toggle = $("#sideToggle");
+    const backdrop = $("#sideBackdrop");
+    if (!side || !toggle || !backdrop) return;
+    const wasOpen = side.classList.contains("open");
+    open = !!open && window.innerWidth <= 900;
+    side.classList.toggle("open", open);
+    side.inert = window.innerWidth <= 900 && !open;
+    side.setAttribute("aria-hidden", String(window.innerWidth <= 900 && !open));
+    backdrop.hidden = !open;
+    document.body.classList.toggle("admin-nav-open", open);
+    toggle.setAttribute("aria-expanded", String(open));
+    toggle.setAttribute("aria-label", open ? "Close admin menu" : "Open admin menu");
+    if (open) $("#sideClose").focus();
+    else if (wasOpen && side.contains(document.activeElement)) toggle.focus();
   }
 
   function renderTopbar() {
@@ -1064,8 +1086,15 @@
     });
     const t = $("#sideToggle");
     if (t) t.addEventListener("click", function () {
-      $("#adminSide").classList.toggle("open");
+      setSidebar(!$("#adminSide").classList.contains("open"));
     });
+    $("#sideClose").addEventListener("click", function () { setSidebar(false); });
+    $("#sideBackdrop").addEventListener("click", function () { setSidebar(false); });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && $("#adminSide").classList.contains("open")) setSidebar(false);
+    });
+    window.addEventListener("resize", function () { setSidebar(false); });
+    setSidebar(false);
     const lo = $("#adLogout");
     if (lo) lo.addEventListener("click", leave);
     const rs = $("#adReset");

@@ -11,9 +11,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/style.css?v=20261009-store6">
-  <link rel="stylesheet" href="assets/css/pages.css?v=20261009-store6">
-  <link rel="stylesheet" href="assets/css/platform.css?v=20261009-store6">
+  <link rel="stylesheet" href="assets/css/style.css?v=20261009-polish3">
+  <link rel="stylesheet" href="assets/css/pages.css?v=20261009-polish3">
+  <link rel="stylesheet" href="assets/css/platform.css?v=20261009-polish3">
 </head>
 <body>
   <header class="site-header"></header>
@@ -23,11 +23,11 @@
     <section class="admin-gate" id="acctGate" style="display:none">
       <div class="gate-card">
         <div class="gate-tabs" role="tablist" aria-label="Account access">
-          <button type="button" class="gate-tab active" data-gate="signIn" role="tab" aria-selected="true">Sign in</button>
-          <button type="button" class="gate-tab" data-gate="signUp" role="tab" aria-selected="false">Create account</button>
+          <button type="button" class="gate-tab active" id="gate-signIn" data-gate="signIn" role="tab" aria-controls="signInForm" aria-selected="true" tabindex="0">Sign in</button>
+          <button type="button" class="gate-tab" id="gate-signUp" data-gate="signUp" role="tab" aria-controls="signUpForm" aria-selected="false" tabindex="-1">Create account</button>
         </div>
 
-        <form id="signInForm" class="gate-form" novalidate>
+        <form id="signInForm" class="gate-form" role="tabpanel" aria-labelledby="gate-signIn" novalidate>
           <div class="field">
             <label for="siEmail">Email</label>
             <input class="input" id="siEmail" type="email" autocomplete="email" placeholder="you@example.com" required>
@@ -40,7 +40,7 @@
           <p class="gate-hint">New here? Create an account — it takes about a minute.</p>
         </form>
 
-        <form id="signUpForm" class="gate-form" style="display:none" novalidate>
+        <form id="signUpForm" class="gate-form" role="tabpanel" aria-labelledby="gate-signUp" style="display:none" novalidate>
           <div class="field">
             <label for="suName">Full name</label>
             <input class="input" id="suName" type="text" autocomplete="name" required>
@@ -78,23 +78,23 @@
       </div>
 
       <div class="wrap acct-tabs" role="tablist" aria-label="Account sections">
-        <button type="button" class="acct-tab active" data-tab="overview" role="tab" aria-selected="true">&#128204; Overview</button>
-        <button type="button" class="acct-tab" data-tab="pets" role="tab" aria-selected="false">&#128021; My pets</button>
-        <button type="button" class="acct-tab" data-tab="bookings" role="tab" aria-selected="false">&#128197; Appointments</button>
-        <button type="button" class="acct-tab" data-tab="orders" role="tab" aria-selected="false">&#128722; Orders</button>
-        <button type="button" class="acct-tab" data-tab="inbox" role="tab" aria-selected="false">&#128236; Inbox <span class="tab-badge" id="inboxBadge" hidden>0</span></button>
-        <button type="button" class="acct-tab" data-tab="payment" role="tab" aria-selected="false">&#128179; Payment</button>
-        <button type="button" class="acct-tab" data-tab="settings" role="tab" aria-selected="false">&#9881; Settings</button>
+        <button type="button" class="acct-tab active" id="tab-overview" data-tab="overview" role="tab" aria-controls="panelOverview" aria-selected="true" tabindex="0">&#128204; Overview</button>
+        <button type="button" class="acct-tab" id="tab-pets" data-tab="pets" role="tab" aria-controls="panelPets" aria-selected="false" tabindex="-1">&#128021; My pets</button>
+        <button type="button" class="acct-tab" id="tab-bookings" data-tab="bookings" role="tab" aria-controls="panelBookings" aria-selected="false" tabindex="-1">&#128197; Appointments</button>
+        <button type="button" class="acct-tab" id="tab-orders" data-tab="orders" role="tab" aria-controls="panelOrders" aria-selected="false" tabindex="-1">&#128722; Orders</button>
+        <button type="button" class="acct-tab" id="tab-inbox" data-tab="inbox" role="tab" aria-controls="panelInbox" aria-selected="false" tabindex="-1">&#128236; Inbox <span class="tab-badge" id="inboxBadge" hidden>0</span></button>
+        <button type="button" class="acct-tab" id="tab-payment" data-tab="payment" role="tab" aria-controls="panelPayment" aria-selected="false" tabindex="-1">&#128179; Payment</button>
+        <button type="button" class="acct-tab" id="tab-settings" data-tab="settings" role="tab" aria-controls="panelSettings" aria-selected="false" tabindex="-1">&#9881; Settings</button>
       </div>
 
       <div class="wrap acct-panels">
-        <div class="acct-panel active" data-panel="overview" id="panelOverview"></div>
-        <div class="acct-panel" data-panel="pets" id="panelPets"></div>
-        <div class="acct-panel" data-panel="bookings" id="panelBookings"></div>
-        <div class="acct-panel" data-panel="orders" id="panelOrders"></div>
-        <div class="acct-panel" data-panel="inbox" id="panelInbox"></div>
-        <div class="acct-panel" data-panel="payment" id="panelPayment"></div>
-        <div class="acct-panel" data-panel="settings" id="panelSettings"></div>
+        <div class="acct-panel active" data-panel="overview" id="panelOverview" role="tabpanel" aria-labelledby="tab-overview" tabindex="0"></div>
+        <div class="acct-panel" data-panel="pets" id="panelPets" role="tabpanel" aria-labelledby="tab-pets" tabindex="0"></div>
+        <div class="acct-panel" data-panel="bookings" id="panelBookings" role="tabpanel" aria-labelledby="tab-bookings" tabindex="0"></div>
+        <div class="acct-panel" data-panel="orders" id="panelOrders" role="tabpanel" aria-labelledby="tab-orders" tabindex="0"></div>
+        <div class="acct-panel" data-panel="inbox" id="panelInbox" role="tabpanel" aria-labelledby="tab-inbox" tabindex="0"></div>
+        <div class="acct-panel" data-panel="payment" id="panelPayment" role="tabpanel" aria-labelledby="tab-payment" tabindex="0"></div>
+        <div class="acct-panel" data-panel="settings" id="panelSettings" role="tabpanel" aria-labelledby="tab-settings" tabindex="0"></div>
       </div>
     </section>
   </main>
@@ -179,14 +179,14 @@
     </div>
   </div>
 
-  <script src="assets/js/data.js?v=20261009-store6"></script>
-  <script src="assets/js/app.js?v=20261009-store6"></script>
-  <script src="assets/js/nav.js?v=20261009-store6"></script>
-  <script src="assets/js/convexClient.js?v=20261009-store6"></script>
+  <script src="assets/js/data.js?v=20261009-polish3"></script>
+  <script src="assets/js/app.js?v=20261009-polish3"></script>
+  <script src="assets/js/nav.js?v=20261009-polish3"></script>
+  <script src="assets/js/convexClient.js?v=20261009-polish3"></script>
   <!-- Clerk is the identity provider. The publishable key lives in
        assets/js/clerk.js — one place for the whole site. Without a
        key the site runs in DEMO MODE. -->
-  <script src="assets/js/clerk.js?v=20261009-store6"></script>
-  <script src="assets/js/account.js?v=20261009-store6"></script>
+  <script src="assets/js/clerk.js?v=20261009-polish3"></script>
+  <script src="assets/js/account.js?v=20261009-polish3"></script>
 </body>
 </html>
