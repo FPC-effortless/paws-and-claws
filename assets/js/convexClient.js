@@ -150,7 +150,10 @@
       }
       if (syncPromise) await syncPromise;
       if (session) {
-        const result = await api.mutate("ensureOwner", {});
+        const owner = ck && typeof ck.currentOwner === "function" ? ck.currentOwner() : null;
+        const result = await api.mutate("ensureOwner", {
+          profile: owner ? { email: owner.email, fullName: owner.fullName } : {}
+        });
         if (result && result.error) {
           const message = String(result.error);
           if (message !== lastAuthSyncError) {

@@ -122,23 +122,24 @@ async function recordForIdentity(ctx, table, id) {
   return candidate && (!candidate.clerkId || candidate.clerkId === id.subject) ? candidate : null;
 }
 
-async function ownerFor(ctx, allowCreate = false) {
+async function ownerFor(ctx, allowCreate = false, profile = {}) {
   const id = await identity(ctx);
   if (await recordForIdentity(ctx, "admins", id)) return null;
 
   let owner = await recordForIdentity(ctx, "owners", id);
   if (!owner && allowCreate) {
-    // A new profile is bound to the authenticated Clerk subject, so it does
-    // not need to trust an email claim. Email verification is still required
-    // by recordForIdentity before an unbound identity can claim an existing
-    // owner or staff row.
-    if (!id.email) throw new Error("Your account needs an email address before creating a member profile.");
-    if (await ctx.db.query("owners").withIndex("by_email", q => q.eq("email", id.email.trim().toLowerCase())).first()) throw new Error("This email is already linked to another account. Contact support.");
+    // A new profile is bound to the authenticated Clerk subject. The client
+    // supplies the verified Clerk profile fields because some Convex JWT
+    // templates omit email/name claims; those fields never authorize access.
+    const email = String(id.email || profile.email || "").trim().toLowerCase();
+    const fullName = String(id.name || profile.fullName || email || "Member").trim().slice(0, 120);
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Your account needs an email address before creating a member profile.");
+    if (await ctx.db.query("owners").withIndex("by_email", q => q.eq("email", email)).first()) throw new Error("This email is already linked to another account. Contact support.");
     owner = {
       id: "ow-" + crypto.randomUUID().slice(0, 8),
       clerkId: id.subject,
-      fullName: id.name || id.email || "Member",
-      email: (id.email || "").toLowerCase(),
+      fullName,
+      email,
       phone: "",
       emergencyContact: "",
       address: "",
@@ -414,7 +415,7 @@ export const mutate = mutation({
         if (staff.clerkId !== id.subject) await ctx.db.patch(staff._id, { clerkId: id.subject });
         return { ok: true, kind: "admin" };
       }
-      const owner = await ownerFor(ctx, true);
+      const owner = await ownerFor(ctx, true, p.profile || {});
       if (!owner) throw new Error("Not authorized.");
       if (owner.clerkId !== id.subject) await ctx.db.patch(owner._id, { clerkId: id.subject });
       return { ok: true, kind: "owner", ownerId: owner.id };
