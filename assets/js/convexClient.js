@@ -20,6 +20,14 @@
     return String(global.__PNC_CONVEX_URL__ || DEFAULT_URL).trim() || null;
   }
 
+  function pendingSignupProfile() {
+    try {
+      const raw = global.sessionStorage && global.sessionStorage.getItem("pnc_pending_signup_profile");
+      const profile = raw ? JSON.parse(raw) : null;
+      return profile && typeof profile === "object" ? profile : {};
+    } catch { return {}; }
+  }
+
   const api = {
     enabled: false,
     client: null,
@@ -121,6 +129,20 @@
       }
     },
 
+    async uploadImage(file) {
+      if (!file || !/^image\/(jpeg|png|webp|gif)$/i.test(file.type) || file.size > 8 * 1024 * 1024) {
+        return { error: "Choose a JPG, PNG, WEBP or GIF image up to 8 MB." };
+      }
+      const ticket = await api.mutate("generateUploadUrl", {});
+      if (ticket.error) return ticket;
+      try {
+        const response = await fetch(ticket.uploadUrl, { method: "POST", headers: { "Content-Type": file.type }, body: file });
+        if (!response.ok) throw new Error("Image upload failed.");
+        const body = await response.json();
+        return { storageId: body.storageId };
+      } catch (err) { return { error: String(err.message || "Image upload failed.") }; }
+    },
+
     async close() {
       if (api.client) {
         try { await api.client.close(); } catch {}
@@ -151,8 +173,13 @@
       if (syncPromise) await syncPromise;
       if (session) {
         const owner = ck && typeof ck.currentOwner === "function" ? ck.currentOwner() : null;
+        const pending = pendingSignupProfile();
         const result = await api.mutate("ensureOwner", {
-          profile: owner ? { email: owner.email, fullName: owner.fullName, phone: owner.phone } : {}
+          profile: owner ? {
+            email: owner.email,
+            fullName: pending.fullName || owner.fullName,
+            phone: pending.phone || owner.phone
+          } : pending
         });
         if (result && result.error) {
           const message = String(result.error);
@@ -166,6 +193,7 @@
           }
           return;
         }
+        try { global.sessionStorage?.removeItem?.("pnc_pending_signup_profile"); } catch {}
         lastAuthSyncError = "";
       }
       await api.syncBootstrap();

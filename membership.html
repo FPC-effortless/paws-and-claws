@@ -73,6 +73,27 @@
         <div class="auth-card">
           <!-- Clerk replaces the local forms when a publishable key is set.
                This page is about joining, so Clerk's <SignUp/> is mounted. -->
+          <div id="memberProfileStep" class="auth-body" hidden>
+            <h2 style="font-size:1.5rem">Tell us about you</h2>
+            <p>Start with your contact details. We’ll use them for appointments and urgent pet-care updates.</p>
+            <form id="memberProfileForm" novalidate>
+              <div class="form-grid">
+                <div class="field">
+                  <label for="reg-first">First name</label>
+                  <input class="input" id="reg-first" type="text" autocomplete="given-name" required>
+                </div>
+                <div class="field">
+                  <label for="reg-last">Last name</label>
+                  <input class="input" id="reg-last" type="text" autocomplete="family-name" required>
+                </div>
+                <div class="field full">
+                  <label for="reg-phone">Phone number</label>
+                  <input class="input" id="reg-phone" type="tel" autocomplete="tel" placeholder="+234 800 000 0000" required>
+                </div>
+              </div>
+              <button class="btn btn-primary btn-block" type="submit">Continue to account creation</button>
+            </form>
+          </div>
           <div id="clerkMemberHolder" hidden class="clerk-member-holder"></div>
           <div id="accountUnavailable" hidden class="auth-body" role="status"><h2>Online accounts are temporarily unavailable</h2><p>Please contact or visit our Amasoma store. You can shop in person without an account.</p><a class="btn btn-primary" href="contact.html">Contact the store</a></div>
           <div class="auth-tabs" role="tablist">
@@ -316,9 +337,11 @@
       function mountClerkJoin() {
         var ck = window.PNC_CLERK;
         var holder = document.getElementById("clerkMemberHolder");
+        var profileStep = document.getElementById("memberProfileStep");
         var unavailable = document.getElementById("accountUnavailable");
         if (!holder) return;
         if (PNC_DB.productionMode() && (!ck || !ck.active)) {
+          if (profileStep) profileStep.hidden = true;
           unavailable.hidden = false;
           document.querySelector(".auth-tabs").hidden = true;
           paneSignup.hidden = true;
@@ -327,18 +350,37 @@
         }
         if (!ck || !ck.active) return;
         unavailable.hidden = true;
+        var pending = null;
+        try { pending = JSON.parse(sessionStorage.getItem("pnc_pending_signup_profile") || "null"); } catch {}
+        if (!pending && profileStep) {
+          profileStep.hidden = false;
+          holder.hidden = true;
+          return;
+        }
+        if (profileStep) profileStep.hidden = true;
         var card = holder.closest(".auth-card");
         if (card) card.classList.add("clerk-active");
         holder.hidden = false;
-        ck.mountSignUp(holder, {
+        if (!holder.dataset.mounted) ck.mountSignUp(holder, {
           appearance: { elements: { rootBox: "width:100%" } }
         });
+        holder.dataset.mounted = "1";
         document.querySelector(".auth-tabs").style.display = "none";
         document.getElementById("paneSignup").style.display = "none";
         document.getElementById("paneLogin").style.display = "none";
       }
       mountClerkJoin();
       window.addEventListener("pnc:clerk", mountClerkJoin);
+      document.getElementById("memberProfileForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+        var first = document.getElementById("reg-first").value.trim();
+        var last = document.getElementById("reg-last").value.trim();
+        var phone = document.getElementById("reg-phone").value.trim();
+        if (!first || !last) { PNC.toast("Enter your first and last name.", "err"); return; }
+        if (!phone) { PNC.toast("Enter a phone number.", "err"); return; }
+        try { sessionStorage.setItem("pnc_pending_signup_profile", JSON.stringify({ fullName: first + " " + last, phone: phone })); } catch {}
+        mountClerkJoin();
+      });
 
       var pre = new URLSearchParams(location.search).get("plan");
       if (pre && !PNC_DB.productionMode()) {
