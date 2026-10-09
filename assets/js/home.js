@@ -150,6 +150,35 @@
     });
   }
 
+  /* -------------------------- interactive hero ----------------------- */
+  function mountHeroScene() {
+    const scene = $("[data-hero-scene]");
+    const card = $("[data-hero-tilt]");
+    if (!scene || !card || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    function reset() {
+      card.style.setProperty("--tilt-x", "0deg");
+      card.style.setProperty("--tilt-y", "0deg");
+      $$("[data-depth]", card).forEach(function (layer) {
+        layer.style.transform = "translateZ(" + layer.dataset.depth + "px)";
+      });
+    }
+
+    scene.addEventListener("pointermove", function (event) {
+      const box = scene.getBoundingClientRect();
+      const x = (event.clientX - box.left) / box.width - .5;
+      const y = (event.clientY - box.top) / box.height - .5;
+      card.style.setProperty("--tilt-x", (y * -8).toFixed(2) + "deg");
+      card.style.setProperty("--tilt-y", (x * 10).toFixed(2) + "deg");
+      $$("[data-depth]", card).forEach(function (layer) {
+        const depth = Number(layer.dataset.depth);
+        layer.style.transform = "translate3d(" + (x * depth * .18).toFixed(1) + "px," + (y * depth * .18).toFixed(1) + "px," + depth + "px)";
+      });
+    });
+    scene.addEventListener("pointerleave", reset);
+    reset();
+  }
+
   /* ------------------------------- mount ------------------------------ */
   function start() {
     try { D.load(); } catch (e) { try { D.reset(); } catch (e2) {} }
@@ -158,6 +187,7 @@
     renderListings();
     renderBestsellers();
     mountNewsletter();
+    mountHeroScene();
     window.addEventListener("pnc:data-ready", function () {
       renderHero(); renderGroups(); renderListings(); renderBestsellers();
       $$(".reveal").forEach(el => el.classList.add("in"));

@@ -323,6 +323,18 @@
     syncMemberZone();
     window.addEventListener("pnc:data-ready", function () { syncMemberZone(); renderBell(); renderCmsChrome(); syncVisitCta(); });
     window.addEventListener("pnc:auth", function () { syncMemberZone(); renderBell(); });
+    window.addEventListener("pnc:auth-sync-error", function (event) {
+      const message = event && event.detail && event.detail.message;
+      if (!message) return;
+      syncMemberZone();
+      if (/verify your email/i.test(message)) {
+        if (global.PNC && global.PNC.toast) {
+          global.PNC.toast("Verify your email to finish setting up your member account.", "err");
+        }
+      } else if (global.PNC && global.PNC.toast) {
+        global.PNC.toast("We could not finish loading your account. Please refresh and try again.", "err");
+      }
+    });
     window.addEventListener("storage", function () { renderBell(); syncMemberZone(); });
   }
 

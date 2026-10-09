@@ -11,6 +11,7 @@
   let authConfigured = false;
   let syncPromise = null;
   let observedClerk = null;
+  let lastAuthSyncError = "";
   let boundSession = undefined;
   let sessionVersion = 0;
   let serverAuthenticated = false;
@@ -150,7 +151,19 @@
       if (syncPromise) await syncPromise;
       if (session) {
         const result = await api.mutate("ensureOwner", {});
-        if (result && result.error) return;
+        if (result && result.error) {
+          const message = String(result.error);
+          if (message !== lastAuthSyncError) {
+            lastAuthSyncError = message;
+            try {
+              global.dispatchEvent(new CustomEvent("pnc:auth-sync-error", {
+                detail: { message, session }
+              }));
+            } catch {}
+          }
+          return;
+        }
+        lastAuthSyncError = "";
       }
       await api.syncBootstrap();
     }
