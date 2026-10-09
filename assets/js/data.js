@@ -1238,6 +1238,21 @@
     persist();
     return { ok: true, providerId };
   }
+  function initializeCatalog() {
+    if (remoteEnabled()) return remoteMutation("initializeCatalog", {});
+    if (productionMode()) return { error: "Secure backend is not available." };
+    const admin = currentAdmin();
+    if (!admin || admin.role !== "super" || !can("cms.edit")) return { error: "Not authorized." };
+    const groups = SERVICE_GROUPS.filter(g => !(db.serviceGroups || []).some(row => row.id === g.id));
+    const providers = PROVIDERS.filter(p => !(db.providers || []).some(row => row.id === p.id));
+    const services = SERVICES.filter(s => !(db.services || []).some(row => row.id === s.id));
+    db.serviceGroups = (db.serviceGroups || []).concat(clone(groups));
+    db.providers = (db.providers || []).concat(clone(providers));
+    db.services = (db.services || []).concat(clone(services));
+    audit("Catalog initialized", groups.length + " departments, " + providers.length + " staff, " + services.length + " services");
+    persist();
+    return { ok: true, groupsAdded: groups.length, providersAdded: providers.length, servicesAdded: services.length };
+  }
 
   /* ------------------------- staff & waitlist ------------------------- */
   function addLeave(providerId, date, reason) {
@@ -1634,7 +1649,7 @@ function prepareStoreSale(lines, products, method, options) {
     /* inventory */
     adjustStock, updateProduct,
     /* cms */
-    updateCMS, updateService, createService, deleteService, updateProvider, createProvider, deleteProvider,
+    updateCMS, updateService, createService, deleteService, updateProvider, createProvider, deleteProvider, initializeCatalog,
     /* staff */
     addLeave, removeLeave, joinWaitlist, removeWaitlist,
     /* crm */

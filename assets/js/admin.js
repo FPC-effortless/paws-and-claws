@@ -892,6 +892,20 @@
       fillServiceForm();
       pick.onchange = fillServiceForm;
     }
+    const initializer = $("#svcInitialize");
+    if (initializer) {
+      const empty = !(D.db.services || []).length && !(D.db.providers || []).length && !(D.db.serviceGroups || []).length;
+      initializer.style.display = empty ? "block" : "none";
+      if (empty && !$("#svcInitBtn")) initializer.insertAdjacentHTML("beforeend", ' <button class="btn btn-teal btn-sm" type="button" id="svcInitBtn">Initialize approved baseline</button>');
+      const initButton = $("#svcInitBtn");
+      if (initButton) initButton.onclick = async function () {
+        if (!window.confirm("Add the approved service departments, staff profiles and service baseline to production? You can edit them afterward.")) return;
+        const r = await Promise.resolve(D.initializeCatalog());
+        if (r && r.error) return toast(r.error, "err");
+        toast("Catalog initialized");
+        renderCMS();
+      };
+    }
 
     renderStaff();
     renderRoles();

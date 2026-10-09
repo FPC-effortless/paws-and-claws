@@ -43,6 +43,25 @@ const PROVIDERS = [
   { id: "Coach Ray", name: "Ray Carter", role: "Trainer", title: "CPDT-KA Trainer", group: "training", icon: "&#127893;", start: 10, end: 19, off: [0], bio: "Positive reinforcement only." }
 ];
 
+// First-run production catalog. This is only used by the one-time, super-admin
+// guarded initializer; after insertion, every record is edited through CMS.
+const SERVICE_CATALOG = [
+  { id: "sv-bath", group: "grooming", name: "Bath & Brush", icon: "&#128704;", price: 28, duration: 1, deposit: true, requiresVaccine: true, staff: ["Rosa", "Talia"], desc: "Gentle bathing, brushing, drying and a tidy finish matched to your pet's coat.", popular: true },
+  { id: "sv-haircut", group: "grooming", name: "Coat Trim & Style", icon: "&#128136;", price: 52, duration: 1.5, deposit: true, requiresVaccine: true, staff: ["Rosa", "Talia"], desc: "Coat trimming and styling with practical care guidance for home.", popular: true },
+  { id: "sv-deshed", group: "grooming", name: "De-Shedding Treatment", icon: "&#129508;", price: 42, duration: 1.5, deposit: true, requiresVaccine: true, staff: ["Rosa"], desc: "A thorough undercoat release and brush-out to reduce shedding at home." },
+  { id: "sv-nails", group: "grooming", name: "Nail, Ear & Hygiene Care", icon: "&#128063;", price: 18, duration: 0.5, deposit: false, requiresVaccine: false, staff: ["Rosa", "Talia"], desc: "Calm nail trimming, gentle ear cleaning and essential hygiene care." },
+  { id: "sv-dropin", group: "sitting", name: "PawPlay Daycare — Half-Day", icon: "&#128021;", price: 24, duration: 4, deposit: true, requiresVaccine: true, staff: ["Priya", "Owen"], desc: "Limited-place supervised play, enrichment, feeding instructions and a rest break." },
+  { id: "sv-daycare", group: "sitting", name: "PawPlay Daycare — Full-Day", icon: "&#128021;", price: 38, duration: 8, deposit: true, requiresVaccine: true, staff: ["Priya", "Owen"], desc: "Supervised care, enrichment, owner-directed feeding, rest breaks and an update.", popular: true },
+  { id: "sv-overnight", group: "sitting", name: "PawStay Overnight Boarding", icon: "&#127968;", price: 58, duration: 24, deposit: true, requiresVaccine: true, staff: ["Priya", "Owen"], desc: "Contact-led overnight care with separate rest areas, recorded feeding and daily monitoring." },
+  { id: "sv-wellness", group: "vet", name: "PawHealth Vet Day Consultation", icon: "&#129658;", price: 65, duration: 0.5, deposit: true, requiresVaccine: false, staff: ["Dana", "Marcus"], desc: "Scheduled consultation with a registered veterinary professional.", popular: true },
+  { id: "sv-vaccination", group: "vet", name: "Wellness Check & Vaccination", icon: "&#128137;", price: 38, duration: 0.5, deposit: false, requiresVaccine: false, staff: ["Dana", "Marcus"], desc: "Routine wellness check, vaccination review and appropriate vaccine administration." },
+  { id: "sv-dental", group: "vet", name: "Deworming & Parasite Advice", icon: "&#129702;", price: 30, duration: 0.5, deposit: false, requiresVaccine: false, staff: ["Dana"], desc: "Vet-led deworming and parasite-prevention advice for your pet's lifestyle." },
+  { id: "sv-surgery", group: "vet", name: "PawHealth Vet Day Follow-Up", icon: "&#128300;", price: 45, duration: 0.5, deposit: false, requiresVaccine: false, staff: ["Dana", "Marcus"], desc: "A scheduled review of an existing care plan by a registered professional." },
+  { id: "sv-puppy", group: "training", name: "Puppy Foundations", icon: "&#128062;", price: 45, duration: 1, deposit: true, requiresVaccine: false, staff: ["Coach Ray"], desc: "Puppy foundations, confidence, name response and toilet-training support." },
+  { id: "sv-obedience", group: "training", name: "Loose-Leash & Recall", icon: "&#127893;", price: 60, duration: 1.5, deposit: true, requiresVaccine: true, staff: ["Coach Ray"], desc: "Practical leash walking, recall and everyday handling skills for owners and dogs.", popular: true },
+  { id: "sv-agility", group: "training", name: "Socialisation & Owner Coaching", icon: "&#127919;", price: 55, duration: 1, deposit: true, requiresVaccine: true, staff: ["Coach Ray"], desc: "Supported socialisation, humane handling and a clear home practice plan." }
+];
+
 const DAY_START = 8;
 const DAY_END = 19;
 const STEP = 0.5;
@@ -360,7 +379,7 @@ const OPS = new Set([
   "ensureOwner","markNotificationRead","markNotificationsRead","updateOwner","addPet","updatePet",
   "removePet","addVaccine","setVaccineStatus","createBooking","rescheduleBooking","cancelBooking",
   "setBookingStatus","addBookingNote","placeOrder","setOrderStage","refund","setListingStatus",
-  "adjustStock","updateProduct","updateCMS","updateService","createService","deleteService","updateProvider","createProvider","deleteProvider","addLeave","removeLeave",
+  "adjustStock","updateProduct","updateCMS","updateService","createService","deleteService","updateProvider","createProvider","deleteProvider","initializeCatalog","addLeave","removeLeave",
   "joinWaitlist","removeWaitlist","posCharge","addPaymentMethod","removePaymentMethod",
   "setPrimaryPayment","submitContact","submitInquiry","createOwner","sendMessage","markMessageRead","setContactStatus","staffBooking","recordBookingPayment","refundStoreSale"
 ]);
@@ -990,6 +1009,27 @@ export const mutate = mutation({
       await ctx.db.delete(provider._id);
       await audit(ctx, admin, "Staff profile deleted", provider.id + " — " + provider.name);
       return { ok: true, providerId: provider.id };
+    }
+
+    if (op === "initializeCatalog") {
+      const admin = await adminFor(ctx);
+      requirePermission(admin, "cms.edit");
+      if (admin.role !== "super") throw new Error("Only a super admin can initialize the catalog.");
+      const existingGroups = await ctx.db.query("serviceGroups").collect();
+      const existingProviders = await ctx.db.query("providers").collect();
+      const existingServices = await ctx.db.query("services").collect();
+      let groupsAdded = 0, providersAdded = 0, servicesAdded = 0;
+      for (const group of SERVICE_GROUPS) {
+        if (!existingGroups.some(row => row.id === group.id)) { await ctx.db.insert("serviceGroups", group); groupsAdded++; }
+      }
+      for (const provider of PROVIDERS) {
+        if (!existingProviders.some(row => row.id === provider.id)) { await ctx.db.insert("providers", provider); providersAdded++; }
+      }
+      for (const service of SERVICE_CATALOG) {
+        if (!existingServices.some(row => row.id === service.id)) { await ctx.db.insert("services", service); servicesAdded++; }
+      }
+      await audit(ctx, admin, "Catalog initialized", groupsAdded + " departments, " + providersAdded + " staff, " + servicesAdded + " services");
+      return { ok: true, groupsAdded, providersAdded, servicesAdded };
     }
 
     if (op === "addLeave") {
