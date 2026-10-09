@@ -67,7 +67,7 @@
         "</a>" +
         '<div class="nav-links" id="primaryNav">' + links +
           '<a href="account.html" data-member-only hidden>My pets</a>' +
-          '<a class="btn btn-teal" href="services.html">Book a visit</a>' +
+          '<a class="btn btn-teal" id="visitNavLink" href="services.html#book">Book a visit</a>' +
         "</div>" +
         '<div class="nav-actions">' +
           '<div id="memberZone"></div>' +
@@ -92,9 +92,9 @@
               '<div class="row" id="cartSubtotal" hidden></div>' +
               '<div class="row" id="cartDiscount" hidden></div>' +
               '<div class="row"><span>Total</span><span id="cartTotal">&#8358;0.00</span></div>' +
-              '<div class="row"><span>Delivery</span><span>Calculated at checkout</span></div>' +
+              '<div class="row"><span>Fulfillment</span><span>Online delivery not available</span></div>' +
               '<button class="btn btn-primary btn-block" id="cartCheckout">Proceed to checkout</button>' +
-              '<p class="cart-note">Demo store — no payment is processed.</p>' +
+              '<p class="cart-note">Online payments are unavailable. Visit our Amasoma store to confirm price and availability.</p>' +
             "</div>" +
           "</div>" +
         "</div>" +
@@ -227,6 +227,14 @@
     if (btn) btn.setAttribute("aria-expanded", "false");
   }
 
+  function syncVisitCta() {
+    const link = $("#visitNavLink");
+    if (!link) return;
+    const bookable = D.catalogReady && D.catalogReady();
+    link.href = bookable ? "services.html#book" : "contact.html";
+    link.textContent = bookable ? "Book a visit" : "Ask about visits";
+  }
+
   function renderCmsChrome() {
     const header = $(".site-header"), cms = D.db.cms;
     if (!header || !cms) return;
@@ -254,6 +262,7 @@
     if (!$(".site-footer")) document.body.insertAdjacentHTML("beforeend", footerHTML());
 
     renderCmsChrome();
+    syncVisitCta();
 
     const cartBtn = $("#cartBtn");
     if (cartBtn) cartBtn.addEventListener("click", function () { PNC.openModal("cartModal"); });
@@ -311,7 +320,7 @@
 
     /* sync member zone: prefer the new DB session */
     syncMemberZone();
-    window.addEventListener("pnc:data-ready", function () { syncMemberZone(); renderBell(); renderCmsChrome(); });
+    window.addEventListener("pnc:data-ready", function () { syncMemberZone(); renderBell(); renderCmsChrome(); syncVisitCta(); });
     window.addEventListener("pnc:auth", function () { syncMemberZone(); renderBell(); });
     window.addEventListener("storage", function () { renderBell(); syncMemberZone(); });
   }

@@ -137,7 +137,7 @@
       if (D.productionMode && D.productionMode()) {
         if (!window.PNC_CONVEX || !window.PNC_CONVEX.active) {
           status.style.color = "var(--danger)";
-          status.textContent = "Messaging is temporarily unavailable. Please call the store.";
+          status.textContent = "Messaging is temporarily unavailable. Please try again later or ask at the store in person.";
           if (PNC) PNC.toast("Secure messaging is unavailable", "err");
           return;
         }
