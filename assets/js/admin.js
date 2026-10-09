@@ -753,6 +753,7 @@
             '<button class="mini-btn primary" data-stk="' + p.id + ':1">+1</button>' +
             '<button class="mini-btn" data-stk="' + p.id + ':10">+10</button>' +
             '<button class="mini-btn warn" data-pedit="' + p.id + '">Edit</button>' +
+            '<button class="mini-btn" data-pimg="' + p.id + '">Image</button>' +
           "</div></td>" +
         "</tr>";
       }).join("") + "</tbody>";
@@ -780,6 +781,13 @@
         render();
       });
     });
+    $$('[data-pimg]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp,image/gif';
+        input.onchange = async function () { const file = input.files[0]; if (!file) return; const up = await window.PNC_CONVEX?.uploadImage(file); if (!up || up.error) return toast(up?.error || 'Image uploads require the connected secure backend.', 'err'); const r = await D.updateProduct(b.dataset.pimg, { imageStorageId: up.storageId }); if (r.error) return toast(r.error, 'err'); toast('Product image saved'); render(); };
+        input.click();
+      });
+    });
 
     renderListings();
   }
@@ -794,7 +802,7 @@
     }
     host.innerHTML = '<div class="pet-tile-grid">' + list.map(function (l) {
       return '<div class="pet-tile">' +
-        '<div class="pet-tile-art">' + D.icon(l.icon) + "</div>" +
+        '<div class="pet-tile-art">' + (l.imageUrl ? '<img src="' + esc(l.imageUrl) + '" alt="' + esc(l.name) + '" style="width:100%;height:100%;object-fit:cover">' : D.icon(l.icon)) + "</div>" +
         '<div class="pet-tile-body">' +
           "<h3>" + esc(l.name) + ' <span class="sub">' + esc(l.breed) + "</span></h3>" +
           '<div class="meta" style="font-size:.8rem;color:var(--ink-soft)">' +
@@ -804,6 +812,7 @@
               return '<button class="mini-btn' + (l.status === s ? " primary" : "") + '" data-lst="' + l.id + ":" + s + '">' +
                 D.titleCase(s) + "</button>";
             }).join("") +
+            '<button class="mini-btn" data-limg="' + l.id + '">Image</button>' +
           "</div>" +
         "</div></div>";
     }).join("") + "</div>";
@@ -815,6 +824,13 @@
         if (r.error) return toast(r.error, "err");
         toast(r.listing.name + " is now " + parts[1]);
         render();
+      });
+    });
+    $$('[data-limg]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp,image/gif';
+        input.onchange = async function () { const up = await window.PNC_CONVEX?.uploadImage(input.files[0]); if (!up || up.error) return toast(up?.error || 'Image uploads require the connected secure backend.', 'err'); const r = await window.PNC_CONVEX.mutate('setListingStatus', { listingId: b.dataset.limg, status: D.byId(D.db.listings, b.dataset.limg).status, imageStorageId: up.storageId }); if (r.error) return toast(r.error, 'err'); await window.PNC_CONVEX.syncBootstrap(); toast('Pet listing image saved'); render(); };
+        input.click();
       });
     });
     const inquiries = D.db.inquiries || [];
@@ -861,12 +877,20 @@
     const pick = $("#svcPick");
     if (pick) {
       const cur = pick.value;
-      pick.innerHTML = D.db.services.map(function (s) {
+      pick.innerHTML = '<option value="">Choose a service</option>' + D.db.services.map(function (s) {
         return '<option value="' + s.id + '">' + esc(s.name) + " (" + money(s.price) + ")</option>";
       }).join("");
       if (cur && D.byId(D.db.services, cur)) pick.value = cur;
+      const group = $("#svcGroup");
+      if (group) group.innerHTML = (D.SERVICE_GROUPS || []).map(function (g) {
+        return '<option value="' + esc(g.id) + '">' + esc(g.name) + '</option>';
+      }).join("");
+      const staff = $("#svcStaff");
+      if (staff) staff.innerHTML = (D.PROVIDERS || []).map(function (p) {
+        return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>';
+      }).join("");
       fillServiceForm();
-      pick.addEventListener("change", fillServiceForm);
+      pick.onchange = fillServiceForm;
     }
 
     renderStaff();
@@ -876,12 +900,19 @@
 
   function fillServiceForm() {
     const s = D.byId(D.db.services, $("#svcPick").value);
-    if (!s) return;
-    $("#svcName").value = s.name;
-    $("#svcPrice").value = s.price;
-    $("#svcDur").value = s.duration;
-    $("#svcPop").value = s.popular ? "1" : "0";
-    $("#svcDesc").value = s.desc || "";
+    const set = function (id, value) { const el = $(id); if (el) el.value = value == null ? "" : value; };
+    set("#svcName", s ? s.name : "");
+    set("#svcPrice", s ? s.price : "");
+    set("#svcDur", s ? s.duration : "1");
+    set("#svcPop", s && s.popular ? "1" : "0");
+    set("#svcDesc", s ? s.desc : "");
+    set("#svcGroup", s ? s.group : (D.SERVICE_GROUPS[0] || {}).id);
+    const deposit = $("#svcDeposit"); if (deposit) deposit.checked = !!(s && s.deposit);
+    const vaccine = $("#svcVaccine"); if (vaccine) vaccine.checked = !!(s && s.requiresVaccine);
+    const staff = $("#svcStaff");
+    if (staff) Array.from(staff.options).forEach(function (o) { o.selected = !!(s && (s.staff || []).includes(o.value)); });
+    const del = $("#svcDelete"); if (del) del.disabled = !s;
+    const save = $("#svcSave"); if (save) save.textContent = s ? "Save service" : "Create service";
   }
 
   function mountCMS() {
@@ -922,26 +953,81 @@
     });
 
     const sf = $("#svcForm");
-    if (sf) sf.addEventListener("submit", async function (e) {
+    if (sf) sf.onsubmit = async function (e) {
       e.preventDefault();
       const id = $("#svcPick").value;
-      const r = await Promise.resolve(D.updateService(id, {
+      const image = $("#svcImage")?.files[0];
+      let imageStorageId;
+      if (image) {
+        const up = await window.PNC_CONVEX?.uploadImage(image);
+        if (!up || up.error) return toast(up?.error || "Image uploads require the connected secure backend.", "err");
+        imageStorageId = up.storageId;
+      }
+      const patch = {
         name: $("#svcName").value.trim(),
+        group: $("#svcGroup").value,
         price: Number($("#svcPrice").value),
         duration: Number($("#svcDur").value),
         popular: $("#svcPop").value === "1",
-        desc: $("#svcDesc").value
-      }));
+        desc: $("#svcDesc").value,
+        deposit: $("#svcDeposit").checked,
+        requiresVaccine: $("#svcVaccine").checked,
+        staff: Array.from($("#svcStaff").selectedOptions).map(function (o) { return o.value; }),
+        ...(imageStorageId ? { imageStorageId } : {})
+      };
+      const r = await Promise.resolve(id ? D.updateService(id, patch) : D.createService(patch));
       if (r.error) {
         $("#svcMsg").style.color = "var(--danger)";
         $("#svcMsg").textContent = r.error;
         return toast(r.error, "err");
       }
       $("#svcMsg").style.color = "var(--ok)";
-      $("#svcMsg").textContent = r.service.name + " updated.";
-      toast("Service updated");
+      $("#svcMsg").textContent = r.service.name + (id ? " updated." : " created.");
+      toast(id ? "Service updated" : "Service created");
       renderCMS();
-    });
+    };
+    const sn = $("#svcNew");
+    if (sn) sn.onclick = function () {
+      $("#svcPick").value = "";
+      fillServiceForm();
+      $("#svcMsg").textContent = "Enter the new service details, then choose Create service.";
+    };
+    const sd = $("#svcDelete");
+    if (sd) sd.onclick = async function () {
+      const id = $("#svcPick").value;
+      if (!id) return;
+      const s = D.byId(D.db.services, id);
+      if (!s || !window.confirm("Delete " + s.name + "? Services with booking history cannot be deleted.")) return;
+      const r = await Promise.resolve(D.deleteService(id));
+      if (r && r.error) return toast(r.error, "err");
+      toast("Service deleted");
+      renderCMS();
+    };
+
+    const staffPick = $("#staffPick");
+    if (staffPick) staffPick.onchange = fillStaffForm;
+    const staffNew = $("#staffNew");
+    if (staffNew) staffNew.onclick = function () { staffPick.value = ""; fillStaffForm(); $("#staffMsg").textContent = "Enter the new staff profile, then choose Create staff member."; };
+    const staffForm = $("#staffForm");
+    if (staffForm) staffForm.onsubmit = async function (e) {
+      e.preventDefault();
+      const id = staffPick.value;
+      const off = $$('[data-staff-off]:checked').map(function (box) { return Number(box.value); });
+      const input = { id: $("#staffId").value.trim(), name: $("#staffName").value.trim(), role: $("#staffRole").value.trim(), title: $("#staffTitle").value.trim(), group: $("#staffGroup").value, icon: $("#staffIcon").value.trim(), start: Number($("#staffStart").value), end: Number($("#staffEnd").value), off, bio: $("#staffBio").value.trim() };
+      const r = await Promise.resolve(id ? D.updateProvider(id, input) : D.createProvider(input));
+      if (r && r.error) { $("#staffMsg").style.color = "var(--danger)"; $("#staffMsg").textContent = r.error; return toast(r.error, "err"); }
+      $("#staffMsg").style.color = "var(--ok)"; $("#staffMsg").textContent = id ? "Staff member updated." : "Staff member created.";
+      toast(id ? "Staff member updated" : "Staff member created");
+      renderCMS();
+    };
+    const staffDelete = $("#staffDelete");
+    if (staffDelete) staffDelete.onclick = async function () {
+      const id = staffPick.value, p = D.byId(D.PROVIDERS || [], id);
+      if (!id || !p || !window.confirm("Delete " + p.name + "? Reassign services and bookings first.")) return;
+      const r = await Promise.resolve(D.deleteProvider(id));
+      if (r && r.error) return toast(r.error, "err");
+      toast("Staff member deleted"); renderCMS();
+    };
 
     const lf = $("#leaveForm");
     if (lf) lf.addEventListener("submit", async function (e) {
@@ -965,10 +1051,23 @@
     const sel = $("#lvWho");
     if (!host) return;
     const providers = D.PROVIDERS || [];
-    if (sel && !sel.options.length) {
+    if (sel) {
+      const leaveValue = sel.value;
       sel.innerHTML = providers.map(function (p) {
         return '<option value="' + esc(p.id) + '">' + esc(p.name) + "</option>";
       }).join("");
+      if (leaveValue && D.byId(providers, leaveValue)) sel.value = leaveValue;
+    }
+    const pick = $("#staffPick");
+    if (pick) {
+      const current = pick.value;
+      pick.innerHTML = '<option value="">New staff member</option>' + providers.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>'; }).join("");
+      if (current && D.byId(providers, current)) pick.value = current;
+      const group = $("#staffGroup");
+      if (group) group.innerHTML = (D.SERVICE_GROUPS || []).map(function (g) { return '<option value="' + esc(g.id) + '">' + esc(g.name) + '</option>'; }).join("");
+      const off = $("#staffOff");
+      if (off) off.innerHTML = [[1,"Mon"],[2,"Tue"],[3,"Wed"],[4,"Thu"],[5,"Fri"],[6,"Sat"],[0,"Sun"]].map(function (d) { return '<label class="checkrow"><input type="checkbox" data-staff-off value="' + d[0] + '"> ' + d[1] + '</label>'; }).join("");
+      fillStaffForm();
     }
     const leave = D.db.staffLeave || [];
     host.innerHTML = providers.map(function (p) {
@@ -995,6 +1094,18 @@
         renderStaff();
       });
     });
+  }
+
+  function fillStaffForm() {
+    const p = D.byId(D.PROVIDERS || [], $("#staffPick")?.value);
+    const set = function (id, value) { const el = $(id); if (el) el.value = value == null ? "" : value; };
+    set("#staffId", p ? p.id : ""); set("#staffName", p ? p.name : ""); set("#staffRole", p ? p.role : ""); set("#staffTitle", p ? p.title : ""); set("#staffIcon", p ? p.icon : ""); set("#staffStart", p ? p.start : "8"); set("#staffEnd", p ? p.end : "17"); set("#staffBio", p ? p.bio : "");
+    const group = $("#staffGroup"); if (group) group.value = p ? p.group : ((D.SERVICE_GROUPS || [])[0] || {}).id || "";
+    $$('[data-staff-off]').forEach(function (box) { box.checked = !!(p && (p.off || []).includes(Number(box.value))); });
+    const title = $("#staffFormTitle"); if (title) title.textContent = p ? "Edit staff member" : "Add staff member";
+    const id = $("#staffId"); if (id) id.disabled = !!p;
+    const del = $("#staffDelete"); if (del) del.disabled = !p;
+    const save = $("#staffSave"); if (save) save.textContent = p ? "Save staff member" : "Create staff member";
   }
 
   function renderRoles() {
@@ -1186,6 +1297,11 @@
     /* Clerk loads asynchronously from a CDN; re-mount the gate and
        re-evaluate the staff session once it reports ready. */
     window.addEventListener("pnc:clerk", function () {
+      mountClerkGate();
+      if (admin()) enter();
+    });
+
+    window.addEventListener("pnc:auth-ready", function () {
       mountClerkGate();
       if (admin()) enter();
     });

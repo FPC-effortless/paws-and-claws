@@ -18,16 +18,12 @@
   function renderHero() {
     const cms = D.db.cms;
     if (!cms) return;
-    const t = $("#heroTitle");
-    if (t && cms.heroTitle) t.innerHTML = esc(cms.heroTitle);
     const lead = $("#heroLead");
-    if (lead) lead.textContent = D.catalogReady()
-      ? "Visit our physical store for pet supplies and care. Walk in to shop, speak with our team, or book an appointment online before your visit. No membership is required to shop in person."
-      : "Visit our physical store for pet supplies and care. Walk in to shop, speak with our team, or ask about an appointment before your visit. No membership is required to shop in person.";
+    if (lead) lead.textContent = "Quality pet supplies, thoughtful grooming, daycare, vet support, training and a community of pet lovers — all in one place.";
     const bookingLink = $("#heroBookingLink");
     if (bookingLink) {
       bookingLink.href = D.catalogReady() ? 'services.html#book' : 'contact.html';
-      bookingLink.textContent = D.catalogReady() ? 'Book an appointment' : 'Ask about appointments';
+      bookingLink.innerHTML = 'Explore pet care <span aria-hidden="true">→</span>';
     }
     const services = $("#services");
     if (services) services.hidden = !D.catalogReady();
@@ -160,7 +156,9 @@
       card.style.setProperty("--tilt-x", "0deg");
       card.style.setProperty("--tilt-y", "0deg");
       $$("[data-depth]", card).forEach(function (layer) {
-        layer.style.transform = "translateZ(" + layer.dataset.depth + "px)";
+        layer.style.setProperty("--scene-x", "0px");
+        layer.style.setProperty("--scene-y", "0px");
+        layer.style.setProperty("--scene-z", layer.dataset.depth + "px");
       });
     }
 
@@ -172,7 +170,9 @@
       card.style.setProperty("--tilt-y", (x * 10).toFixed(2) + "deg");
       $$("[data-depth]", card).forEach(function (layer) {
         const depth = Number(layer.dataset.depth);
-        layer.style.transform = "translate3d(" + (x * depth * .18).toFixed(1) + "px," + (y * depth * .18).toFixed(1) + "px," + depth + "px)";
+        layer.style.setProperty("--scene-x", (x * depth * .18).toFixed(1) + "px");
+        layer.style.setProperty("--scene-y", (y * depth * .18).toFixed(1) + "px");
+        layer.style.setProperty("--scene-z", depth + "px");
       });
     });
     scene.addEventListener("pointerleave", reset);

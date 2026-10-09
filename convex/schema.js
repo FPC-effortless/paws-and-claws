@@ -41,6 +41,7 @@ export default defineSchema({
     tags: v.optional(v.array(v.string())),
     vaccines: v.optional(v.array(vaccine)),
     notes: v.optional(v.string()),
+    imageStorageId: v.optional(v.id("_storage")),
     createdAt: v.string(),
   })
     .index("by_external_id", ["id"])
@@ -112,6 +113,7 @@ export default defineSchema({
     lowAt: v.number(),
     cost: v.optional(v.number()),
     lowStock: v.optional(v.boolean()),
+    imageStorageId: v.optional(v.id("_storage")),
   }).index("by_external_id", ["id"]),
 
   orders: defineTable({
@@ -161,6 +163,7 @@ export default defineSchema({
     temperament: v.optional(v.array(v.string())),
     bio: v.optional(v.string()),
     listedAt: v.string(),
+    imageStorageId: v.optional(v.id("_storage")),
   }).index("by_external_id", ["id"]),
 
   payments: defineTable({
@@ -187,6 +190,7 @@ export default defineSchema({
     staff: v.array(v.string()),
     desc: v.string(),
     popular: v.optional(v.boolean()),
+    imageStorageId: v.optional(v.id("_storage")),
   }).index("by_external_id", ["id"]),
 
   serviceGroups: defineTable({

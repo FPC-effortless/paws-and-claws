@@ -117,7 +117,7 @@
     const vax = l.health || [];
     return '<article class="pet-card" data-id="' + l.id + '">' +
       '<div class="pet-art">' +
-        '<span class="pet-emoji" aria-hidden="true">' + D.icon(l.icon) + '</span>' +
+        (l.imageUrl ? '<img src="' + D.esc(l.imageUrl) + '" alt="' + D.esc(l.name) + '" style="width:100%;height:100%;object-fit:cover">' : '<span class="pet-emoji" aria-hidden="true">' + D.icon(l.icon) + '</span>') +
         statusPill(l) +
         '<span class="pet-price">' + D.money(l.price) + '</span>' +
       '</div>' +
@@ -204,8 +204,8 @@
     const el = $('#petCta');
     if (!el) return;
     el.innerHTML = '<div class="pet-cta-card">' +
-      '<h3>Ask about available pets</h3>' +
-      '<p>Contact the store for current pet listings, health details and visit arrangements.</p>' +
+      '<h3>Ask about available pets or PawMatch</h3>' +
+      '<p>Contact the store for current listings, health details, or a carefully moderated introduction for eligible adult dogs. PawMatch is a welfare-led service, not a casual mating marketplace.</p>' +
       '<a class="btn btn-teal" href="contact.html">Contact the team</a>' +
       ' <a class="btn btn-ghost" href="services.html">See our care services</a>' +
     '</div>';

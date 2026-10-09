@@ -17,7 +17,7 @@
     { href: "index.html", label: "Home" },
     { href: "services.html", label: "Services", match: ["services.html", "pets.html"] },
     { href: "shop.html", label: "Shop", match: ["shop.html"] },
-    { href: "account.html", label: "Member", match: ["account.html", "membership.html"] },
+    { href: "membership.html", label: "Club", match: ["account.html", "membership.html"] },
     { href: "contact.html", label: "Contact", match: ["contact.html"] }
   ];
 
@@ -59,11 +59,14 @@
     const bell = '<button class="nav-bell" id="notifBtn" aria-label="Notifications" aria-expanded="false">' +
       bellSvg() + '<span class="dot" id="notifDot" data-empty="true">0</span></button>';
 
+    const search = '<a class="nav-search" href="shop.html" aria-label="Search the pet shop" title="Search the pet shop">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.2 4.2"/></svg></a>';
+
     return (
       '<div class="wrap"><nav class="nav">' +
         '<a class="brand" href="index.html" aria-label="Paws and Claws home">' +
           brandImg("brand-mark brand-img") +
-          "<span>Paws &amp; Claws<small>Pet Co.</small></span>" +
+          "<span>Paws &amp; Claws<small>Connect Hub</small></span>" +
         "</a>" +
         '<div class="nav-links" id="primaryNav">' + links +
           '<a href="account.html" data-member-only hidden>My pets</a>' +
@@ -71,7 +74,7 @@
         "</div>" +
         '<div class="nav-actions">' +
           '<div id="memberZone"></div>' +
-          bell + cart +
+          search + bell + cart +
           '<button class="burger" aria-label="Open menu" aria-controls="primaryNav" aria-expanded="false"><span></span></button>' +
         "</div>" +
       "</nav></div>"

@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="../assets/css/style.css?v=20261009-polish3">
   <link rel="stylesheet" href="../assets/css/pages.css?v=20261009-polish3">
   <link rel="stylesheet" href="../assets/css/platform.css?v=20261009-polish3">
+  <link rel="stylesheet" href="../assets/css/connect-hub.css?v=20261009-connect-hub1">
 </head>
 <body class="admin-body">
 
@@ -252,13 +253,15 @@
                 </form>
               </div>
               <div class="admin-panel pos-pad">
-                <div class="panel-head"><h2>Service pricing</h2></div>
+                <div class="panel-head"><h2>Services</h2><span class="muted">Add, edit or remove bookable services</span></div>
                 <form id="svcForm" novalidate>
                   <div class="field"><label for="svcPick">Service</label>
                     <select class="input" id="svcPick"></select></div>
                   <div class="form-grid">
                     <div class="field"><label for="svcName">Name</label>
                       <input class="input" id="svcName"></div>
+                    <div class="field"><label for="svcGroup">Department</label>
+                      <select class="input" id="svcGroup"></select></div>
                     <div class="field"><label for="svcPrice">Price</label>
                       <input class="input" id="svcPrice" type="number" min="0" step="0.01"></div>
                     <div class="field"><label for="svcDur">Hours</label>
@@ -266,9 +269,16 @@
                     <div class="field"><label for="svcPop">Popular?</label>
                       <select class="input" id="svcPop"><option value="1">Yes</option><option value="0">No</option></select></div>
                   </div>
+                  <div class="form-grid">
+                    <div class="field"><label for="svcStaff">Care team</label>
+                      <select class="input" id="svcStaff" multiple size="4"></select><p class="hint">Hold Ctrl/Cmd to select more than one provider.</p></div>
+                    <div class="field"><label class="checkrow"><input type="checkbox" id="svcDeposit"> Deposit required</label>
+                      <label class="checkrow"><input type="checkbox" id="svcVaccine"> Approved vaccines required</label></div>
+                  </div>
                   <div class="field"><label for="svcDesc">Description</label>
                     <textarea class="input" id="svcDesc" rows="2"></textarea></div>
-                  <button class="btn btn-primary btn-block" type="submit">Save service</button>
+                  <div class="field"><label for="svcImage">Service image</label><input class="input" id="svcImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif"><p class="hint">JPG, PNG, WEBP or GIF up to 8 MB.</p></div>
+                  <div class="form-grid"><button class="btn btn-primary" type="submit" id="svcSave">Save service</button><button class="btn btn-ghost" type="button" id="svcNew">New service</button><button class="btn btn-ghost" type="button" id="svcDelete" style="color:var(--danger)">Delete service</button></div>
                   <p class="hint" id="svcMsg" role="status" style="margin:10px 0 0"></p>
                 </form>
               </div>
@@ -277,6 +287,24 @@
               <div class="admin-panel pos-pad">
                 <div class="panel-head"><h2>Staff &amp; leave</h2></div>
                 <div id="staffHost"></div>
+                <form id="staffForm" class="staff-editor" novalidate>
+                  <div class="panel-head"><h3 id="staffFormTitle">Add staff member</h3><span class="muted">Admin-managed provider profile and availability</span></div>
+                  <div class="field"><label for="staffPick">Staff member</label><select class="input" id="staffPick"></select></div>
+                  <div class="form-grid">
+                    <div class="field"><label for="staffId">Staff ID</label><input class="input" id="staffId" placeholder="e.g. Rosa" autocomplete="off"></div>
+                    <div class="field"><label for="staffName">Name</label><input class="input" id="staffName"></div>
+                    <div class="field"><label for="staffRole">Role</label><input class="input" id="staffRole" placeholder="Groomer"></div>
+                    <div class="field"><label for="staffTitle">Title</label><input class="input" id="staffTitle" placeholder="Grooming Studio Lead"></div>
+                    <div class="field"><label for="staffGroup">Department</label><select class="input" id="staffGroup"></select></div>
+                    <div class="field"><label for="staffIcon">Icon</label><input class="input" id="staffIcon" placeholder="🧼"></div>
+                    <div class="field"><label for="staffStart">Starts</label><input class="input" id="staffStart" type="number" min="0" max="24" step="0.5"></div>
+                    <div class="field"><label for="staffEnd">Ends</label><input class="input" id="staffEnd" type="number" min="0" max="24" step="0.5"></div>
+                  </div>
+                  <div class="field"><label>Regular days off</label><div id="staffOff" class="checkrow"></div></div>
+                  <div class="field"><label for="staffBio">Bio / customer-facing description</label><textarea class="input" id="staffBio" rows="2"></textarea></div>
+                  <div class="form-grid"><button class="btn btn-primary" type="submit" id="staffSave">Save staff member</button><button class="btn btn-ghost" type="button" id="staffNew">New staff member</button><button class="btn btn-ghost" type="button" id="staffDelete" style="color:var(--danger)">Delete staff member</button></div>
+                  <p class="hint" id="staffMsg" role="status" style="margin:10px 0 0"></p>
+                </form>
                 <form id="leaveForm" class="leave-form" novalidate>
                   <div class="form-grid">
                     <div class="field"><label for="lvWho">Provider</label>

@@ -188,7 +188,7 @@ const run=(op,payload={})=>backend.mutate.handler(ctx,{op,payload});
  await run('updateService',{serviceId:'svc-audit',patch:{name:'Edited service',price:25,duration:1.5}});
  assert.equal((await run('updateService',{serviceId:'svc-audit',patch:{price:25}})).serviceId,'svc-audit');
  assert.equal(tables.services.find(r=>r.id==='svc-audit').price,25);
- await assert.rejects(run('updateService',{serviceId:'svc-audit',patch:{duration:13}}),/duration/);
+ await assert.rejects(run('updateService',{serviceId:'svc-audit',patch:{duration:25}}),/duration/);
  const contact=await db.insert('contactMessages',{id:'contact-audit',status:'new'});
  await run('setContactStatus',{contactId:'contact-audit',status:'resolved'});
  assert.equal(tables.contactMessages.find(r=>r.id==='contact-audit').status,'resolved');

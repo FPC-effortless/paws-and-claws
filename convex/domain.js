@@ -251,11 +251,17 @@ async function limitSubmission(ctx, id, email) {
 async function bootstrapData(ctx) {
   const id = await ctx.auth.getUserIdentity();
   const cms = (await ctx.db.query("cms").first()) || null;
+  const addImageUrls = async rows => Promise.all(rows.map(async row => {
+    if (!row.imageStorageId) return row;
+    const imageUrl = await ctx.storage.getUrl(row.imageStorageId);
+    const { imageStorageId, ...safe } = row;
+    return { ...safe, imageUrl: imageUrl || "" };
+  }));
   const publicData = {
     version: 1,
-    owners: [], pets: [], bookings: [], orders: [], listings: await ctx.db.query("listings").collect(),
-    products: (await ctx.db.query("products").collect()).map(({ cost, ...p }) => p),
-    services: await ctx.db.query("services").collect(),
+    owners: [], pets: [], bookings: [], orders: [], listings: await addImageUrls(await ctx.db.query("listings").collect()),
+    products: (await addImageUrls(await ctx.db.query("products").collect())).map(({ cost, ...p }) => p),
+    services: await addImageUrls(await ctx.db.query("services").collect()),
     serviceGroups: await ctx.db.query("serviceGroups").collect(),
     providers: await ctx.db.query("providers").collect(),
     staffLeave: (await ctx.db.query("staffLeave").collect()).map(l => ({ providerId: l.providerId, date: l.date })),
@@ -275,13 +281,13 @@ async function bootstrapData(ctx) {
   if (admin) {
     const out = { ...publicData };
     out.admins = [admin];
-    if (permission(admin, "inventory.edit")) out.products = await ctx.db.query("products").collect();
+    if (permission(admin, "inventory.edit")) out.products = await addImageUrls(await ctx.db.query("products").collect());
     if (admin.role === "super") {
       out.owners = await ctx.db.query("owners").collect();
-      out.pets = await ctx.db.query("pets").collect();
+      out.pets = await addImageUrls(await ctx.db.query("pets").collect());
       out.bookings = await ctx.db.query("bookings").collect();
       out.orders = await ctx.db.query("orders").collect();
-      out.listings = await ctx.db.query("listings").collect();
+      out.listings = await addImageUrls(await ctx.db.query("listings").collect());
       out.staffLeave = await ctx.db.query("staffLeave").collect();
       out.waitlist = await ctx.db.query("waitlist").collect();
       out.messages = await ctx.db.query("messages").collect();
@@ -293,10 +299,10 @@ async function bootstrapData(ctx) {
     }
     if (admin.role === "desk") {
       out.owners = await ctx.db.query("owners").collect();
-      out.pets = await ctx.db.query("pets").collect();
+      out.pets = await addImageUrls(await ctx.db.query("pets").collect());
       out.bookings = await ctx.db.query("bookings").collect();
       out.orders = await ctx.db.query("orders").collect();
-      out.listings = await ctx.db.query("listings").collect();
+      out.listings = await addImageUrls(await ctx.db.query("listings").collect());
       out.waitlist = await ctx.db.query("waitlist").collect();
       out.messages = await ctx.db.query("messages").collect();
       out.notifications = await ctx.db.query("notifications").collect();
@@ -310,7 +316,7 @@ async function bootstrapData(ctx) {
         id: o.id, fullName: o.fullName, email: o.email, phone: o.phone || ""
       }));
       out.orders = await ctx.db.query("orders").collect();
-      out.listings = await ctx.db.query("listings").collect();
+      out.listings = await addImageUrls(await ctx.db.query("listings").collect());
       out.audit = await ctx.db.query("audit").collect();
       out.inquiries = await ctx.db.query("inquiries").collect();
       out.contactMessages = await ctx.db.query("contactMessages").collect();
@@ -322,7 +328,7 @@ async function bootstrapData(ctx) {
       const petIds = [...new Set(bookings.map(b => b.petId))];
       out.bookings = bookings;
       out.owners = (await ctx.db.query("owners").collect()).filter(o => ownerIds.includes(o.id));
-      out.pets = (await ctx.db.query("pets").collect()).filter(p => petIds.includes(p.id));
+      out.pets = (await addImageUrls(await ctx.db.query("pets").collect())).filter(p => petIds.includes(p.id));
       out.messages = (await ctx.db.query("messages").collect()).filter(m => ownerIds.includes(m.ownerId));
       return out;
     }
@@ -333,7 +339,7 @@ async function bootstrapData(ctx) {
   return publicCatalog({
     ...publicData,
     owners: [(({ notes, ...profile }) => profile)(owner)],
-    pets: (await ctx.db.query("pets").collect()).filter(p => p.ownerId === owner.id),
+    pets: (await addImageUrls(await ctx.db.query("pets").collect())).filter(p => p.ownerId === owner.id),
     bookings: (await ctx.db.query("bookings").collect()).filter(b => b.ownerId === owner.id).map(({ internalNotes, ...b }) => b),
     orders: (await ctx.db.query("orders").collect()).filter(o => o.ownerId === owner.id),
     messages: (await ctx.db.query("messages").collect()).filter(m => m.ownerId === owner.id),
@@ -350,10 +356,11 @@ export const bootstrap = query({
 });
 
 const OPS = new Set([
+  "generateUploadUrl",
   "ensureOwner","markNotificationRead","markNotificationsRead","updateOwner","addPet","updatePet",
   "removePet","addVaccine","setVaccineStatus","createBooking","rescheduleBooking","cancelBooking",
   "setBookingStatus","addBookingNote","placeOrder","setOrderStage","refund","setListingStatus",
-  "adjustStock","updateProduct","updateCMS","updateService","addLeave","removeLeave",
+  "adjustStock","updateProduct","updateCMS","updateService","createService","deleteService","updateProvider","createProvider","deleteProvider","addLeave","removeLeave",
   "joinWaitlist","removeWaitlist","posCharge","addPaymentMethod","removePaymentMethod",
   "setPrimaryPayment","submitContact","submitInquiry","createOwner","sendMessage","markMessageRead","setContactStatus","staffBooking","recordBookingPayment","refundStoreSale"
 ]);
@@ -364,6 +371,13 @@ export const mutate = mutation({
     if (!OPS.has(op)) throw new Error("Unknown operation.");
     if (payload == null || typeof payload !== "object" || Array.isArray(payload)) throw new Error("Invalid operation payload.");
     const p = payload;
+
+    if (op === "generateUploadUrl") {
+      const admin = await adminFor(ctx);
+      const owner = await ownerFor(ctx, false);
+      if (!admin && !owner) throw new Error("Not authorized.");
+      return { uploadUrl: await ctx.storage.generateUploadUrl() };
+    }
 
     if (op === "createOwner") {
       const admin = await adminFor(ctx);
@@ -488,7 +502,8 @@ export const mutate = mutation({
         weightKg: Math.max(0, Number(input.weightKg) || 0),
         microchip: String(input.microchip || "").trim(), coat: String(input.coat || "").trim(),
         tags: Array.isArray(input.tags) ? input.tags.map(String).slice(0, 12) : [],
-        vaccines: [], notes: String(input.notes || ""), createdAt: today()
+        vaccines: [], notes: String(input.notes || ""), createdAt: today(),
+        ...(input.imageStorageId ? { imageStorageId: input.imageStorageId } : {})
       };
       await ctx.db.insert("pets", pet);
       if (admin) await audit(ctx, admin, "Pet added", pet.petName);
@@ -513,6 +528,7 @@ export const mutate = mutation({
         if (input[k] !== undefined) patch[k] = k === "weightKg" ? Math.max(0, Number(input[k]) || 0) : String(input[k]);
       }
       if (input.tags !== undefined) patch.tags = Array.isArray(input.tags) ? input.tags.map(String).slice(0, 12) : [];
+      if (input.imageStorageId !== undefined) patch.imageStorageId = input.imageStorageId;
       await ctx.db.patch(pet._id, patch);
       if (admin) await audit(ctx, admin, "Pet updated", pet.id);
       return { ok: true };
@@ -751,6 +767,7 @@ export const mutate = mutation({
       requirePermission(admin, "listings.edit");
       const l = await ctx.db.query("listings").filter(q => q.eq(q.field("id"), p.listingId)).first();
       if (!l) throw new Error("Listing not found.");
+      if (p.imageStorageId !== undefined) await ctx.db.patch(l._id, { imageStorageId: p.imageStorageId });
       const status = String(p.status || "");
       if (!["available","reserved","sold"].includes(status)) throw new Error("Invalid listing status.");
       await ctx.db.patch(l._id, { status });
@@ -796,6 +813,7 @@ export const mutate = mutation({
       }
       if (input.desc !== undefined) patch.desc = String(input.desc);
       if (input.icon !== undefined) patch.icon = String(input.icon);
+      if (input.imageStorageId !== undefined) patch.imageStorageId = input.imageStorageId;
       patch.lowStock = (patch.stock ?? product.stock) <= (patch.lowAt ?? product.lowAt);
       await ctx.db.patch(product._id, patch);
       await audit(ctx, admin, "Product edited", product.id);
@@ -846,6 +864,11 @@ export const mutate = mutation({
       const input = p.patch || {};
       const patch = {};
       if (input.name !== undefined) patch.name = String(input.name).trim();
+      if (input.group !== undefined) {
+        const group = await ctx.db.query("serviceGroups").filter(q => q.eq(q.field("id"), String(input.group))).first();
+        if (!group) throw new Error("Choose a valid department.");
+        patch.group = String(input.group);
+      }
       if (input.desc !== undefined) patch.desc = String(input.desc);
       if (input.price !== undefined) {
         const price = Number(input.price);
@@ -854,13 +877,119 @@ export const mutate = mutation({
       }
       if (input.duration !== undefined) {
         const duration = Number(input.duration);
-        if (!Number.isFinite(duration) || duration <= 0 || duration > 12) throw new Error("Invalid service duration.");
+        if (!Number.isFinite(duration) || duration <= 0 || duration > 24) throw new Error("Invalid service duration.");
         patch.duration = duration;
       }
       if (input.popular !== undefined) patch.popular = !!input.popular;
+      if (input.deposit !== undefined) patch.deposit = !!input.deposit;
+      if (input.requiresVaccine !== undefined) patch.requiresVaccine = !!input.requiresVaccine;
+      if (input.staff !== undefined) {
+        if (!Array.isArray(input.staff) || !input.staff.length) throw new Error("Assign at least one care-team member.");
+        const providers = await ctx.db.query("providers").collect();
+        if (input.staff.some(id => !providers.some(provider => provider.id === id))) throw new Error("Choose valid care-team members.");
+        patch.staff = input.staff.map(String);
+      }
+      if (!patch.name && !s.name) throw new Error("Enter a service name.");
+      if (input.imageStorageId !== undefined) patch.imageStorageId = input.imageStorageId;
       await ctx.db.patch(s._id, patch);
       await audit(ctx, admin, "Service edited", s.id);
       return { ok: true, serviceId: s.id };
+    }
+
+    if (op === "createService") {
+      const admin = await adminFor(ctx);
+      requirePermission(admin, "cms.edit");
+      const input = p.input || {};
+      const groupId = String(input.group || "");
+      const group = await ctx.db.query("serviceGroups").filter(q => q.eq(q.field("id"), groupId)).first();
+      if (!group) throw new Error("Choose a valid department.");
+      const providers = await ctx.db.query("providers").collect();
+      const staff = Array.isArray(input.staff) ? input.staff.map(String) : [];
+      if (!staff.length || staff.some(id => !providers.some(provider => provider.id === id))) throw new Error("Assign valid care-team members.");
+      const name = String(input.name || "").trim();
+      const price = Number(input.price);
+      const duration = Number(input.duration);
+      if (!name) throw new Error("Enter a service name.");
+      if (!Number.isFinite(price) || price < 0) throw new Error("Invalid service price.");
+      if (!Number.isFinite(duration) || duration <= 0 || duration > 24) throw new Error("Invalid service duration.");
+      const service = {
+        id: uid("sv"), group: groupId, name, icon: String(input.icon || "&#128062;"),
+        price: round2(price), duration, deposit: !!input.deposit, requiresVaccine: !!input.requiresVaccine,
+        staff, desc: String(input.desc || "").trim(), popular: !!input.popular
+      };
+      await ctx.db.insert("services", service);
+      await audit(ctx, admin, "Service created", service.id + " — " + service.name);
+      return { ok: true, serviceId: service.id };
+    }
+
+    if (op === "deleteService") {
+      const admin = await adminFor(ctx);
+      requirePermission(admin, "cms.edit");
+      const s = await getService(ctx, p.serviceId);
+      if (!s) throw new Error("Service not found.");
+      const bookings = await ctx.db.query("bookings").collect();
+      const waitlist = await ctx.db.query("waitlist").collect();
+      if (bookings.some(b => b.serviceId === s.id) || waitlist.some(w => w.serviceId === s.id)) throw new Error("This service has booking history or a waitlist. Rename it or remove those records first.");
+      await ctx.db.delete(s._id);
+      await audit(ctx, admin, "Service deleted", s.id + " — " + s.name);
+      return { ok: true, serviceId: s.id };
+    }
+
+    if (op === "updateProvider") {
+      const admin = await adminFor(ctx);
+      requirePermission(admin, "staff.manage");
+      const provider = await ctx.db.query("providers").filter(q => q.eq(q.field("id"), String(p.providerId || ""))).first();
+      if (!provider) throw new Error("Staff member not found.");
+      const input = p.patch || {};
+      const patch = {};
+      for (const key of ["name", "role", "title", "icon", "bio"]) if (input[key] !== undefined) patch[key] = String(input[key]).trim();
+      if (input.group !== undefined) {
+        const group = await ctx.db.query("serviceGroups").filter(q => q.eq(q.field("id"), String(input.group))).first();
+        if (!group) throw new Error("Choose a valid department.");
+        patch.group = String(input.group);
+      }
+      if (input.start !== undefined) patch.start = Number(input.start);
+      if (input.end !== undefined) patch.end = Number(input.end);
+      if (input.off !== undefined) patch.off = Array.isArray(input.off) ? input.off.map(Number) : [];
+      const values = { ...provider, ...patch };
+      if (!values.name || !values.role || !values.title) throw new Error("Enter the staff member's name, role and title.");
+      if (!Number.isFinite(values.start) || !Number.isFinite(values.end) || values.start < 0 || values.end > 24 || values.end <= values.start) throw new Error("Enter valid working hours.");
+      if (!Array.isArray(values.off) || values.off.some(day => !Number.isInteger(day) || day < 0 || day > 6)) throw new Error("Choose valid days off.");
+      await ctx.db.patch(provider._id, patch);
+      await audit(ctx, admin, "Staff profile edited", provider.id + " — " + values.name);
+      return { ok: true, providerId: provider.id };
+    }
+
+    if (op === "createProvider") {
+      const admin = await adminFor(ctx);
+      requirePermission(admin, "staff.manage");
+      const input = p.input || {};
+      const id = String(input.id || "").trim();
+      if (!/^[A-Za-z0-9][A-Za-z0-9_-]{1,39}$/.test(id)) throw new Error("Use a staff ID with 2-40 letters, numbers, hyphens or underscores.");
+      if (await ctx.db.query("providers").filter(q => q.eq(q.field("id"), id)).first()) throw new Error("That staff ID is already in use.");
+      const group = await ctx.db.query("serviceGroups").filter(q => q.eq(q.field("id"), String(input.group || ""))).first();
+      if (!group) throw new Error("Choose a valid department.");
+      const provider = { id, name: String(input.name || "").trim(), role: String(input.role || "").trim(), title: String(input.title || "").trim(), group: String(input.group), icon: String(input.icon || "").trim(), start: Number(input.start), end: Number(input.end), off: Array.isArray(input.off) ? input.off.map(Number) : [], bio: String(input.bio || "").trim() };
+      if (!provider.name || !provider.role || !provider.title) throw new Error("Enter the staff member's name, role and title.");
+      if (!Number.isFinite(provider.start) || !Number.isFinite(provider.end) || provider.start < 0 || provider.end > 24 || provider.end <= provider.start) throw new Error("Enter valid working hours.");
+      if (provider.off.some(day => !Number.isInteger(day) || day < 0 || day > 6)) throw new Error("Choose valid days off.");
+      await ctx.db.insert("providers", provider);
+      await audit(ctx, admin, "Staff profile created", provider.id + " — " + provider.name);
+      return { ok: true, providerId: provider.id };
+    }
+
+    if (op === "deleteProvider") {
+      const admin = await adminFor(ctx);
+      requirePermission(admin, "staff.manage");
+      const provider = await ctx.db.query("providers").filter(q => q.eq(q.field("id"), String(p.providerId || ""))).first();
+      if (!provider) throw new Error("Staff member not found.");
+      const services = await ctx.db.query("services").collect();
+      const bookings = await ctx.db.query("bookings").collect();
+      const leave = await ctx.db.query("staffLeave").collect();
+      if (services.some(s => (s.staff || []).includes(provider.id)) || bookings.some(b => b.providerId === provider.id) || leave.some(l => l.providerId === provider.id)) throw new Error("This staff member is referenced by services, bookings or leave. Reassign those records first.");
+      await ctx.db.delete(provider._id);
+      await audit(ctx, admin, "Staff profile deleted", provider.id + " — " + provider.name);
+      return { ok: true, providerId: provider.id };
     }
 
     if (op === "addLeave") {

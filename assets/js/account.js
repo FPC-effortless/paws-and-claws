@@ -262,7 +262,7 @@
     const vax = p.vaccines || [];
     const ok = D.vaccinesOk(p);
     return '<article class="pet-tile" data-id="' + p.id + '">' +
-      '<div class="pet-tile-art">' + D.speciesIcon(p.species) + '</div>' +
+      '<div class="pet-tile-art">' + (p.imageUrl ? '<img src="' + D.esc(p.imageUrl) + '" alt="' + D.esc(p.petName) + '" style="width:100%;height:100%;object-fit:cover">' : D.speciesIcon(p.species)) + '</div>' +
       '<div class="pet-tile-body">' +
         '<h3>' + D.esc(p.petName) + '</h3>' +
         '<p class="muted small">' + D.esc(p.breed || D.titleCase(p.species)) + ' &middot; ' +
@@ -307,6 +307,7 @@
     $('#pfWeight').value = p ? p.weightKg : '';
     $('#pfChip').value = p ? p.microchip : '';
     $('#pfNotes').value = p ? (p.notes || '') : '';
+    $('#pfImage').value = '';
     PNC.openModal('petModal');
   }
 
@@ -325,6 +326,16 @@
       microchip: $('#pfChip').value.trim(),
       notes: $('#pfNotes').value.trim()
     };
+    const image = $('#pfImage').files[0];
+    if (image && window.PNC_CONVEX && window.PNC_CONVEX.active) {
+      PNC.toast('Uploading photo…');
+      const uploaded = await window.PNC_CONVEX.uploadImage(image);
+      if (uploaded.error) { PNC.toast(uploaded.error, 'err'); return; }
+      input.imageStorageId = uploaded.storageId;
+    } else if (image) {
+      const reader = await new Promise(resolve => { const r = new FileReader(); r.onload = () => resolve(r.result); r.readAsDataURL(image); });
+      input.imageUrl = reader;
+    }
     const res = await Promise.resolve(editingPetId
       ? D.updatePet(editingPetId, input)
       : D.addPet(me().id, input));

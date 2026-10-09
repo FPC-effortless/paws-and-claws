@@ -101,7 +101,7 @@
   function card(p) {
     return '<article class="product-card" data-id="' + p.id + '">' +
       '<div class="product-art">' +
-        '<span class="product-emoji" aria-hidden="true">' + (D.icon ? D.icon(p.icon) : D.esc(p.icon)) + '</span>' +
+        (p.imageUrl ? '<img src="' + D.esc(p.imageUrl) + '" alt="' + D.esc(p.name) + '" style="width:100%;height:100%;object-fit:cover">' : '<span class="product-emoji" aria-hidden="true">' + (D.icon ? D.icon(p.icon) : D.esc(p.icon)) + '</span>') +
         badge(p) +
       '</div>' +
       '<div class="product-body">' +

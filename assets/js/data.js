@@ -82,10 +82,10 @@
   const VACCINES = ["Rabies", "DHPP", "Bordetella", "FVRCP", "Leptospirosis", "Canine Influenza"];
   const TEMPERAMENTS = ["Friendly", "Energetic", "Shy", "Good with kids", "Good with dogs", "Good with cats", "Vocal", "Cuddly", "Independent", "Needs experienced handler"];
   const SERVICE_GROUPS = [
-    { id: "vet", name: "Veterinary", icon: "&#129658;", blurb: "Wellness exams, vaccinations, and surgery with licensed veterinarians." },
-    { id: "grooming", name: "Grooming &amp; Washing", icon: "&#128136;", blurb: "Baths, haircuts, nail trims and spa add-ons by certified groomers." },
-    { id: "sitting", name: "Pet Sitting &amp; Boarding", icon: "&#127968;", blurb: "Daycare, overnight stays and in-home sitting with daily photo updates." },
-    { id: "training", name: "Behavioral Training", icon: "&#127893;", blurb: "Puppy basics, obedience and agility with positive-reinforcement trainers." }
+    { id: "grooming", name: "Grooming Studio", icon: "&#128136;", blurb: "Bathing, brushing, coat care, de-shedding, nails, ears and gentle hygiene." },
+    { id: "sitting", name: "PawPlay Daycare", icon: "&#128021;", blurb: "Limited half-day and full-day care with enrichment, rest breaks and owner updates." },
+    { id: "vet", name: "PawHealth Vet Days", icon: "&#129658;", blurb: "Scheduled veterinary consultations, wellness checks, vaccines and parasite advice." },
+    { id: "training", name: "GoodPaws Training", icon: "&#127893;", blurb: "Puppy foundations, loose-leash skills, recall, toilet training and owner coaching." }
   ];
   const ADMIN_ROLES = {
     super: { id: "super", name: "Super Admin", scope: "*", level: 100 },
@@ -121,23 +121,23 @@
      availability; `requiresVaccine` blocks booking until the pet's
      records are approved by staff. */
   const SERVICES = [
-    { id: "sv-wellness", group: "vet", name: "Wellness Exam", icon: "&#129658;", price: 65, duration: 0.5, deposit: true, requiresVaccine: false, staff: ["Dana", "Marcus"], desc: "Full nose-to-tail exam, weight and dental check, plus a nutrition chat.", popular: true },
-    { id: "sv-vaccination", group: "vet", name: "Vaccination Visit", icon: "&#128137;", price: 38, duration: 0.25, deposit: false, requiresVaccine: false, staff: ["Dana", "Marcus"], desc: "Rabies, DHPP, Bordetella and more. Bring your records book." },
-    { id: "sv-dental", group: "vet", name: "Dental Cleaning", icon: "&#129702;", price: 240, duration: 2, deposit: true, requiresVaccine: true, staff: ["Dana"], desc: "Anesthesia-free scaling and polishing under vet supervision." },
-    { id: "sv-surgery", group: "vet", name: "Spay / Neuter Surgery", icon: "&#128712;", price: 320, duration: 3, deposit: true, requiresVaccine: true, staff: ["Dana", "Marcus"], desc: "Pre-op bloodwork, monitoring, and post-op pain relief included." },
+    { id: "sv-bath", group: "grooming", name: "Bath & Brush", icon: "&#128704;", price: 28, duration: 1, deposit: true, requiresVaccine: true, staff: ["Rosa", "Talia"], desc: "Gentle bath, brushing, drying and a tidy finish matched to your pet's coat.", popular: true },
+    { id: "sv-haircut", group: "grooming", name: "Coat Trim & Style", icon: "&#128136;", price: 52, duration: 1.5, deposit: true, requiresVaccine: true, staff: ["Rosa", "Talia"], desc: "A practical or breed-inspired trim with coat-care guidance for home.", popular: true },
+    { id: "sv-deshed", group: "grooming", name: "De-Shedding Treatment", icon: "&#129508;", price: 42, duration: 1.5, deposit: true, requiresVaccine: true, staff: ["Rosa"], desc: "A thorough undercoat release and brush-out to reduce shedding at home." },
+    { id: "sv-nails", group: "grooming", name: "Nail Trim & File", icon: "&#128063;", price: 18, duration: 0.5, deposit: false, requiresVaccine: false, staff: ["Rosa", "Talia"], desc: "Calm nail trimming and smoothing, with a slower handling approach when needed." },
 
-    { id: "sv-bath", group: "grooming", name: "Bath & Blowout", icon: "&#128704;", price: 28, duration: 1, deposit: true, requiresVaccine: true, staff: ["Rosa", "Talia"], desc: "Warm bath, tear-free shampoo, blowout and a finishing bandana." },
-    { id: "sv-haircut", group: "grooming", name: "Breed-Specific Haircut", icon: "&#128136;", price: 52, duration: 1.5, deposit: true, requiresVaccine: true, staff: ["Rosa", "Talia"], desc: "Breed-standard clip or a custom look. Add coat-specific shampoo.", popular: true },
-    { id: "sv-nails", group: "grooming", name: "Nail Trim & File", icon: "&#128063;", price: 18, duration: 0.5, deposit: false, requiresVaccine: false, staff: ["Rosa", "Talia"], desc: "Quick, gentle trim with a smoothing file. Clipped with love." },
-    { id: "sv-deshed", group: "grooming", name: "De-Shed Treatment", icon: "&#129508;", price: 42, duration: 1.5, deposit: true, requiresVaccine: true, staff: ["Rosa"], desc: "Undercoat blast-out that saves your couch. Best done monthly." },
+    { id: "sv-dropin", group: "sitting", name: "Daycare Half-Day", icon: "&#128021;", price: 24, duration: 4, deposit: true, requiresVaccine: true, staff: ["Priya", "Owen"], desc: "A limited-place half-day with supervised play, enrichment and a rest break." },
+    { id: "sv-daycare", group: "sitting", name: "Daycare Full-Day", icon: "&#128021;", price: 38, duration: 8, deposit: true, requiresVaccine: true, staff: ["Priya", "Owen"], desc: "Supervised care, enrichment, owner-directed feeding, rest breaks and an update.", popular: true },
+    { id: "sv-overnight", group: "sitting", name: "PawStay Overnight Boarding", icon: "&#127968;", price: 58, duration: 24, deposit: true, requiresVaccine: true, staff: ["Priya", "Owen"], desc: "Planned overnight care with separate rest areas, recorded feeding and daily monitoring. Launching after daycare procedures are proven." },
 
-    { id: "sv-daycare", group: "sitting", name: "Daycare (Full Day)", icon: "&#128021;", price: 38, duration: 8, deposit: true, requiresVaccine: true, staff: ["Priya", "Owen"], desc: "Group play, nap schedule and a report card at pickup.", popular: true },
-    { id: "sv-overnight", group: "sitting", name: "Overnight Boarding", icon: "&#127968;", price: 58, duration: 24, deposit: true, requiresVaccine: true, staff: ["Priya", "Owen"], desc: "Cozy private suite, evening storytime and two walks a day." },
-    { id: "sv-dropin", group: "sitting", name: "Drop-In Visit", icon: "&#128694;", price: 24, duration: 1, deposit: false, requiresVaccine: false, staff: ["Priya", "Owen"], desc: "In-home feed, walk and cuddle visit while you are out." },
+    { id: "sv-wellness", group: "vet", name: "Vet Day Consultation", icon: "&#129658;", price: 65, duration: 0.5, deposit: true, requiresVaccine: false, staff: ["Dana", "Marcus"], desc: "Scheduled consultation with a registered veterinary professional for a current concern or care plan.", popular: true },
+    { id: "sv-vaccination", group: "vet", name: "Wellness Check & Vaccination", icon: "&#128137;", price: 38, duration: 0.5, deposit: false, requiresVaccine: false, staff: ["Dana", "Marcus"], desc: "Routine wellness check, vaccination review and appropriate vaccine administration." },
+    { id: "sv-dental", group: "vet", name: "Deworming & Parasite Advice", icon: "&#129702;", price: 30, duration: 0.5, deposit: false, requiresVaccine: false, staff: ["Dana"], desc: "Vet-led guidance on deworming and parasite prevention for your pet's lifestyle." },
+    { id: "sv-surgery", group: "vet", name: "Vet Day Follow-Up", icon: "&#128300;", price: 45, duration: 0.5, deposit: false, requiresVaccine: false, staff: ["Dana", "Marcus"], desc: "A scheduled review of an existing care plan; clinical services are provided by registered professionals." },
 
-    { id: "sv-puppy", group: "training", name: "Puppy Basics", icon: "&#128062;", price: 45, duration: 1, deposit: true, requiresVaccine: false, staff: ["Coach Ray"], desc: "Socialization, name response, and the potty-training playbook." },
-    { id: "sv-obedience", group: "training", name: "Obedience Level 1", icon: "&#127893;", price: 60, duration: 1.5, deposit: true, requiresVaccine: true, staff: ["Coach Ray"], desc: "Sit, stay, loose-leash walking and rock-solid recall basics.", popular: true },
-    { id: "sv-agility", group: "training", name: "Agility Intro", icon: "&#127919;", price: 75, duration: 1.5, deposit: true, requiresVaccine: true, staff: ["Coach Ray"], desc: "Jumps, tunnels and weave poles for high-energy dogs." }
+    { id: "sv-puppy", group: "training", name: "Puppy Foundations", icon: "&#128062;", price: 45, duration: 1, deposit: true, requiresVaccine: false, staff: ["Coach Ray"], desc: "Puppy foundations, confidence, name response and toilet-training support." },
+    { id: "sv-obedience", group: "training", name: "Loose-Leash & Recall", icon: "&#127893;", price: 60, duration: 1.5, deposit: true, requiresVaccine: true, staff: ["Coach Ray"], desc: "Practical leash walking, recall and everyday handling skills for owners and dogs.", popular: true },
+    { id: "sv-agility", group: "training", name: "Socialisation & Owner Coaching", icon: "&#127919;", price: 55, duration: 1, deposit: true, requiresVaccine: true, staff: ["Coach Ray"], desc: "Supported socialisation, humane handling and a clear home practice plan." }
   ];
 
   const SERVICE_BY_ID = Object.fromEntries(SERVICES.map((s) => [s.id, s]));
@@ -147,13 +147,13 @@
   /* staff[] on each service lists provider ids; the availability
      engine below turns provider working hours + leave into slots. */
   const PROVIDERS = [
-    { id: "Dana", name: "Dr. Dana Whitfield", role: "Veterinarian", title: "DVM, Chief of Medicine", group: "vet", icon: "&#129658;", start: 8, end: 16, off: [0], bio: "14 years in small-animal practice. Loves a good dental." },
-    { id: "Marcus", name: "Dr. Marcus Ito", role: "Veterinarian", title: "DVM, Surgery", group: "vet", icon: "&#129658;", start: 10, end: 18, off: [0], bio: "Soft-tissue surgery and dentals. Cat whisperer." },
-    { id: "Rosa", name: "Rosa Delgado", role: "Groomer", title: "Certified Master Groomer", group: "grooming", icon: "&#128136;", start: 9, end: 17, off: [0], bio: "Breed-standard clips and de-shed wizard." },
-    { id: "Talia", name: "Talia Nguyen", role: "Groomer", title: "Groomer & Spa Lead", group: "grooming", icon: "&#128136;", start: 9, end: 17, off: [1, 0], bio: "Cat specialist. Zero scraches per week, on average." },
-    { id: "Priya", name: "Priya Raman", role: "Sitter", title: "Daycare & Boarding Lead", group: "sitting", icon: "&#127968;", start: 7, end: 19, off: [], bio: "Runs the play yard and sends the best photo updates." },
-    { id: "Owen", name: "Owen Brooks", role: "Sitter", title: "In-Home Sitting Specialist", group: "sitting", icon: "&#127968;", start: 8, end: 20, off: [0], bio: "Overnights and drop-ins for senior and shy pets." },
-    { id: "Coach Ray", name: "Ray Carter", role: "Trainer", title: "CPDT-KA Trainer", group: "training", icon: "&#127893;", start: 10, end: 19, off: [0], bio: "Positive reinforcement only. Agility course builder." }
+    { id: "Dana", name: "Dr. Dana Whitfield", role: "Veterinarian", title: "Registered Veterinary Professional · Vet Days", group: "vet", icon: "&#129658;", start: 8, end: 16, off: [0], bio: "Provides scheduled consultations, wellness checks and preventive-care guidance." },
+    { id: "Marcus", name: "Dr. Marcus Ito", role: "Veterinarian", title: "Registered Veterinary Professional · Vet Days", group: "vet", icon: "&#129658;", start: 10, end: 18, off: [0], bio: "Helps families understand practical next steps for everyday pet health." },
+    { id: "Rosa", name: "Rosa Delgado", role: "Groomer", title: "Grooming Studio Lead", group: "grooming", icon: "&#128136;", start: 9, end: 17, off: [0], bio: "Coat trims, de-shedding and patient handling for dogs and cats." },
+    { id: "Talia", name: "Talia Nguyen", role: "Groomer", title: "Grooming & Hygiene Specialist", group: "grooming", icon: "&#128136;", start: 9, end: 17, off: [1, 0], bio: "Gentle grooming, nails, ears and hygiene with a cat-friendly approach." },
+    { id: "Priya", name: "Priya Raman", role: "Daycare Lead", title: "PawPlay Daycare Lead", group: "sitting", icon: "&#127968;", start: 7, end: 19, off: [], bio: "Runs the limited-place play, enrichment and rest routine with owner updates." },
+    { id: "Owen", name: "Owen Brooks", role: "Daycare Lead", title: "PawPlay Care Specialist", group: "sitting", icon: "&#127968;", start: 8, end: 20, off: [0], bio: "Focuses on safe introductions, feeding instructions and calm rest periods." },
+    { id: "Coach Ray", name: "Ray Carter", role: "Trainer", title: "GoodPaws Training Coach", group: "training", icon: "&#127893;", start: 10, end: 19, off: [0], bio: "Positive-reinforcement coaching for puppies, dogs and the people who live with them." }
   ];
   const PROVIDER_BY_ID = Object.fromEntries(PROVIDERS.map((p) => [p.id, p]));
 
@@ -1130,13 +1130,113 @@
     const s = byId(db.services, serviceId);
     if (!s) return { error: "Service not found." };
     const values = { ...s, ...patch };
-    if (!String(values.name || "").trim() || !Number.isFinite(Number(values.price)) || Number(values.price) < 0 || !Number.isFinite(Number(values.duration)) || Number(values.duration) <= 0 || Number(values.duration) > 12) return { error: "Invalid service values." };
-    ["name", "price", "duration", "desc", "popular"].forEach((k) => {
+    const error = validateServiceValues(values);
+    if (error) return { error };
+    ["name", "group", "price", "duration", "desc", "popular", "deposit", "requiresVaccine", "staff"].forEach((k) => {
       if (patch[k] !== undefined) s[k] = ["price", "duration"].includes(k) ? Number(patch[k]) : ["name", "desc"].includes(k) ? String(patch[k]).trim() : patch[k];
     });
     audit("Service edited", s.name + " — " + money(s.price));
     persist();
     return { service: s };
+  }
+  function validateServiceValues(values) {
+    if (!String(values.name || "").trim()) return "Enter a service name.";
+    const groups = (db && db.serviceGroups) || SERVICE_GROUPS;
+    if (!groups.some(g => g.id === values.group)) return "Choose a valid department.";
+    if (!Number.isFinite(Number(values.price)) || Number(values.price) < 0) return "Enter a valid service price.";
+    if (!Number.isFinite(Number(values.duration)) || Number(values.duration) <= 0 || Number(values.duration) > 24) return "Enter a duration between 0.25 and 24 hours.";
+    if (!Array.isArray(values.staff) || values.staff.length === 0) return "Assign at least one care-team member.";
+    const providers = (db && db.providers) || PROVIDERS;
+    if (values.staff.some(id => !providers.some(p => p.id === id))) return "Choose valid care-team members.";
+    return "";
+  }
+  function createService(input) {
+    if (remoteEnabled()) return remoteMutation("createService", { input });
+    if (productionMode()) return { error: "Secure backend is not available." };
+    const admin = currentAdmin();
+    if (!admin || !can("cms.edit")) return { error: "Not authorized." };
+    const values = {
+      id: uid("sv"), group: String(input.group || ""), name: String(input.name || "").trim(),
+      icon: String(input.icon || "&#128062;"), price: Number(input.price), duration: Number(input.duration),
+      deposit: !!input.deposit, requiresVaccine: !!input.requiresVaccine,
+      staff: Array.isArray(input.staff) ? input.staff.slice() : [], desc: String(input.desc || "").trim(),
+      popular: !!input.popular
+    };
+    const error = validateServiceValues(values);
+    if (error) return { error };
+    db.services.push(values);
+    audit("Service created", values.name);
+    persist();
+    return { service: values };
+  }
+  function deleteService(serviceId) {
+    if (remoteEnabled()) return remoteMutation("deleteService", { serviceId });
+    if (productionMode()) return { error: "Secure backend is not available." };
+    const admin = currentAdmin();
+    if (!admin || !can("cms.edit")) return { error: "Not authorized." };
+    const service = byId(db.services, serviceId);
+    if (!service) return { error: "Service not found." };
+    if ((db.bookings || []).some(b => b.serviceId === serviceId) || (db.waitlist || []).some(w => w.serviceId === serviceId)) {
+      return { error: "This service has booking history or a waitlist. Rename it or remove those records first." };
+    }
+    db.services = db.services.filter(s => s.id !== serviceId);
+    audit("Service deleted", service.name);
+    persist();
+    return { ok: true, serviceId };
+  }
+
+  function validateProviderValues(values, creating) {
+    if (creating && !/^[A-Za-z0-9][A-Za-z0-9_-]{1,39}$/.test(String(values.id || ""))) return "Use a staff ID with 2-40 letters, numbers, hyphens or underscores.";
+    if (!String(values.name || "").trim() || !String(values.role || "").trim() || !String(values.title || "").trim()) return "Enter the staff member's name, role and title.";
+    const groups = (db && db.serviceGroups) || SERVICE_GROUPS;
+    if (!groups.some(g => g.id === values.group)) return "Choose a valid department.";
+    const start = Number(values.start), end = Number(values.end);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end > 24 || end <= start) return "Enter valid working hours.";
+    if (!Array.isArray(values.off) || values.off.some(day => !Number.isInteger(day) || day < 0 || day > 6)) return "Choose valid days off.";
+    return "";
+  }
+  function updateProvider(providerId, patch) {
+    if (remoteEnabled()) return remoteMutation("updateProvider", { providerId, patch });
+    if (productionMode()) return { error: "Secure backend is not available." };
+    const admin = currentAdmin();
+    if (!admin || !can("staff.manage")) return { error: "Not authorized." };
+    const provider = byId(db.providers || [], providerId);
+    if (!provider) return { error: "Staff member not found." };
+    const values = { ...provider, ...patch, id: provider.id };
+    const error = validateProviderValues(values, false);
+    if (error) return { error };
+    Object.assign(provider, { name: String(values.name).trim(), role: String(values.role).trim(), title: String(values.title).trim(), group: values.group, icon: String(values.icon || "").trim(), start: Number(values.start), end: Number(values.end), off: values.off.slice(), bio: String(values.bio || "").trim() });
+    audit("Staff profile edited", provider.id + " — " + provider.name);
+    persist();
+    return { provider };
+  }
+  function createProvider(input) {
+    if (remoteEnabled()) return remoteMutation("createProvider", { input });
+    if (productionMode()) return { error: "Secure backend is not available." };
+    const admin = currentAdmin();
+    if (!admin || !can("staff.manage")) return { error: "Not authorized." };
+    const values = { id: String(input.id || "").trim(), name: String(input.name || "").trim(), role: String(input.role || "").trim(), title: String(input.title || "").trim(), group: String(input.group || ""), icon: String(input.icon || "").trim(), start: Number(input.start), end: Number(input.end), off: Array.isArray(input.off) ? input.off.map(Number) : [], bio: String(input.bio || "").trim() };
+    if ((db.providers || []).some(p => p.id === values.id)) return { error: "That staff ID is already in use." };
+    const error = validateProviderValues(values, true);
+    if (error) return { error };
+    db.providers = db.providers || [];
+    db.providers.push(values);
+    audit("Staff profile created", values.id + " — " + values.name);
+    persist();
+    return { provider: values };
+  }
+  function deleteProvider(providerId) {
+    if (remoteEnabled()) return remoteMutation("deleteProvider", { providerId });
+    if (productionMode()) return { error: "Secure backend is not available." };
+    const admin = currentAdmin();
+    if (!admin || !can("staff.manage")) return { error: "Not authorized." };
+    const provider = byId(db.providers || [], providerId);
+    if (!provider) return { error: "Staff member not found." };
+    if ((db.services || []).some(s => (s.staff || []).includes(providerId)) || (db.bookings || []).some(b => b.providerId === providerId) || (db.staffLeave || []).some(l => l.providerId === providerId)) return { error: "This staff member is referenced by services, bookings or leave. Reassign those records first." };
+    db.providers = db.providers.filter(p => p.id !== providerId);
+    audit("Staff profile deleted", provider.id + " — " + provider.name);
+    persist();
+    return { ok: true, providerId };
   }
 
   /* ------------------------- staff & waitlist ------------------------- */
@@ -1145,7 +1245,7 @@
     if (productionMode()) return { error: "Secure backend is not available." };
     const admin = currentAdmin();
     if (!admin || !can("staff.manage")) return { error: "Not authorized." };
-    if (!PROVIDER_BY_ID[providerId] || !validDateOnly(String(date)) || String(date) < todayISO()) return { error: "Invalid leave date." };
+    if (!byId(db.providers || PROVIDERS, providerId) || !validDateOnly(String(date)) || String(date) < todayISO()) return { error: "Invalid leave date." };
     if (db.bookings.some(b => b.providerId === providerId && b.date === date && !["cancelled", "completed", "no-show"].includes(b.status))) return { error: "Reschedule or cancel this specialist's appointments before blocking the day." };
     if (db.staffLeave.some(l => l.providerId === providerId && l.date === date)) return { error: "Leave is already booked for that day." };
     db.staffLeave.push({ id: uid("lv"), providerId, date, reason: String(reason || "Blocked").slice(0, 240) });
@@ -1278,7 +1378,7 @@
       coat: String(input.coat || "").trim(),
       tags: Array.isArray(input.tags) ? input.tags.filter((t) => TEMPERAMENTS.indexOf(t) !== -1) : [],
       vaccines: Array.isArray(input.vaccines) ? input.vaccines : [],
-      notes: String(input.notes || ""), createdAt: todayISO()
+      notes: String(input.notes || ""), createdAt: todayISO(), imageUrl: String(input.imageUrl || "")
     };
     db.pets.push(pet);
     audit("Pet added", pet.petName + " for " + o.fullName);
@@ -1301,6 +1401,7 @@
       if (patch[k] !== undefined) p[k] = patch[k];
     });
     if (Array.isArray(patch.tags)) p.tags = patch.tags.filter((t) => TEMPERAMENTS.indexOf(t) !== -1);
+    if (patch.imageUrl !== undefined) p.imageUrl = String(patch.imageUrl || "");
     // Vaccine approvals can only be changed through the staff review action.
     audit("Pet updated", p.petName);
     persist();
@@ -1533,7 +1634,7 @@ function prepareStoreSale(lines, products, method, options) {
     /* inventory */
     adjustStock, updateProduct,
     /* cms */
-    updateCMS, updateService,
+    updateCMS, updateService, createService, deleteService, updateProvider, createProvider, deleteProvider,
     /* staff */
     addLeave, removeLeave, joinWaitlist, removeWaitlist,
     /* crm */

@@ -24,7 +24,7 @@
       const title = $('#heroTitle');
       if (title) title.textContent = 'Ask us about pet care services';
       const lead = $('.hero-grid .lead');
-      if (lead) lead.textContent = 'Our service list, staff and naira prices are being confirmed. Contact our Amasoma team to ask about care and arrange a visit.';
+      if (lead) lead.textContent = 'Our launch services are being confirmed. Contact our Amasoma team about grooming, limited daycare, scheduled vet days or GoodPaws training.';
       const actions = $('.hero-grid .hero-cta');
       if (actions) actions.innerHTML = '<a class="btn btn-primary btn-lg" href="contact.html">Contact the store</a>';
     }
@@ -38,7 +38,7 @@
     return (
       '<div class="card svc-card reveal in" data-svc-card="' + s.id + '">' +
         '<div class="flex gap12" style="align-items:flex-start">' +
-          '<span class="ico" style="width:52px;height:52px;border-radius:14px;display:grid;place-items:center;font-size:1.5rem;background:var(--ocean-100);flex:none">' + D.icon(s.icon) + "</span>" +
+          '<span class="ico" style="width:52px;height:52px;border-radius:14px;display:grid;place-items:center;font-size:1.5rem;background:var(--ocean-100);flex:none">' + (s.imageUrl ? '<img src="' + esc(s.imageUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">' : D.icon(s.icon)) + "</span>" +
           "<div><h3>" + esc(s.name) + "</h3>" +
           '<div class="svc-meta">' +
             (s.popular ? '<span class="tag tag--yellow">Popular</span>' : "") +
@@ -177,7 +177,7 @@
         '<button class="pick' + (on ? " on" : "") + '"' +
           ((D.productionMode() && s.deposit) || s.duration >= 24 ? ' disabled title="Contact the store to arrange this service"' : '') +
           ' data-pick="' + s.id + '">' +
-          '<span class="pi">' + D.icon(s.icon) + "</span>" +
+          '<span class="pi">' + (s.imageUrl ? '<img src="' + esc(s.imageUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">' : D.icon(s.icon)) + "</span>" +
           "<span><b>" + esc(s.name) + "</b><small>" + publicPrice(s.price) + " · " + s.duration + " hr" + (s.duration === 1 ? "" : "s") +
           (s.requiresVaccine ? " · vaccines required" : "") + "</small></span>" +
         "</button>"
@@ -322,7 +322,7 @@
         '<div class="field"><label for="in-instructions">Instructions for the groomer</label>' +
         '<textarea class="input" id="in-instructions" rows="3" placeholder="e.g. Keep the tail long, trim the paws, she hates the dryer">' + esc(W.intake.instructions || "") + "</textarea></div>" +
         '<div class="intake-tags">' +
-          ["OK with clippers", "Needs muzzle", "Anxious", "Cat-friendly shampoo", "Oatmeal shampoo"].map((t) =>
+          ["OK with clippers", "Needs muzzle", "Anxious", "Gentle ear cleaning", "Sensitive skin"].map((t) =>
             '<button type="button" class="tag-btn' + ((W.intake.tags || []).indexOf(t) !== -1 ? " on" : "") + '" data-tag="' + esc(t) + '">' + esc(t) + "</button>"
           ).join("") + "</div>";
     } else if (g === "vet") {
@@ -334,7 +334,7 @@
         '<label class="checkrow"><input type="checkbox" id="in-fasted"' + (W.intake.fasted ? " checked" : "") + ">" +
         "<span>Pet has been fasted (needed for bloodwork)</span></label>";
     } else if (g === "sitting") {
-      f = '<h3 class="sub">&#127968; Sitting details</h3>' +
+      f = '<h3 class="sub">&#127968; Daycare details</h3>' +
         '<div class="field"><label for="in-food">Feeding &amp; care notes</label>' +
         '<textarea class="input" id="in-food" rows="3" placeholder="e.g. 1 cup kibble morning, medication at noon">' + esc(W.intake.food || "") + "</textarea></div>" +
         '<div class="intake-tags">' +
@@ -344,7 +344,7 @@
         '<div class="field" style="margin-top:12px"><label for="in-access">Access instructions</label>' +
         '<input class="input" id="in-access" type="text" placeholder="e.g. Key under the mat, code 4242" value="' + esc(W.intake.access || "") + '"></div>';
     } else {
-      f = '<h3 class="sub">&#127893; Training details</h3>' +
+      f = '<h3 class="sub">&#127893; GoodPaws goals</h3>' +
         '<div class="field"><label for="in-goal">What do you want to work on?</label>' +
         '<textarea class="input" id="in-goal" rows="3" placeholder="e.g. Loose-leash walking and not barging through doors">' + esc(W.intake.goal || "") + "</textarea></div>" +
         '<div class="intake-tags">' +
@@ -608,12 +608,21 @@
       if (!o) { PNC.toast("Create an account first", "err"); window.location.href = "membership.html#join"; return; }
       const name = $("#qp-name").value.trim();
       if (name.length < 1) { PNC.toast("Give your pet a name", "err"); return; }
-      const r = await Promise.resolve(D.addPet(o.id, {
+      const petInput = {
         petName: name,
         species: $("#qp-species").value || "Dog",
         breed: $("#qp-breed").value.trim(),
         dob: $("#qp-dob").value || ""
-      }));
+      };
+      const image = $("#qp-image").files[0];
+      if (image && window.PNC_CONVEX?.active) {
+        const up = await window.PNC_CONVEX.uploadImage(image);
+        if (up.error) { PNC.toast(up.error, "err"); return; }
+        petInput.imageStorageId = up.storageId;
+      } else if (image) {
+        petInput.imageUrl = await new Promise(resolve => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.readAsDataURL(image); });
+      }
+      const r = await Promise.resolve(D.addPet(o.id, petInput));
       if (r && r.error) { PNC.toast(r.error, "err"); return; }
       PNC.toast(name + " added to your account 🐾");
       PNC.closeModal("petModal");
