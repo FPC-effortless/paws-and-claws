@@ -208,14 +208,42 @@
     }
     host.hidden = false;
     const holder = $("#clerkAdminHolder");
-    if (holder) ck.mountSignIn(holder, {
-      appearance: { elements: { rootBox: "width:100%" } },
-      signIn: { redirectUrl: new URL("/admin", location.origin).toString() }
-    });
     const local = $("#adminLoginForm");
     if (local) local.hidden = true;
     const demo = document.querySelector(".demo-creds");
     if (demo) demo.hidden = true;
+
+    const showSwitchAccount = function () {
+      if (!holder) return;
+      const email = ck.currentOwner && ck.currentOwner() ? ck.currentOwner().email : "your current account";
+      holder.innerHTML = '<div class="admin-session-note" role="status">' +
+        "You are signed in as <b>" + esc(email) + "</b>, which is not an admin account." +
+        '<button type="button" class="btn btn-primary btn-block" id="adminSwitchAccount">Switch to an admin account</button>' +
+        "</div>";
+      const switchBtn = $("#adminSwitchAccount", holder);
+      if (switchBtn) switchBtn.addEventListener("click", async function () {
+        switchBtn.disabled = true;
+        try {
+          await ck.signOut();
+          holder.innerHTML = "";
+          mountClerkGate();
+        } finally { switchBtn.disabled = false; }
+      });
+    };
+
+    /* Never mount SignIn over an existing Clerk session. Doing so makes
+       Clerk complete a second sign-in flow and redirect to the homepage.
+       Admin sessions enter directly; member sessions get a clear switch
+       action that signs out before mounting the admin sign-in UI. */
+    if (ck.clerk && ck.clerk.user) {
+      if (D.currentAdmin()) { enter(); return; }
+      showSwitchAccount();
+    } else if (holder) {
+      ck.mountSignIn(holder, {
+        appearance: { elements: { rootBox: "width:100%" } },
+        signIn: { redirectUrl: new URL("/admin", location.origin).toString() }
+      });
+    }
     /* Clerk mounted the real UI, so the gate is satisfied by the
        Clerk session alone. Re-check on every Clerk state change. */
     if (window.PNC_CLERK._unsubAdmin) try { window.PNC_CLERK._unsubAdmin(); } catch {}
