@@ -52,7 +52,7 @@
         '<div class="svc-foot">' +
           '<span class="svc-price">' + publicPrice(s.price) + "</span>" +
           '<span class="svc-dur">' + s.duration + " hr" + (s.duration === 1 ? "" : "s") + "</span>" +
-          (s.duration >= 24 || !D.catalogReady()
+          (s.duration >= 24 || !D.catalogReady() || (D.productionMode() && s.deposit)
             ? '<a class="mini-btn" href="contact.html">Contact us</a>'
             : '<button class="mini-btn primary" data-book="' + s.id + '">Book now</button>') +
         "</div>" +
@@ -115,7 +115,10 @@
   function renderQuickBook() {
     const sel = $("#qbService");
     if (!sel) return;
-    sel.innerHTML = D.db.services.map((s) => '<option value="' + s.id + '">' + esc(s.name) + " · " + publicPrice(s.price) + "</option>").join("");
+    sel.innerHTML = D.db.services.filter(s => s.duration < 24 && (!D.productionMode() || !s.deposit))
+      .map((s) => '<option value="' + s.id + '">' + esc(s.name) + " · " + publicPrice(s.price) + "</option>").join("");
+    const go = $("#qbGo");
+    if (go) go.disabled = !sel.options.length;
     refreshQBPets();
   }
 
@@ -171,7 +174,9 @@
     }).join("") + D.db.services.map(function (s) {
       const on = W.serviceId === s.id;
       return (
-        '<button class="pick' + (on ? " on" : "") + '" data-pick="' + s.id + '">' +
+        '<button class="pick' + (on ? " on" : "") + '"' +
+          ((D.productionMode() && s.deposit) || s.duration >= 24 ? ' disabled title="Contact the store to arrange this service"' : '') +
+          ' data-pick="' + s.id + '">' +
           '<span class="pi">' + D.icon(s.icon) + "</span>" +
           "<span><b>" + esc(s.name) + "</b><small>" + publicPrice(s.price) + " · " + s.duration + " hr" + (s.duration === 1 ? "" : "s") +
           (s.requiresVaccine ? " · vaccines required" : "") + "</small></span>" +
@@ -364,7 +369,7 @@
     const svc = D.SERVICE_BY_ID[W.serviceId];
     const o = D.currentOwner();
     /* Mirror createBooking: members get their plan discount. */
-    const rate = o ? (D.PLAN_DISCOUNT[o.plan] || 0) : 0;
+    const rate = o && !D.productionMode() ? (D.PLAN_DISCOUNT[o.plan] || 0) : 0;
     const net = Math.round(svc.price * (1 - rate) * 100) / 100;
     const dep = svc.deposit ? Math.round(net * D.DEPOSIT_RATE * 100) / 100 : 0;
     return { deposit: dep, remainder: Math.round((net - dep) * 100) / 100, net, rate };
@@ -389,10 +394,13 @@
       (b.rate
         ? '<div class="row"><span>Member discount (' + Math.round(b.rate * 100) + '%)</span><span style="color:var(--ok)">&minus;' + money(Math.round(svc.price * b.rate * 100) / 100) + "</span></div>"
         : "") +
-      '<div class="row"><span>' + (svc.deposit ? "Deposit today (30%)" : "Payment due at visit") + '</span><span><b>' + money(b.deposit) + "</b></span></div>" +
-      (svc.deposit ? '<div class="row"><span>Balance at the visit</span><span>' + money(b.remainder) + "</span></div>" : "") +
-      '<div class="row total"><span>' + (svc.deposit ? "Charged now" : "Charged now") + '</span><span>' + money(b.deposit) + "</span></div>" +
-      '<p class="tiny muted" style="margin:10px 0 0">' + (D.productionMode() ? 'Confirm payment arrangements with the store.' : 'Local demo only — no real payment is collected.') + '</p>';
+      '<div class="row"><span>' + (svc.deposit ? "Deposit to arrange with the store (30%)" : "Amount due at your visit") +
+        '</span><span><b>' + money(svc.deposit ? b.deposit : b.net) + "</b></span></div>" +
+      (svc.deposit ? '<div class="row"><span>Remaining balance at the visit</span><span>' + money(b.remainder) + "</span></div>" : "") +
+      '<div class="row total"><span>Paid online now</span><span>' + money(0) + "</span></div>" +
+      '<p class="tiny muted" style="margin:10px 0 0">' +
+        (D.productionMode() ? 'No payment is taken online. For services requiring a deposit, contact the store before booking.' :
+          'Local demo only — no real payment is collected.') + '</p>';
 
     $("#acctGate").innerHTML = o
       ? '<p class="small muted" style="margin:14px 0 0">Booking as <b>' + esc(o.fullName) + "</b> · " + esc(o.email) + "</p>"
@@ -415,6 +423,11 @@
 
   function startBooking(serviceId) {
     if (!D.catalogReady()) { PNC.toast("Service prices are being confirmed. Please contact the store to arrange a visit.", "err"); return; }
+    const service = D.SERVICE_BY_ID[serviceId];
+    if (!service || service.duration >= 24 || (D.productionMode() && service.deposit)) {
+      PNC.toast("Contact the store to arrange this service and any required deposit.", "err");
+      return;
+    }
     W.serviceId = serviceId;
     W.date = null; W.hour = null; W.providerId = null;
     gotoStep(2);
@@ -563,6 +576,10 @@
     /* quick book */
     $("#qbGo").addEventListener("click", function () {
       const sid = $("#qbService").value;
+      if (!sid) {
+        PNC.toast("Contact the store about the current appointment options.", "err");
+        return;
+      }
       const pid = $("#qbPet").value;
       const date = D.firstOpenDate(D.db, sid);
       const open = D.slotsFor(D.db, sid, date).filter((s) => s.available);
