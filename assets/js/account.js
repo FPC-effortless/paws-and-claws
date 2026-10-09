@@ -64,6 +64,8 @@
       if (!gate) return;
       $$('.gate-form', gate).forEach(f => f.style.display = 'none');
       $$('.gate-tab', gate).forEach(t => t.style.display = 'none');
+      const route = $('.auth-route', gate);
+      if (route) route.hidden = true;
     };
 
     // An existing Clerk session must not mount SignIn: Clerk treats that as
