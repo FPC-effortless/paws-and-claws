@@ -450,9 +450,8 @@
     renderStep1();
     refreshNext();
 
-    /* hero title from CMS */
-    const t = D.db.cms.heroTitle;
-    if (t) $("#heroTitle").innerHTML = esc(t).replace("best friend", "<em>best friend</em>");
+    /* The services page has its own headline; the shared homepage
+       CMS title should not replace this page-specific message. */
     syncCatalogAvailability();
 
     /* group filter */
