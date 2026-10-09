@@ -146,8 +146,18 @@
 
   function render() {
     const list = D.catalogReady() ? filtered() : [];
+    if (D.productionMode && D.productionMode()) {
+      const lead = $('#shopLead');
+      if (lead) lead.textContent = D.catalogReady()
+        ? 'Browse our range, then visit our Amasoma store. Pay in naira by cash or bank transfer; no account required. Online checkout is not available yet.'
+        : 'Our product catalog is being confirmed. Visit our Amasoma store and ask about current stock and naira prices. Pay by cash or bank transfer; no account required.';
+    }
     const filters = $('#shopFilters');
     if (filters) filters.hidden = !D.catalogReady();
+    const search = $('.shop-search');
+    if (search) search.hidden = !D.catalogReady();
+    const toolbar = $('.shop-toolbar');
+    if (toolbar) toolbar.hidden = !D.catalogReady();
     const reset = $('#resetEmpty');
     if (reset) reset.hidden = !D.catalogReady();
     $('#productGrid').innerHTML = list.map(card).join('');
@@ -296,10 +306,6 @@
 
     /* member pricing note */
     const m = member();
-    if (D.productionMode && D.productionMode()) {
-      const lead = $('#shopLead');
-      if (lead) lead.textContent = 'Browse our range, then visit our Amasoma store. Pay in naira by cash or bank transfer; no account required. Online checkout is not available yet.';
-    }
     if (m) {
       const lead = $('#shopLead');
       if (lead && !(D.productionMode && D.productionMode())) {

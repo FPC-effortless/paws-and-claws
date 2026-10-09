@@ -172,6 +172,8 @@
     const list = filtered();
     const facets = $('.pet-facets');
     if (facets) facets.hidden = !D.catalogReady();
+    const toolbar = $('.shop-toolbar');
+    if (toolbar) toolbar.hidden = !D.catalogReady();
     const reset = $('#petResetEmpty');
     if (reset) reset.hidden = !D.catalogReady();
     $('#petGrid').innerHTML = list.map(card).join('');
