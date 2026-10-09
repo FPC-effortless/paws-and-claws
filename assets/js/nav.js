@@ -341,6 +341,11 @@
   function syncMemberZone() {
     const zone = $("#memberZone");
     if (!zone) return;
+    const ck = global.PNC_CLERK;
+    if (ck && ck.active && ck.clerk && ck.clerk.user && global.PNC_CONVEX && !global.PNC_CONVEX.authReady) {
+      zone.innerHTML = '<span class="member-chip member-chip-loading" aria-label="Loading account">Loading account&hellip;</span>';
+      return;
+    }
     const o = D.currentOwner();
     if (o) {
       zone.innerHTML =

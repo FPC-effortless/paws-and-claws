@@ -40,6 +40,11 @@
 
   function syncView() {
     const m = me();
+    const ck = window.PNC_CLERK;
+    if (ck && ck.active && ck.clerk && ck.clerk.user && window.PNC_CONVEX && !window.PNC_CONVEX.authReady) {
+      showGate();
+      return;
+    }
     if (!m) showGate(); else showApp();
   }
 
@@ -68,7 +73,7 @@
       hideLocalGate();
       holder.hidden = false;
       holder.innerHTML = '<p class="auth-loading" role="status">Loading your member account&hellip;</p>';
-      syncView();
+      showGate();
       return;
     }
 
@@ -750,6 +755,11 @@
     /* Clerk loads asynchronously; re-mount the gate and re-evaluate
        the view once it reports ready. */
     window.addEventListener('pnc:clerk', function () {
+      mountClerkGate();
+      syncView();
+      if (me()) setTab(tab);
+    });
+    window.addEventListener('pnc:auth-ready', function () {
       mountClerkGate();
       syncView();
       if (me()) setTab(tab);

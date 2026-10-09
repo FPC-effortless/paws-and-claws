@@ -237,6 +237,10 @@
        action that signs out before mounting the admin sign-in UI. */
     if (ck.clerk && ck.clerk.user) {
       if (D.currentAdmin()) { enter(); return; }
+      if (window.PNC_CONVEX && !window.PNC_CONVEX.authReady) {
+        holder.innerHTML = '<p class="auth-loading" role="status">Checking admin access&hellip;</p>';
+        return;
+      }
       showSwitchAccount();
     } else if (holder) {
       ck.mountSignIn(holder, {

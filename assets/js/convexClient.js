@@ -15,6 +15,12 @@
   let boundSession = undefined;
   let sessionVersion = 0;
   let serverAuthenticated = false;
+  let authReady = false;
+
+  function announceAuthReady(ready) {
+    authReady = !!ready;
+    try { global.dispatchEvent(new CustomEvent("pnc:auth-ready", { detail: { ready: authReady } })); } catch {}
+  }
 
   function configured() {
     return String(global.__PNC_CONVEX_URL__ || DEFAULT_URL).trim() || null;
@@ -32,6 +38,7 @@
     enabled: false,
     client: null,
     syncing: false,
+    get authReady() { return authReady; },
     get active() { return api.enabled && !!api.client; },
 
     async connect() {
@@ -160,43 +167,48 @@
 
   async function bindClerk() {
     const ck = global.PNC_CLERK;
-    if (ck && ck.demo) { await api.close(); return; }
-    if (!(await api.connect())) return;
+    if (ck && ck.demo) { announceAuthReady(true); await api.close(); return; }
+    if (!(await api.connect())) { announceAuthReady(true); return; }
     async function refreshSession() {
       const session = ck && ck.clerk && ck.clerk.session ? ck.clerk.session.id : null;
       if (session === boundSession) return;
+      announceAuthReady(false);
       boundSession = session;
       sessionVersion++;
       if (global.PNC_DB && global.PNC_DB.productionMode && global.PNC_DB.productionMode()) {
         if (global.PNC_DB.clearRemoteSnapshot) global.PNC_DB.clearRemoteSnapshot();
       }
       if (syncPromise) await syncPromise;
-      if (session) {
-        const owner = ck && typeof ck.currentOwner === "function" ? ck.currentOwner() : null;
-        const pending = pendingSignupProfile();
-        const result = await api.mutate("ensureOwner", {
-          profile: owner ? {
-            email: owner.email,
-            fullName: pending.fullName || owner.fullName,
-            phone: pending.phone || owner.phone
-          } : pending
-        });
-        if (result && result.error) {
-          const message = String(result.error);
-          if (message !== lastAuthSyncError) {
-            lastAuthSyncError = message;
-            try {
-              global.dispatchEvent(new CustomEvent("pnc:auth-sync-error", {
-                detail: { message, session }
-              }));
-            } catch {}
+      try {
+        if (session) {
+          const owner = ck && typeof ck.currentOwner === "function" ? ck.currentOwner() : null;
+          const pending = pendingSignupProfile();
+          const result = await api.mutate("ensureOwner", {
+            profile: owner ? {
+              email: owner.email,
+              fullName: pending.fullName || owner.fullName,
+              phone: pending.phone || owner.phone
+            } : pending
+          });
+          if (result && result.error) {
+            const message = String(result.error);
+            if (message !== lastAuthSyncError) {
+              lastAuthSyncError = message;
+              try {
+                global.dispatchEvent(new CustomEvent("pnc:auth-sync-error", {
+                  detail: { message, session }
+                }));
+              } catch {}
+            }
+            return;
           }
-          return;
+          try { global.sessionStorage?.removeItem?.("pnc_pending_signup_profile"); } catch {}
+          lastAuthSyncError = "";
         }
-        try { global.sessionStorage?.removeItem?.("pnc_pending_signup_profile"); } catch {}
-        lastAuthSyncError = "";
+        await api.syncBootstrap();
+      } finally {
+        announceAuthReady(true);
       }
-      await api.syncBootstrap();
     }
     if (ck && ck.active && ck.clerk && observedClerk !== ck.clerk) {
       observedClerk = ck.clerk;
