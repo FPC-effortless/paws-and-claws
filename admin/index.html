@@ -205,11 +205,11 @@
             <div><h1>Inventory &amp; Listings</h1><p>Stock levels, product catalog and the pet marketplace.</p></div>
           </div>
           <div class="admin-panel">
-            <div class="panel-head"><h2>Products</h2><span class="muted" id="invNote"></span></div>
+            <div class="panel-head"><h2>Products</h2><span class="muted" id="invNote"></span><button class="btn btn-primary btn-sm" type="button" id="productNew">Add product</button></div>
             <div class="table-wrap"><table class="adm-table" id="invTable"></table></div>
           </div>
           <div class="admin-panel">
-            <div class="panel-head"><h2>Pet listings</h2><span class="muted">Approve, reserve or mark pets as sold</span></div>
+            <div class="panel-head"><h2>Pet listings</h2><span class="muted">Create, edit, reserve or archive listings</span><button class="btn btn-primary btn-sm" type="button" id="listingNew">Add listing</button></div>
             <div id="listingHost"></div>
           </div>
         </section>
@@ -310,7 +310,7 @@
                   <div class="form-grid"><button class="btn btn-primary" type="submit" id="staffSave">Save staff member</button><button class="btn btn-ghost" type="button" id="staffNew">New staff member</button><button class="btn btn-ghost" type="button" id="staffDelete" style="color:var(--danger)">Archive staff profile</button></div>
                   <p class="hint" id="staffMsg" role="status" style="margin:10px 0 0"></p>
                 </form>
-                <div class="field" style="margin-top:18px"><button class="btn btn-ghost" type="button" id="clearStaffProfiles" style="color:var(--danger)">Clear all staff profiles</button><p class="hint">Removes staff profiles, staff-only access and leave blocks. Registered customer accounts and the signed-in Super Admin remain.</p><p class="hint" id="clearStaffMsg" role="status"></p></div>
+                <div class="field" style="margin-top:18px"><button class="btn btn-ghost" type="button" id="clearStaffProfiles" style="color:var(--danger)">Archive all staff profiles</button><p class="hint">Available only after active appointments and waitlist entries are cleared. Archives profiles, removes staff-only access and clears leave blocks while preserving history.</p><p class="hint" id="clearStaffMsg" role="status"></p></div>
                 <form id="leaveForm" class="leave-form" novalidate>
                   <div class="form-grid">
                     <div class="field"><label for="lvWho">Provider</label>

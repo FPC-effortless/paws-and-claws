@@ -427,6 +427,8 @@
             (canManage && b.status === "pending" ? '<button class="mini-btn" data-bkconfirm="' + b.id + '">Confirm</button>' : '') +
             (allowed("payments.take") && canManage && !["cancelled", "no-show"].includes(b.status) && b.paid < b.total
               ? '<button class="mini-btn" data-bkpay="' + esc(b.id) + '">Record payment</button>' : "") +
+            (allowed("payments.refund") && b.paid > 0
+              ? '<button class="mini-btn danger" data-bkrefund="' + esc(b.id) + '">Record refund</button>' : "") +
             (allowed("bookings.notes")
               ? '<button class="mini-btn warn" data-bknote="' + b.id + '">Note</button>' : "") +
             (canManage && ["pending", "confirmed"].includes(b.status)
@@ -732,7 +734,7 @@
   function renderInventory() {
     const host = $("#invTable");
     if (!host) return;
-    const list = D.db.products.slice();
+    const list = D.db.products.filter(function (product) { return product.active !== false; });
     const low = list.filter(function (p) { return p.stock <= p.lowAt; });
     $("#invNote").textContent = list.length + " products · " + low.length + " low on stock";
 
@@ -754,6 +756,7 @@
             '<button class="mini-btn" data-stk="' + p.id + ':10">+10</button>' +
             '<button class="mini-btn warn" data-pedit="' + p.id + '">Edit</button>' +
             '<button class="mini-btn" data-pimg="' + p.id + '">Image</button>' +
+            '<button class="mini-btn danger" data-pdelete="' + p.id + '">Archive</button>' +
           "</div></td>" +
         "</tr>";
       }).join("") + "</tbody>";
@@ -771,16 +774,28 @@
       b.addEventListener("click", async function () {
         const p = D.byId(D.db.products, b.dataset.pedit);
         if (!p) return;
-        const price = window.prompt("Price for " + p.name + ":", String(p.price));
-        if (price === null) return;
-        const stock = window.prompt("Stock level:", String(p.stock));
-        if (stock === null) return;
-        const r = await Promise.resolve(D.updateProduct(p.id, { price: Number(price), stock: Number(stock) }));
+        const name = window.prompt("Product name:", p.name); if (name === null) return;
+        const cat = window.prompt("Category:", p.cat); if (cat === null) return;
+        const desc = window.prompt("Description:", p.desc || ""); if (desc === null) return;
+        const sku = window.prompt("SKU:", p.sku || ""); if (sku === null) return;
+        const price = window.prompt("Selling price:", String(p.price)); if (price === null) return;
+        const cost = window.prompt("Unit cost:", String(p.cost || 0)); if (cost === null) return;
+        const stock = window.prompt("Stock level:", String(p.stock)); if (stock === null) return;
+        const lowAt = window.prompt("Low-stock threshold:", String(p.lowAt)); if (lowAt === null) return;
+        const r = await Promise.resolve(D.updateProduct(p.id, { name, cat, desc, sku, price: Number(price), cost: Number(cost), stock: Number(stock), lowAt: Number(lowAt) }));
         if (r.error) return toast(r.error, "err");
         toast(p.name + " updated");
         render();
       });
     });
+    $$("[data-pdelete]").forEach(function (b) { b.onclick = async function () {
+      const p = D.byId(D.db.products, b.dataset.pdelete); if (!p || !window.confirm("Archive " + p.name + "? It will leave the public shop and keep its sales history.")) return;
+      const r = await Promise.resolve(D.deleteProduct(p.id)); if (r.error) return toast(r.error, "err"); toast("Product archived"); render();
+    }; });
+    const productNew = $("#productNew"); if (productNew) productNew.onclick = async function () {
+      const name=window.prompt("Product name:","");if(name===null)return;const cat=window.prompt("Category:","");if(cat===null)return;const desc=window.prompt("Description:","");if(desc===null)return;const sku=window.prompt("SKU:","");if(sku===null)return;const price=window.prompt("Selling price:","0");if(price===null)return;const cost=window.prompt("Unit cost:","0");if(cost===null)return;const stock=window.prompt("Opening stock:","0");if(stock===null)return;const lowAt=window.prompt("Low-stock threshold:","0");if(lowAt===null)return;
+      const r=await Promise.resolve(D.createProduct({name,cat,desc,sku,price:Number(price),cost:Number(cost),stock:Number(stock),lowAt:Number(lowAt)}));if(r.error)return toast(r.error,"err");toast("Product created");render();
+    };
     $$('[data-pimg]').forEach(function (b) {
       b.addEventListener('click', function () {
         const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp,image/gif';
@@ -813,6 +828,8 @@
                 D.titleCase(s) + "</button>";
             }).join("") +
             '<button class="mini-btn" data-limg="' + l.id + '">Image</button>' +
+            '<button class="mini-btn warn" data-ledit="' + l.id + '">Edit</button>' +
+            '<button class="mini-btn danger" data-ldelete="' + l.id + '">Archive</button>' +
           "</div>" +
         "</div></div>";
     }).join("") + "</div>";
@@ -826,6 +843,12 @@
         render();
       });
     });
+    $$("[data-ledit]").forEach(function (b) { b.onclick = async function () {
+      const l=D.byId(D.db.listings,b.dataset.ledit);if(!l)return;const name=window.prompt("Pet name:",l.name);if(name===null)return;const species=window.prompt("Species:",l.species);if(species===null)return;const breed=window.prompt("Breed:",l.breed);if(breed===null)return;const sex=window.prompt("Sex (Male/Female):",l.sex);if(sex===null)return;const ageMonths=window.prompt("Age in months:",String(l.ageMonths));if(ageMonths===null)return;const price=window.prompt("Price:",String(l.price));if(price===null)return;const bio=window.prompt("Description:",l.bio||"");if(bio===null)return;
+      const r=await Promise.resolve(D.updateListing(l.id,{name,species,breed,sex,ageMonths:Number(ageMonths),price:Number(price),bio}));if(r.error)return toast(r.error,"err");toast("Listing updated");render();
+    }; });
+    $$("[data-ldelete]").forEach(function (b) { b.onclick = async function () { const l=D.byId(D.db.listings,b.dataset.ldelete);if(!l||!window.confirm("Archive "+l.name+"?"))return;const r=await Promise.resolve(D.deleteListing(l.id));if(r.error)return toast(r.error,"err");toast("Listing archived");render(); }; });
+    const listingNew=$("#listingNew");if(listingNew)listingNew.onclick=async function(){const name=window.prompt("Pet name:","");if(name===null)return;const species=window.prompt("Species:","Dog");if(species===null)return;const breed=window.prompt("Breed:","");if(breed===null)return;const sex=window.prompt("Sex (Male/Female):","Male");if(sex===null)return;const ageMonths=window.prompt("Age in months:","0");if(ageMonths===null)return;const price=window.prompt("Price:","0");if(price===null)return;const bio=window.prompt("Description:","");if(bio===null)return;const r=await Promise.resolve(D.createListing({name,species,breed,sex,ageMonths:Number(ageMonths),price:Number(price),bio,status:"draft"}));if(r.error)return toast(r.error,"err");toast("Draft listing created");render();};
     $$('[data-limg]').forEach(function (b) {
       b.addEventListener('click', function () {
         const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp,image/gif';
@@ -1055,12 +1078,12 @@
     };
     const clearStaff = $("#clearStaffProfiles");
     if (clearStaff) clearStaff.onclick = async function () {
-      if (!window.confirm("Remove every staff profile, leave block and non-super staff control-panel access? Registered customer accounts and this Super Admin account stay intact.")) return;
+      if (!window.confirm("Archive every staff profile, clear leave blocks and remove non-super staff access? Active appointments and waitlist entries must be cleared first.")) return;
       clearStaff.disabled = true;
       try {
         const r = await Promise.resolve(D.clearStaffProfiles());
         if (r?.error) return toast(r.error, "err");
-        $("#clearStaffMsg").textContent = "Staff setup cleared. Add new staff from registered accounts when ready.";
+        $("#clearStaffMsg").textContent = "Staff setup archived. Restore or add staff when ready.";
         toast("Staff setup cleared"); renderCMS();
       } finally { clearStaff.disabled = false; }
     };

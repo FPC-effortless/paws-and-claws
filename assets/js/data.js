@@ -43,8 +43,12 @@
   const icon = (s) => esc(s).replace(/&amp;#(\d+|x[0-9a-f]+);/gi, '&#$1;');
   const uid = (p) => p + "-" + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
   const isoDate = (d) => new Date(d).toISOString().slice(0, 10);
-  const todayISO = () => isoDate(new Date());
-  const addDays = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return isoDate(d); };
+  const storeClock = () => {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {timeZone:"Africa/Lagos",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date()).filter(p=>p.type!=="literal").map(p=>[p.type,p.value]));
+    return {date:parts.year+"-"+parts.month+"-"+parts.day,minutes:Number(parts.hour)*60+Number(parts.minute)};
+  };
+  const todayISO = () => storeClock().date;
+  const addDays = (n) => { const d = new Date(todayISO() + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return isoDate(d); };
   const parseD = (s) => { const p = String(s).split("-").map(Number); return new Date(p[0], (p[1] || 1) - 1, p[2] || 1); };
   const validDateOnly = (s) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s))) return false;
@@ -178,7 +182,7 @@
     let provider = providerArg, dateStr = dateArg;
     if (!dateStr && typeof providerArg === "string") { provider = dbArg; dateStr = providerArg; }
     if (!provider || !dateStr) return false;
-    const dow = parseD(dateStr).getDay();
+    const dow = new Date(dateStr + "T12:00:00Z").getUTCDay();
     if (provider.active === false || provider.off == null || provider.off.indexOf(dow) !== -1) return false;
     return !providerLeave(dbArg && dbArg.staffLeave ? dbArg : db, provider.id).some((l) => l.date === dateStr);
   }
@@ -188,17 +192,24 @@
     const svc = byId(db && db.services ? db.services : [], serviceId) || SERVICE_BY_ID[serviceId];
     if (!svc) return [];
     const out = [];
+    const dayNames=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    const cmsHours=(db.cms||{}).hours||[];
+    const storeDay=cmsHours.find(row=>row.day===dayNames[new Date(dateStr+"T12:00:00Z").getUTCDay()]);
+    const asMinutes=value=>{const m=String(value||"").match(/^(1[0-2]|[1-9]):([0-5]\d) (AM|PM)$/);return m?(Number(m[1])%12+(m[3]==="PM"?12:0))*60+Number(m[2]):null;};
+    if(storeDay&&(storeDay.open==="Closed"||storeDay.close==="Closed"))return [];
+    const storeOpen=storeDay?asMinutes(storeDay.open)/60:DAY_START,storeClose=storeDay?asMinutes(storeDay.close)/60:DAY_END;
+    const now=storeClock();
     (db.providers || PROVIDERS).filter((p) => svc.staff.indexOf(p.id) !== -1).forEach((p) => {
       if (!providerWorking(db, p, dateStr)) return;
-      let t = Math.max(DAY_START, p.start);
-      while (t + svc.duration <= Math.min(DAY_END, p.end)) {
+      let t = Math.max(DAY_START, storeOpen, p.start);
+      while (t + svc.duration <= Math.min(DAY_END, storeClose, p.end)) {
         const seed = dateStr + "|" + p.id + "|" + t;
         const rnd = hash01(seed);
         /* 22% of start times are naturally unavailable */
         const natural = productionMode() || rnd > 0.22;
         /* already booked by this provider at that start? */
         const clash = (db.bookings || []).concat(db.occupiedSlots || []).some(
-          (b) => b.providerId === p.id && b.date === dateStr &&
+          (b) => (b.providerId === p.id || (db.__petId && b.petId === db.__petId)) && b.date === dateStr &&
             b.status !== "cancelled" && b.status !== "no-show" && b.status !== "completed" &&
             t < b.hour + b.duration && b.hour < t + svc.duration
         );
@@ -206,7 +217,7 @@
           hour: t,
           providerId: p.id,
           label: fmtTime(t) + " - " + fmtTime(t + svc.duration),
-          available: natural && !clash
+          available: natural && !clash && !(dateStr === now.date && t * 60 <= now.minutes)
         });
         t += STEP;
       }
@@ -477,8 +488,9 @@
   }
   function vaccinesOk(pet, service) {
     if (!pet || !service || !service.requiresVaccine) return { ok: true, missing: [] };
-    const have = (pet.vaccines || []).filter((v) => v.status === "approved").map((v) => v.name);
-    const required = pet.species === "Cat" ? ["Rabies", "FVRCP"] : ["Rabies", "DHPP", "Bordetella"];
+    const have = (pet.vaccines || []).filter((v) => v.status === "approved" && (!v.expires || v.expires >= todayISO())).map((v) => v.name);
+    const required = pet.species === "Cat" ? ["Rabies", "FVRCP"] : pet.species === "Dog" ? ["Rabies", "DHPP", "Bordetella"] : [];
+    if (!required.length) return { ok: false, missing: ["Species-specific vaccine review"] };
     const missing = required.filter((r) => have.indexOf(r) === -1);
     return { ok: missing.length === 0, missing };
   }
@@ -520,7 +532,7 @@
   }
   function audit(action, detail) {
     const s = session();
-    db.audit.unshift({ id: uid("au"), adminEmail: s ? s.email : "system", action, detail, at: todayISO() });
+    db.audit.unshift({ id: uid("au"), adminEmail: s ? s.email : "system", action, detail, at: new Date().toISOString() });
     persist();
   }
 
@@ -820,7 +832,7 @@
     const provider = byId(db.providers || PROVIDERS, input.providerId);
     if (!provider || svc.staff.indexOf(provider.id) === -1) return { error: "That specialist isn't available for this service." };
 
-    const slots = slotsFor(db, svc.id, input.date);
+    const slots = slotsFor({ ...db, __petId: pet.id }, svc.id, input.date);
     if (String(input.date) < todayISO()) return { error: "Bookings cannot be made in the past." };
     const slot = slots.find((s) => s.available && s.hour === Number(input.hour) && s.providerId === provider.id);
     if (!slot) return { error: "That time slot is no longer available. Please pick another." };
@@ -865,6 +877,25 @@
     audit("Appointment payment", booking.id + " — " + money(amount)); persist(); return {booking};
   }
 
+  function refundBookingPayment(bookingId, amount, method, options = {}) {
+    if (remoteEnabled()) return remoteMutation("refundBookingPayment", {bookingId, amount, method, options});
+    if (productionMode()) return {error: "Secure backend is not available."};
+    if (!can("payments.refund")) return {error: "Not authorized."};
+    const booking = byId(db.bookings, bookingId);
+    if (!booking) return {error: "Appointment not found."};
+    if (!/^[a-zA-Z0-9_-]{8,100}$/.test(options.requestId || "")) return {error: "A refund reference is required."};
+    const refunds = booking.storeRefunds || [];
+    if (refunds.some(item => item.requestId === options.requestId)) return {booking};
+    amount = Number(amount); const reason = String(options.reason || "").trim().slice(0, 500);
+    if (!Number.isFinite(amount) || amount <= 0 || Math.round(amount * 100) / 100 !== amount || amount > booking.paid) return {error: "Refund must be positive and cannot exceed the amount received."};
+    if (!["Cash", "Bank transfer"].includes(method) || !reason) return {error: "Enter the refund method and reason."};
+    refunds.push({requestId: options.requestId, amount, method, reason, at: new Date().toISOString()});
+    booking.storeRefunds = refunds; booking.paid = Math.round((booking.paid - amount) * 100) / 100;
+    booking.refunded = Math.round(((booking.refunded || 0) + amount) * 100) / 100;
+    booking.paymentStatus = booking.paid === 0 ? "refunded" : "partial";
+    audit("Appointment refund recorded", booking.id + " — " + money(amount)); persist(); return {booking};
+  }
+
   function rescheduleBooking(bookingId, date, hour, providerId) {
     if (remoteEnabled()) return remoteMutation("rescheduleBooking", { bookingId, date, hour, providerId });
     if (productionMode()) return { error: "Secure backend is not available." };
@@ -877,7 +908,8 @@
     if (!["confirmed","pending"].includes(bk.status)) return { error: "This booking cannot be rescheduled." };
     const svc = byId(db.services, bk.serviceId);
     const pid = providerId || bk.providerId;
-    const slots = slotsFor({ ...db, bookings: db.bookings.filter(b => b.id !== bookingId) }, bk.serviceId, date).filter((s) => s.providerId === pid);
+    const serviceForBooking = { ...svc, duration: bk.duration };
+    const slots = slotsFor({ ...db, __petId: bk.petId, services: db.services.map(item => item.id === svc.id ? serviceForBooking : item), bookings: db.bookings.filter(b => b.id !== bookingId) }, bk.serviceId, date).filter((s) => s.providerId === pid);
     const slot = slots.find((s) => s.available && s.hour === Number(hour));
     if (!slot) return { error: "That slot was just taken — please choose another." };
     bk.date = date; bk.hour = slot.hour; bk.providerId = pid;
@@ -942,7 +974,7 @@
     const lines = items.map((i) => {
       const p = byId(db.products, i.id);
       const qty = Number(i.qty);
-      if (!p || !Number.isInteger(qty) || qty <= 0) return null;
+      if (!p || p.active === false || !Number.isInteger(qty) || qty <= 0) return null;
       if (qty > p.stock) return null;
       return { productId: p.id, qty, price: p.price };
     }).filter(Boolean);
@@ -1050,6 +1082,29 @@
     persist();
     return { listing: l };
   }
+  function createListing(input) {
+    if (remoteEnabled()) return remoteMutation("createListing", {input});
+    if (productionMode()) return {error:"Secure backend is not available."};
+    if (!can("listings.edit")) return {error:"Not authorized."};
+    const listing={id:uid("ls"),listedAt:todayISO(),species:String(input.species||"").trim(),name:String(input.name||"").trim(),breed:String(input.breed||"").trim(),sex:String(input.sex||""),ageMonths:Number(input.ageMonths),price:Number(input.price),status:String(input.status||"draft"),bio:String(input.bio||"").trim(),health:[],temperament:[]};
+    if(!listing.species||!listing.name||!listing.breed||!["Male","Female"].includes(listing.sex)||!Number.isInteger(listing.ageMonths)||listing.ageMonths<0||!Number.isFinite(listing.price)||listing.price<0)return {error:"Enter valid listing details."};
+    db.listings.push(listing);audit("Listing created",listing.name);persist();return {listing};
+  }
+  function updateListing(listingId, patch) {
+    if (remoteEnabled()) return remoteMutation("updateListing", {listingId,patch});
+    if (productionMode()) return {error:"Secure backend is not available."};
+    if (!can("listings.edit")) return {error:"Not authorized."};
+    const listing=byId(db.listings,listingId);if(!listing)return {error:"Listing not found."};
+    const values={...listing,...patch};
+    if(!String(values.species||"").trim()||!String(values.name||"").trim()||!String(values.breed||"").trim()||!["Male","Female"].includes(values.sex)||!Number.isInteger(Number(values.ageMonths))||Number(values.ageMonths)<0||!Number.isFinite(Number(values.price))||Number(values.price)<0)return {error:"Enter valid listing details."};
+    Object.assign(listing,values,{ageMonths:Number(values.ageMonths),price:Number(values.price)});audit("Listing edited",listing.name);persist();return {listing};
+  }
+  function deleteListing(listingId) {
+    if (remoteEnabled()) return remoteMutation("deleteListing", {listingId});
+    if (productionMode()) return {error:"Secure backend is not available."};
+    if (!can("listings.edit")) return {error:"Not authorized."};
+    const listing=byId(db.listings,listingId);if(!listing)return {error:"Listing not found."};listing.status="archived";audit("Listing archived",listing.name);persist();return {listing};
+  }
 
   /* --------------------------- inventory ------------------------------ */
   function adjustStock(productId, delta, note) {
@@ -1076,16 +1131,32 @@
     const p = byId(db.products, productId);
     if (!p) return { error: "Product not found." };
     const values = { ...p, ...patch };
-    if (!Number.isFinite(Number(values.price)) || Number(values.price) < 0 || !Number.isInteger(Number(values.stock)) || Number(values.stock) < 0 || !Number.isInteger(Number(values.lowAt)) || Number(values.lowAt) < 0 || !String(values.name || "").trim()) {
+    if (!Number.isFinite(Number(values.price)) || Number(values.price) < 0 || !Number.isFinite(Number(values.cost || 0)) || Number(values.cost || 0) < 0 || !Number.isInteger(Number(values.stock)) || Number(values.stock) < 0 || !Number.isInteger(Number(values.lowAt)) || Number(values.lowAt) < 0 || !String(values.name || "").trim()) {
       return { error: "Invalid product values." };
     }
-    ["name", "cat", "price", "stock", "lowAt", "desc", "icon"].forEach((k) => {
-      if (patch[k] !== undefined) p[k] = ["name", "cat", "desc", "icon"].includes(k) ? String(patch[k]).trim() : Number(patch[k]);
+    ["name", "cat", "price", "cost", "stock", "lowAt", "desc", "icon", "sku"].forEach((k) => {
+      if (patch[k] !== undefined) p[k] = ["name", "cat", "desc", "icon", "sku"].includes(k) ? String(patch[k]).trim() : Number(patch[k]);
     });
+    if (patch.imageStorageId !== undefined) p.imageStorageId = patch.imageStorageId;
     p.lowStock = p.stock <= p.lowAt;
     audit("Product edited", p.name);
     persist();
     return { product: p };
+  }
+  function createProduct(input) {
+    if (remoteEnabled()) return remoteMutation("createProduct", {input});
+    if (productionMode()) return {error: "Secure backend is not available."};
+    if (!can("inventory.edit")) return {error: "Not authorized."};
+    const product = {id:uid("pr"),active:true,name:String(input.name||"").trim(),cat:String(input.cat||"").trim(),desc:String(input.desc||"").trim(),sku:String(input.sku||"").trim(),price:Number(input.price),cost:Number(input.cost||0),stock:Number(input.stock),lowAt:Number(input.lowAt),icon:String(input.icon||"")};
+    if (!product.name || !product.cat || !product.desc || !Number.isFinite(product.price) || product.price < 0 || !Number.isFinite(product.cost) || product.cost < 0 || !Number.isInteger(product.stock) || product.stock < 0 || !Number.isInteger(product.lowAt) || product.lowAt < 0) return {error:"Enter valid product details."};
+    product.lowStock=product.stock<=product.lowAt; db.products.push(product); audit("Product created",product.name); persist(); return {product};
+  }
+  function deleteProduct(productId) {
+    if (remoteEnabled()) return remoteMutation("deleteProduct", {productId});
+    if (productionMode()) return {error:"Secure backend is not available."};
+    if (!can("inventory.edit")) return {error:"Not authorized."};
+    const product=byId(db.products,productId); if(!product)return {error:"Product not found."};
+    product.active=false;product.stock=0;product.lowStock=true;audit("Product archived",product.name);persist();return {ok:true};
   }
 
   /* ----------------------------- CMS ---------------------------------- */
@@ -1117,7 +1188,7 @@
     if (patch.name !== undefined && !/paw/i.test(String(patch.name))) return { error: "Service names must include Paw." };
     const error = validateServiceValues(values);
     if (error) return { error };
-    ["name", "group", "price", "duration", "desc", "popular", "deposit", "requiresVaccine", "staff", "active"].forEach((k) => {
+    ["name", "group", "price", "duration", "desc", "popular", "deposit", "requiresVaccine", "staff", "active", "imageUrl"].forEach((k) => {
       if (patch[k] !== undefined) s[k] = ["price", "duration"].includes(k) ? Number(patch[k]) : ["name", "desc"].includes(k) ? String(patch[k]).trim() : patch[k];
     });
     audit("Service edited", s.name + " — " + money(s.price));
@@ -1146,7 +1217,7 @@
       icon: String(input.icon || "&#128062;"), price: Number(input.price), duration: Number(input.duration),
       deposit: !!input.deposit, requiresVaccine: !!input.requiresVaccine,
       staff: Array.isArray(input.staff) ? input.staff.slice() : [], desc: String(input.desc || "").trim(),
-      popular: !!input.popular
+      popular: !!input.popular, imageUrl: String(input.imageUrl || "")
     };
     if (!/paw/i.test(values.name)) return { error: "Service names must include Paw." };
     const error = validateServiceValues(values);
@@ -1194,6 +1265,7 @@
     if (patch.active !== undefined) {
       provider.active = patch.active;
     }
+    if (patch.ownerId !== undefined) provider.ownerId = String(patch.ownerId || "") || undefined;
     audit("Staff profile edited", provider.id + " — " + provider.name);
     persist();
     return { provider };
@@ -1248,7 +1320,7 @@
     const provider = providerId ? byId(db.providers || [], providerId) : null;
     if (role === "provider" && (!provider || provider.active === false || (provider.ownerId && provider.ownerId !== owner.id))) return { error: "Choose an available provider profile for this account." };
     if (provider) provider.ownerId = owner.id;
-    const entry = { id: uid("ad"), ownerId: owner.id, email: owner.email, name: owner.fullName, role, ...(providerId ? { providerId } : {}) };
+    const entry = { id: uid("ad"), ownerId: owner.id, clerkId: owner.clerkId, email: owner.email, name: owner.fullName, role, ...(providerId ? { providerId } : {}) };
     db.admins.push(entry); audit("Admin access granted", entry.email + " — " + role); persist();
     return { ok: true, email: entry.email, role };
   }
@@ -1268,10 +1340,12 @@
     const actor = currentAdmin();
     if (!actor || actor.role !== "super") return { error: "Not authorized." };
     const count = (db.providers || []).length;
-    db.providers = []; db.staffLeave = [];
+    const active = (db.bookings || []).filter(booking => !["cancelled","completed","no-show"].includes(booking.status));
+    if (active.length || (db.waitlist || []).length) return {error:"Reschedule or cancel active appointments and clear the waitlist before clearing staff setup."};
+    (db.providers || []).forEach(provider => { provider.active = false; }); db.staffLeave = [];
     (db.services || []).forEach(service => { service.staff = []; service.active = false; });
     db.admins = (db.admins || []).filter(entry => entry.role === "super");
-    audit("Staff setup cleared", count + " profiles removed"); persist(); return { ok: true, providersRemoved: count };
+    audit("Staff setup cleared", count + " profiles archived"); persist(); return { ok: true, providersArchived: count };
   }
   function removeNonPawServices() {
     if (remoteEnabled()) return remoteMutation("removeNonPawServices", {});
@@ -1483,15 +1557,17 @@
     return true;
   }
 
-  function addVaccine(petId, name, date, lot) {
-    if (remoteEnabled()) return remoteMutation("addVaccine", { petId, name, date, lot });
+  function addVaccine(petId, name, date, lot, expires) {
+    if (remoteEnabled()) return remoteMutation("addVaccine", { petId, name, date, lot, expires });
     if (productionMode()) return { error: "Secure backend is not available." };
     const actor = currentOwner();
     const p = byId(db.pets, petId);
     if (!p) return { error: "Pet not found." };
     if (currentAdmin() ? !can("crm.edit") : !actor || p.ownerId !== actor.id) return { error: "Not authorized." };
     if (!VACCINES.includes(name) || !validDateOnly(date) || date > todayISO()) return { error: "Enter a valid vaccine and administration date." };
-    p.vaccines = (p.vaccines || []).concat([{ name, date, lot: lot || "", status: "pending" }]);
+    if (!expires) { const d=new Date(date+"T12:00:00Z");d.setUTCFullYear(d.getUTCFullYear()+1);expires=d.toISOString().slice(0,10); }
+    if (!validDateOnly(expires) || expires <= date) return {error:"Enter a valid expiry date after the administration date."};
+    p.vaccines = (p.vaccines || []).concat([{ name, date, expires, lot: lot || "", status: "pending" }]);
     audit("Vaccine uploaded", p.petName + " — " + name + " (pending review)");
     persist();
     return { pet: p };
@@ -1538,7 +1614,7 @@ function prepareStoreSale(lines, products, method, options) {
   const items = lines.map(line => {
     const qty = Number(line.qty === undefined ? 1 : line.qty);
     if (!Number.isInteger(qty) || qty < 1 || qty > 9999) throw new Error("Quantity must be a whole number between 1 and 9,999.");
-    const product = line.productId ? products.find(p => p.id === line.productId) : null;
+    const product = line.productId ? products.find(p => p.id === line.productId && p.active !== false) : null;
     if (line.productId && !product) throw new Error("Product no longer exists.");
     const label = String(product ? product.name : line.label || "").trim().slice(0, 120);
     const price = Number(product ? product.price : line.amount);
@@ -1644,7 +1720,7 @@ function prepareStoreSale(lines, products, method, options) {
     KEY, CURRENCY, DEPOSIT_RATE, PLAN_DISCOUNT, SPECIES, SEXES, ALTERED, VACCINES, TEMPERAMENTS, catalogReady,
     ADMIN_ROLES, STAGES, DAY_START, DAY_END, STEP,
     get SERVICE_GROUPS() { return db?.serviceGroups || SERVICE_GROUPS; },
-    get PRODUCTS() { return db?.products || PRODUCTS; },
+    get PRODUCTS() { return (db?.products || PRODUCTS).filter(product => product.active !== false); },
     get PRODUCT_BY_ID() { return Object.fromEntries(this.PRODUCTS.map(p => [p.id, p])); },
     get SERVICES() { return db?.services || SERVICES; },
     get SERVICE_BY_ID() { return Object.fromEntries(this.SERVICES.map(s => [s.id, s])); },
@@ -1670,13 +1746,13 @@ function prepareStoreSale(lines, products, method, options) {
     /* admin auth + RBAC */
     adminLogin, adminLogout, session, currentAdmin, can, scopeOf, PERMS,
     /* booking */
-    createBooking, staffBooking, recordBookingPayment, rescheduleBooking, cancelBooking, setBookingStatus, addBookingNote,
+    createBooking, staffBooking, recordBookingPayment, refundBookingPayment, rescheduleBooking, cancelBooking, setBookingStatus, addBookingNote,
     /* orders */
     placeOrder, setOrderStage, refund,
     /* listings */
-    submitInquiry, setListingStatus,
+    submitInquiry, setListingStatus, createListing, updateListing, deleteListing,
     /* inventory */
-    adjustStock, updateProduct,
+    adjustStock, updateProduct, createProduct, deleteProduct,
     /* cms */
     updateCMS, updateService, createService, deleteService, updateProvider, createProvider, deleteProvider, grantAdminAccess, revokeAdminAccess, clearStaffProfiles, removeNonPawServices,
     /* staff */

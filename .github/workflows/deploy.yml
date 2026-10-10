@@ -18,8 +18,10 @@ jobs:
         with:
           node-version: 20
       - name: Install test tooling
-        run: npm install --ignore-scripts --no-audit --no-fund
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Run regression and production-safety tests
         run: npm test
       - name: Verify isolated static deployment
         run: npm run test:build
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high

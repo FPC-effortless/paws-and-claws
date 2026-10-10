@@ -25,7 +25,7 @@
   /* The cart lives in the shared PNC chrome and stores {id, qty} lines.
      Use the platform catalog as the source of truth — it carries species,
      life stage, size and stock, which the static app.js list does not. */
-  function store() { return D.db.products; }
+  function store() { return D.db.products.filter(product => product.active !== false); }
   function catalog() { return D.PRODUCTS; }
   function member() { return D.currentOwner(); }
   function product(id) {

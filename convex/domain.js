@@ -82,7 +82,16 @@ const DAY_START = 8;
 const DAY_END = 19;
 const STEP = 0.5;
 
-function today() { return new Date().toISOString().slice(0, 10); }
+const STORE_TIME_ZONE = "Africa/Lagos";
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+function storeClock() {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
+    timeZone: STORE_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23", weekday: "long"
+  }).formatToParts(new Date()).filter(part => part.type !== "literal").map(part => [part.type, part.value]));
+  return { date: parts.year + "-" + parts.month + "-" + parts.day, minutes: Number(parts.hour) * 60 + Number(parts.minute), weekday: parts.weekday };
+}
+function today() { return storeClock().date; }
 function parseDate(s) {
   const p = String(s || "").split("-").map(Number);
   return new Date(p[0], (p[1] || 1) - 1, p[2] || 1);
@@ -98,7 +107,7 @@ function prepareStoreSale(lines, products, method, options) {
   const items = lines.map(line => {
     const qty = Number(line.qty === undefined ? 1 : line.qty);
     if (!Number.isInteger(qty) || qty < 1 || qty > 9999) throw new Error("Quantity must be a whole number between 1 and 9,999.");
-    const product = line.productId ? products.find(p => p.id === line.productId) : null;
+    const product = line.productId ? products.find(p => p.id === line.productId && p.active !== false) : null;
     if (line.productId && !product) throw new Error("Product no longer exists.");
     const label = String(product ? product.name : line.label || "").trim().slice(0, 120);
     const price = Number(product ? product.price : line.amount);
@@ -215,25 +224,25 @@ function ownerScoped(admin, scope, ownerId, petId, bookingId) {
 }
 
 async function getService(ctx, id) {
-  return await ctx.db.query("services").filter(q => q.eq(q.field("id"), id)).first();
+  return await ctx.db.query("services").withIndex("by_external_id", q => q.eq("id", id)).first();
 }
 async function getProvider(ctx, id) {
-  return await ctx.db.query("providers").filter(q => q.eq(q.field("id"), id)).first();
+  return await ctx.db.query("providers").withIndex("by_external_id", q => q.eq("id", id)).first();
 }
 async function getPet(ctx, id) {
-  return await ctx.db.query("pets").filter(q => q.eq(q.field("id"), id)).first();
+  return await ctx.db.query("pets").withIndex("by_external_id", q => q.eq("id", id)).first();
 }
 async function getOwnerById(ctx, id) {
   return await ctx.db.query("owners").filter(q => q.eq(q.field("id"), id)).first();
 }
 async function getBooking(ctx, id) {
-  return await ctx.db.query("bookings").filter(q => q.eq(q.field("id"), id)).first();
+  return await ctx.db.query("bookings").withIndex("by_external_id", q => q.eq("id", id)).first();
 }
 async function getProduct(ctx, id) {
-  return await ctx.db.query("products").filter(q => q.eq(q.field("id"), id)).first();
+  return await ctx.db.query("products").withIndex("by_external_id", q => q.eq("id", id)).first();
 }
 async function getOrder(ctx, id) {
-  return await ctx.db.query("orders").filter(q => q.eq(q.field("id"), id)).first();
+  return await ctx.db.query("orders").withIndex("by_external_id", q => q.eq("id", id)).first();
 }
 function activeBookingStatus(status) {
   return !["cancelled", "completed", "no-show"].includes(status);
@@ -241,20 +250,48 @@ function activeBookingStatus(status) {
 function serviceProviders(service, providers) {
   return providers.filter(p => (service.staff || []).includes(p.id));
 }
-async function slotAvailable(ctx, service, provider, date, hour, ignoreBookingId) {
-  if (service.duration >= 24 || provider.active === false) return false;
+function clockMinutes(value) {
+  const match = String(value || "").match(/^(1[0-2]|[1-9]):([0-5]\d) (AM|PM)$/);
+  return match ? (Number(match[1]) % 12 + (match[3] === "PM" ? 12 : 0)) * 60 + Number(match[2]) : null;
+}
+async function slotAvailable(ctx, service, provider, date, hour, ignoreBookingId, durationOverride, petId) {
+  const duration = Number(durationOverride ?? service.duration);
+  if (duration >= 24 || provider.active === false) return false;
   const d = parseDate(date);
   if (!validDateOnly(date)) return false;
-  if (date < today()) return false;
+  const now = storeClock();
+  if (date < now.date) return false;
   if (provider.off && provider.off.includes(d.getDay())) return false;
   const leave = await ctx.db.query("staffLeave").filter(q => q.eq(q.field("providerId"), provider.id)).collect();
   if (leave.some(x => x.date === date)) return false;
   const t = Number(hour);
   if (!Number.isFinite(t) || Math.round(t * 2) !== t * 2) return false;
-  if (t < Math.max(DAY_START, provider.start) || t + service.duration > Math.min(DAY_END, provider.end)) return false;
-  const bookings = await ctx.db.query("bookings").filter(q => q.eq(q.field("providerId"), provider.id)).collect();
-  return !bookings.some(b => b.id !== ignoreBookingId && b.date === date && activeBookingStatus(b.status) &&
-    t < b.hour + b.duration && b.hour < t + service.duration);
+  if (date === now.date && t * 60 <= now.minutes) return false;
+  const cms = await ctx.db.query("cms").first();
+  if (Array.isArray(cms?.hours) && cms.hours.length) {
+    const targetWeekday = WEEKDAYS[new Date(date + "T12:00:00Z").getUTCDay()];
+    const storeDay = cms.hours.find(row => row.day === targetWeekday);
+    if (!storeDay || storeDay.open === "Closed" || storeDay.close === "Closed") return false;
+    const open = clockMinutes(storeDay.open), close = clockMinutes(storeDay.close);
+    if (open === null || close === null || t * 60 < open || (t + duration) * 60 > close) return false;
+  }
+  if (t < Math.max(DAY_START, provider.start) || t + duration > Math.min(DAY_END, provider.end)) return false;
+  const providerBookings = await ctx.db.query("bookings").withIndex("by_providerId_date", q => q.eq("providerId", provider.id).eq("date", date)).collect();
+  if (providerBookings.some(b => b.id !== ignoreBookingId && activeBookingStatus(b.status) && t < b.hour + b.duration && b.hour < t + duration)) return false;
+  if (petId) {
+    const petBookings = await ctx.db.query("bookings").withIndex("by_petId_date", q => q.eq("petId", petId).eq("date", date)).collect();
+    if (petBookings.some(b => b.id !== ignoreBookingId && activeBookingStatus(b.status) && t < b.hour + b.duration && b.hour < t + duration)) return false;
+  }
+  return true;
+}
+
+async function claimImage(ctx, storageId, attachedTo) {
+  const id = await identity(ctx);
+  const upload = await ctx.db.query("uploads").withIndex("by_storageId", q => q.eq("storageId", storageId)).first();
+  if (!upload || upload.subject !== id.subject || (upload.attachedTo && upload.attachedTo !== attachedTo)) throw new Error("Upload is not authorized for this record.");
+  const metadata = await ctx.db.system.get("_storage", storageId);
+  if (!metadata || !/^image\/(jpeg|png|webp|gif)$/i.test(metadata.contentType || "") || metadata.size > 8 * 1024 * 1024) throw new Error("Choose a JPG, PNG, WEBP or GIF image up to 8 MB.");
+  await ctx.db.patch(upload._id, { attachedTo });
 }
 
 async function notify(ctx, ownerId, kind, title, body) {
@@ -266,20 +303,29 @@ async function audit(ctx, admin, action, detail) {
     adminEmail: admin?.email || "system",
     action,
     detail,
-    at: today()
+    at: new Date().toISOString()
   });
 }
 
 async function limitSubmission(ctx, id, email) {
   const now = Date.now();
-  // A bounded row per sender avoids scanning contact/inquiry history.
-  const key = id ? "user:" + id.subject : "email:" + email;
-  const row = await ctx.db.query("submissionLimits").withIndex("by_key", q => q.eq("key", key)).first();
-  if (row && now - row.windowStart < 10 * 60 * 1000) {
-    if (row.count >= 5) throw new Error("Too many messages. Please wait ten minutes before trying again.");
-    await ctx.db.patch(row._id, { count: row.count + 1 });
-  } else if (row) await ctx.db.patch(row._id, { windowStart: now, count: 1 });
-  else await ctx.db.insert("submissionLimits", { key, windowStart: now, count: 1 });
+  // Per-sender and global burst budgets prevent a caller from bypassing the
+  // guest limit by rotating email addresses. Edge bot protection can add a
+  // network-level signal without weakening this server-side backstop.
+  for (const [key, maximum] of [[id ? "user:" + id.subject : "email:" + email, 5], ["global", 100]]) {
+    const row = await ctx.db.query("submissionLimits").withIndex("by_key", q => q.eq("key", key)).first();
+    if (row && now - row.windowStart < 10 * 60 * 1000) {
+      if (row.count >= maximum) throw new Error("Too many messages. Please wait ten minutes before trying again.");
+      await ctx.db.patch(row._id, { count: row.count + 1 });
+    } else if (row) await ctx.db.patch(row._id, { windowStart: now, count: 1 });
+    else await ctx.db.insert("submissionLimits", { key, windowStart: now, count: 1 });
+  }
+}
+
+async function bounded(query, label, limit = 2000) {
+  const rows = typeof query.take === "function" ? await query.take(limit + 1) : await query.collect();
+  if (rows.length > limit) throw new Error(label + " has too many records for one view. Archive older operational records before reopening this view.");
+  return rows;
 }
 
 async function bootstrapData(ctx) {
@@ -293,13 +339,13 @@ async function bootstrapData(ctx) {
   }));
   const publicData = {
     version: 1,
-    owners: [], pets: [], bookings: [], orders: [], listings: await addImageUrls(await ctx.db.query("listings").collect()),
-    products: (await addImageUrls(await ctx.db.query("products").collect())).map(({ cost, ...p }) => p),
-    services: (await addImageUrls(await ctx.db.query("services").collect())).filter(service => service.active !== false),
-    serviceGroups: await ctx.db.query("serviceGroups").collect(),
-    providers: (await ctx.db.query("providers").collect()).filter(provider => provider.active !== false),
-    staffLeave: (await ctx.db.query("staffLeave").collect()).map(l => ({ providerId: l.providerId, date: l.date })),
-    occupiedSlots: (await ctx.db.query("bookings").collect()).filter(b => b.date >= today() && activeBookingStatus(b.status))
+    owners: [], pets: [], bookings: [], orders: [], listings: (await addImageUrls(await bounded(ctx.db.query("listings"), "listings"))).filter(listing => !["draft","archived"].includes(listing.status)),
+    products: (await addImageUrls(await bounded(ctx.db.query("products"), "products"))).filter(product => product.active !== false).map(({ cost, ...p }) => p),
+    services: (await addImageUrls(await bounded(ctx.db.query("services"), "services"))).filter(service => service.active !== false),
+    serviceGroups: await bounded(ctx.db.query("serviceGroups"), "serviceGroups"),
+    providers: (await bounded(ctx.db.query("providers"), "providers")).filter(provider => provider.active !== false),
+    staffLeave: (await bounded(ctx.db.query("staffLeave"), "staffLeave")).map(l => ({ providerId: l.providerId, date: l.date })),
+    occupiedSlots: (await bounded(ctx.db.query("bookings"), "bookings")).filter(b => b.date >= today() && activeBookingStatus(b.status))
       .map(b => ({ providerId: b.providerId, date: b.date, hour: b.hour, duration: b.duration })),
     waitlist: [], messages: [], notifications: [], payments: [],
     audit: [], admins: [], inquiries: [], contactMessages: [],
@@ -312,61 +358,61 @@ async function bootstrapData(ctx) {
   if (!id) return publicCatalog(publicData);
 
   const admin = await adminFor(ctx);
-    if (admin) {
+  if (admin) {
     const out = { ...publicData };
     out.admins = [admin];
-    if (permission(admin, "inventory.edit")) out.products = await addImageUrls(await ctx.db.query("products").collect());
+    if (permission(admin, "inventory.edit")) out.products = await addImageUrls(await bounded(ctx.db.query("products"), "products"));
     if (admin.role === "super") {
-      out.admins = (await ctx.db.query("admins").collect()).map(({ _id, clerkId, ...safe }) => safe);
-      out.providers = await ctx.db.query("providers").collect();
-      out.services = await addImageUrls(await ctx.db.query("services").collect());
-      out.owners = await ctx.db.query("owners").collect();
-      out.pets = await addImageUrls(await ctx.db.query("pets").collect());
-      out.bookings = await ctx.db.query("bookings").collect();
-      out.orders = await ctx.db.query("orders").collect();
-      out.listings = await addImageUrls(await ctx.db.query("listings").collect());
-      out.staffLeave = await ctx.db.query("staffLeave").collect();
-      out.waitlist = await ctx.db.query("waitlist").collect();
-      out.messages = await ctx.db.query("messages").collect();
-      out.notifications = await ctx.db.query("notifications").collect();
-      out.audit = await ctx.db.query("audit").collect();
-      out.inquiries = await ctx.db.query("inquiries").collect();
-      out.contactMessages = await ctx.db.query("contactMessages").collect();
+      out.admins = (await bounded(ctx.db.query("admins"), "admins")).map(({ _id, clerkId, ...safe }) => safe);
+      out.providers = await bounded(ctx.db.query("providers"), "providers");
+      out.services = await addImageUrls(await bounded(ctx.db.query("services"), "services"));
+      out.owners = await bounded(ctx.db.query("owners"), "owners");
+      out.pets = await addImageUrls(await bounded(ctx.db.query("pets"), "pets"));
+      out.bookings = await bounded(ctx.db.query("bookings"), "bookings");
+      out.orders = await bounded(ctx.db.query("orders"), "orders");
+      out.listings = await addImageUrls(await bounded(ctx.db.query("listings"), "listings"));
+      out.staffLeave = await bounded(ctx.db.query("staffLeave"), "staffLeave");
+      out.waitlist = await bounded(ctx.db.query("waitlist"), "waitlist");
+      out.messages = await bounded(ctx.db.query("messages"), "messages");
+      out.notifications = await bounded(ctx.db.query("notifications"), "notifications");
+      out.audit = await bounded(ctx.db.query("audit"), "audit");
+      out.inquiries = await bounded(ctx.db.query("inquiries"), "inquiries");
+      out.contactMessages = await bounded(ctx.db.query("contactMessages"), "contactMessages");
       return out;
     }
     if (admin.role === "desk") {
-      out.owners = await ctx.db.query("owners").collect();
-      out.pets = await addImageUrls(await ctx.db.query("pets").collect());
-      out.bookings = await ctx.db.query("bookings").collect();
-      out.orders = await ctx.db.query("orders").collect();
-      out.listings = await addImageUrls(await ctx.db.query("listings").collect());
-      out.waitlist = await ctx.db.query("waitlist").collect();
-      out.messages = await ctx.db.query("messages").collect();
-      out.notifications = await ctx.db.query("notifications").collect();
-      out.audit = await ctx.db.query("audit").collect();
-      out.inquiries = await ctx.db.query("inquiries").collect();
-      out.contactMessages = await ctx.db.query("contactMessages").collect();
+      out.owners = await bounded(ctx.db.query("owners"), "owners");
+      out.pets = await addImageUrls(await bounded(ctx.db.query("pets"), "pets"));
+      out.bookings = await bounded(ctx.db.query("bookings"), "bookings");
+      out.orders = await bounded(ctx.db.query("orders"), "orders");
+      out.listings = await addImageUrls(await bounded(ctx.db.query("listings"), "listings"));
+      out.waitlist = await bounded(ctx.db.query("waitlist"), "waitlist");
+      out.messages = await bounded(ctx.db.query("messages"), "messages");
+      out.notifications = await bounded(ctx.db.query("notifications"), "notifications");
+      out.audit = await bounded(ctx.db.query("audit"), "audit");
+      out.inquiries = await bounded(ctx.db.query("inquiries"), "inquiries");
+      out.contactMessages = await bounded(ctx.db.query("contactMessages"), "contactMessages");
       return out;
     }
     if (admin.role === "retail") {
-      out.owners = (await ctx.db.query("owners").collect()).map(o => ({
+      out.owners = (await bounded(ctx.db.query("owners"), "owners")).map(o => ({
         id: o.id, fullName: o.fullName, email: o.email, phone: o.phone || ""
       }));
-      out.orders = await ctx.db.query("orders").collect();
-      out.listings = await addImageUrls(await ctx.db.query("listings").collect());
-      out.audit = await ctx.db.query("audit").collect();
-      out.inquiries = await ctx.db.query("inquiries").collect();
-      out.contactMessages = await ctx.db.query("contactMessages").collect();
+      out.orders = await bounded(ctx.db.query("orders"), "orders");
+      out.listings = await addImageUrls(await bounded(ctx.db.query("listings"), "listings"));
+      out.audit = await bounded(ctx.db.query("audit"), "audit");
+      out.inquiries = await bounded(ctx.db.query("inquiries"), "inquiries");
+      out.contactMessages = await bounded(ctx.db.query("contactMessages"), "contactMessages");
       return out;
     }
     if (admin.role === "provider") {
-      const bookings = (await ctx.db.query("bookings").collect()).filter(b => b.providerId === admin.providerId);
+      const bookings = await bounded(ctx.db.query("bookings").withIndex("by_providerId", q => q.eq("providerId", admin.providerId)), "provider bookings");
       const ownerIds = [...new Set(bookings.map(b => b.ownerId))];
       const petIds = [...new Set(bookings.map(b => b.petId))];
       out.bookings = bookings;
-      out.owners = (await ctx.db.query("owners").collect()).filter(o => ownerIds.includes(o.id));
-      out.pets = (await addImageUrls(await ctx.db.query("pets").collect())).filter(p => petIds.includes(p.id));
-      out.messages = (await ctx.db.query("messages").collect()).filter(m => ownerIds.includes(m.ownerId));
+      out.owners = (await bounded(ctx.db.query("owners"), "owners")).filter(o => ownerIds.includes(o.id));
+      out.pets = (await addImageUrls(await bounded(ctx.db.query("pets"), "pets"))).filter(p => petIds.includes(p.id));
+      out.messages = (await bounded(ctx.db.query("messages"), "messages")).filter(m => ownerIds.includes(m.ownerId));
       return out;
     }
   }
@@ -376,14 +422,14 @@ async function bootstrapData(ctx) {
   return publicCatalog({
     ...publicData,
     owners: [(({ notes, ...profile }) => profile)(owner)],
-    pets: (await addImageUrls(await ctx.db.query("pets").collect())).filter(p => p.ownerId === owner.id),
-    bookings: (await ctx.db.query("bookings").collect()).filter(b => b.ownerId === owner.id).map(({ internalNotes, ...b }) => b),
-    orders: (await ctx.db.query("orders").collect()).filter(o => o.ownerId === owner.id),
-    messages: (await ctx.db.query("messages").collect()).filter(m => m.ownerId === owner.id),
-    notifications: (await ctx.db.query("notifications").collect()).filter(n => n.ownerId === owner.id),
+    pets: await addImageUrls(await bounded(ctx.db.query("pets").withIndex("by_ownerId", q => q.eq("ownerId", owner.id)), "pets")),
+    bookings: (await bounded(ctx.db.query("bookings").withIndex("by_ownerId", q => q.eq("ownerId", owner.id)), "bookings")).map(({ internalNotes, ...b }) => b),
+    orders: await bounded(ctx.db.query("orders").withIndex("by_ownerId", q => q.eq("ownerId", owner.id)), "orders"),
+    messages: await bounded(ctx.db.query("messages").withIndex("by_ownerId", q => q.eq("ownerId", owner.id)), "messages"),
+    notifications: await bounded(ctx.db.query("notifications").withIndex("by_ownerId", q => q.eq("ownerId", owner.id)), "notifications"),
     payments: [],
-    waitlist: (await ctx.db.query("waitlist").collect()).filter(w => w.ownerId === owner.id),
-    inquiries: (await ctx.db.query("inquiries").collect()).filter(i => i.ownerId === owner.id)
+    waitlist: await bounded(ctx.db.query("waitlist").withIndex("by_ownerId", q => q.eq("ownerId", owner.id)), "waitlist"),
+    inquiries: await bounded(ctx.db.query("inquiries").withIndex("by_ownerId", q => q.eq("ownerId", owner.id)), "inquiries")
   });
 }
 
@@ -393,14 +439,14 @@ export const bootstrap = query({
 });
 
 const OPS = new Set([
-  "generateUploadUrl",
+  "generateUploadUrl","registerUpload",
   "grantAdminAccess","revokeAdminAccess","clearStaffProfiles","removeNonPawServices",
   "ensureOwner","markNotificationRead","markNotificationsRead","updateOwner","addPet","updatePet",
   "removePet","addVaccine","setVaccineStatus","createBooking","rescheduleBooking","cancelBooking",
-  "setBookingStatus","addBookingNote","placeOrder","setOrderStage","refund","setListingStatus",
-  "adjustStock","updateProduct","updateCMS","updateService","createService","deleteService","updateProvider","createProvider","deleteProvider","addLeave","removeLeave",
+  "setBookingStatus","addBookingNote","placeOrder","setOrderStage","refund","setListingStatus","createListing","updateListing","deleteListing",
+  "adjustStock","updateProduct","createProduct","deleteProduct","updateCMS","updateService","createService","deleteService","updateProvider","createProvider","deleteProvider","addLeave","removeLeave",
   "joinWaitlist","removeWaitlist","posCharge","addPaymentMethod","removePaymentMethod",
-  "setPrimaryPayment","submitContact","submitInquiry","createOwner","sendMessage","markMessageRead","setContactStatus","staffBooking","recordBookingPayment","refundStoreSale"
+  "setPrimaryPayment","submitContact","submitInquiry","createOwner","sendMessage","markMessageRead","setContactStatus","staffBooking","recordBookingPayment","refundBookingPayment","refundStoreSale"
 ]);
 
 export const mutate = mutation({
@@ -411,10 +457,30 @@ export const mutate = mutation({
     const p = payload;
 
     if (op === "generateUploadUrl") {
+      const id = await identity(ctx);
       const admin = await adminFor(ctx);
       const owner = await ownerFor(ctx, false);
       if (!admin && !owner) throw new Error("Not authorized.");
+      const uploads = await ctx.db.query("uploads").withIndex("by_subject", q => q.eq("subject", id.subject)).collect();
+      if (uploads.filter(row => !row.attachedTo && Date.now() - row.createdAt < 24 * 60 * 60 * 1000).length >= 10) throw new Error("Too many unfinished uploads. Try again later.");
       return { uploadUrl: await ctx.storage.generateUploadUrl() };
+    }
+
+    if (op === "registerUpload") {
+      const id = await identity(ctx);
+      const admin = await adminFor(ctx);
+      const owner = await ownerFor(ctx, false);
+      if (!admin && !owner) throw new Error("Not authorized.");
+      const storageId = p.storageId;
+      const metadata = await ctx.db.system.get("_storage", storageId);
+      if (!metadata || !/^image\/(jpeg|png|webp|gif)$/i.test(metadata.contentType || "") || metadata.size > 8 * 1024 * 1024) {
+        if (metadata) await ctx.storage.delete(storageId);
+        throw new Error("Choose a JPG, PNG, WEBP or GIF image up to 8 MB.");
+      }
+      const existing = await ctx.db.query("uploads").withIndex("by_storageId", q => q.eq("storageId", storageId)).first();
+      if (existing && existing.subject !== id.subject) throw new Error("Upload is not authorized.");
+      if (!existing) await ctx.db.insert("uploads", { storageId, subject: id.subject, createdAt: Date.now() });
+      return { ok: true, storageId };
     }
 
     if (op === "grantAdminAccess") {
@@ -437,7 +503,7 @@ export const mutate = mutation({
         if (provider.ownerId && provider.ownerId !== owner.id) throw new Error("That provider profile is already linked to another registered account.");
         await ctx.db.patch(provider._id, { ownerId: owner.id });
       }
-      await ctx.db.insert("admins", { email, name, role, ownerId: owner.id, ...(providerId ? { providerId } : {}) });
+      await ctx.db.insert("admins", { email, name, role, ownerId: owner.id, clerkId: owner.clerkId, ...(providerId ? { providerId } : {}) });
       await audit(ctx, admin, "Admin access granted", email + " — " + role);
       return { ok: true, email, role };
     }
@@ -450,15 +516,18 @@ export const mutate = mutation({
       const leaves = await ctx.db.query("staffLeave").collect();
       const services = await ctx.db.query("services").collect();
       const admins = await ctx.db.query("admins").collect();
-      for (const provider of providers) await ctx.db.delete(provider._id);
+      const activeBookings = (await ctx.db.query("bookings").collect()).filter(booking => activeBookingStatus(booking.status));
+      const waitlist = await ctx.db.query("waitlist").collect();
+      if (activeBookings.length || waitlist.length) throw new Error("Reschedule or cancel active appointments and clear the waitlist before clearing staff setup.");
+      for (const provider of providers) await ctx.db.patch(provider._id, { active: false });
       for (const leave of leaves) await ctx.db.delete(leave._id);
       for (const service of services) await ctx.db.patch(service._id, { staff: [], active: false });
       let accessRemoved = 0;
       for (const entry of admins) {
         if (entry._id !== admin._id && entry.role !== "super") { await ctx.db.delete(entry._id); accessRemoved++; }
       }
-      await audit(ctx, admin, "Staff setup cleared", providers.length + " profiles, " + leaves.length + " leave blocks, " + accessRemoved + " staff access entries removed");
-      return { ok: true, providersRemoved: providers.length, accessRemoved };
+      await audit(ctx, admin, "Staff setup cleared", providers.length + " profiles archived, " + leaves.length + " leave blocks, " + accessRemoved + " staff access entries removed");
+      return { ok: true, providersArchived: providers.length, accessRemoved };
     }
 
     if (op === "removeNonPawServices") {
@@ -618,6 +687,7 @@ export const mutate = mutation({
         vaccines: [], notes: String(input.notes || ""), createdAt: today(),
         ...(input.imageStorageId ? { imageStorageId: input.imageStorageId } : {})
       };
+      if (input.imageStorageId) await claimImage(ctx, input.imageStorageId, "pet:" + pet.id);
       await ctx.db.insert("pets", pet);
       if (admin) await audit(ctx, admin, "Pet added", pet.petName);
       return { ok: true };
@@ -641,7 +711,10 @@ export const mutate = mutation({
         if (input[k] !== undefined) patch[k] = k === "weightKg" ? Math.max(0, Number(input[k]) || 0) : String(input[k]);
       }
       if (input.tags !== undefined) patch.tags = Array.isArray(input.tags) ? input.tags.map(String).slice(0, 12) : [];
-      if (input.imageStorageId !== undefined) patch.imageStorageId = input.imageStorageId;
+      if (input.imageStorageId !== undefined) {
+        await claimImage(ctx, input.imageStorageId, "pet:" + pet.id);
+        patch.imageStorageId = input.imageStorageId;
+      }
       await ctx.db.patch(pet._id, patch);
       if (admin) await audit(ctx, admin, "Pet updated", pet.id);
       return { ok: true };
@@ -673,8 +746,11 @@ export const mutate = mutation({
       const name = String(p.name || "").trim();
       const date = String(p.date || "");
       if (!["Rabies", "DHPP", "Bordetella", "FVRCP", "Leptospirosis", "Canine Influenza"].includes(name) || !validDateOnly(date) || date > today()) throw new Error("Invalid vaccine record.");
+      const defaultExpiry = new Date(date + "T12:00:00Z"); defaultExpiry.setUTCFullYear(defaultExpiry.getUTCFullYear() + 1);
+      const expires = String(p.expires || defaultExpiry.toISOString().slice(0, 10));
+      if (!validDateOnly(expires) || expires <= date) throw new Error("Enter a valid expiry date after the administration date.");
       const vaccines = Array.isArray(pet.vaccines) ? pet.vaccines.slice() : [];
-      vaccines.push({ name, date, lot: String(p.lot || ""), status: "pending" });
+      vaccines.push({ name, date, expires, lot: String(p.lot || ""), status: "pending" });
       await ctx.db.patch(pet._id, { vaccines });
       if (admin) await audit(ctx, admin, "Vaccine record added", pet.id + " — " + name);
       return { ok: true };
@@ -705,15 +781,16 @@ export const mutate = mutation({
       if (!owner || !service || service.active === false || !pet || pet.ownerId !== owner.id) throw new Error("Invalid booking request.");
       if (service.duration >= 24) throw new Error("This service requires overnight scheduling; please contact the store.");
       if (service.deposit && !staff) throw new Error("This booking requires a payment processor that is not connected yet.");
-      const required = pet.species === "Cat" ? ["Rabies","FVRCP"] : ["Rabies","DHPP","Bordetella"];
+      const required = pet.species === "Cat" ? ["Rabies","FVRCP"] : pet.species === "Dog" ? ["Rabies","DHPP","Bordetella"] : [];
       if (service.requiresVaccine) {
-        const have = (pet.vaccines || []).filter(v => v.status === "approved").map(v => v.name);
+        if (!required.length) throw new Error("Contact the store for a species-specific vaccine review before booking this service.");
+        const have = (pet.vaccines || []).filter(v => v.status === "approved" && (!v.expires || v.expires >= today())).map(v => v.name);
         const missing = required.filter(v => !have.includes(v));
         if (missing.length) throw new Error("Missing required vaccines: " + missing.join(", ") + ".");
       }
       const provider = await getProvider(ctx, p.providerId);
       if (!provider || provider.active === false || !(service.staff || []).includes(provider.id)) throw new Error("Specialist is not available for this service.");
-      const ok = await slotAvailable(ctx, service, provider, String(p.date), Number(p.hour));
+      const ok = await slotAvailable(ctx, service, provider, String(p.date), Number(p.hour), undefined, service.duration, pet.id);
       if (!ok) throw new Error("That time slot is no longer available.");
       const rate = staff ? 0 : PLANS[owner.plan] || 0;
       const total = round2(service.price * (1 - rate));
@@ -750,6 +827,26 @@ export const mutate = mutation({
       return {ok: true, bookingId: booking.id};
     }
 
+    if (op === "refundBookingPayment") {
+      const admin = await adminFor(ctx);
+      requirePermission(admin, "payments.refund");
+      const booking = await getBooking(ctx, p.bookingId);
+      if (!booking) throw new Error("Appointment not found.");
+      const options = p.options || {};
+      if (!/^[a-zA-Z0-9_-]{8,100}$/.test(options.requestId || "")) throw new Error("A refund reference is required.");
+      const refunds = booking.storeRefunds || [];
+      if (refunds.some(item => item.requestId === options.requestId)) return { ok: true, bookingId: booking.id };
+      const amount = Number(p.amount);
+      const reason = String(options.reason || "").trim().slice(0, 500);
+      if (!Number.isFinite(amount) || amount <= 0 || round2(amount) !== amount || amount > booking.paid) throw new Error("Refund must be positive and cannot exceed the amount received.");
+      if (!["Cash", "Bank transfer"].includes(p.method) || !reason) throw new Error("Enter the refund method and reason.");
+      refunds.push({ requestId: options.requestId, amount, method: p.method, reason, at: new Date().toISOString() });
+      const paid = round2(booking.paid - amount);
+      await ctx.db.patch(booking._id, { paid, refunded: round2((booking.refunded || 0) + amount), paymentStatus: paid === 0 ? "refunded" : "partial", storeRefunds: refunds });
+      await audit(ctx, admin, "Appointment refund recorded", booking.id + " — NGN " + amount.toFixed(2));
+      return { ok: true, bookingId: booking.id };
+    }
+
     if (op === "rescheduleBooking") {
       const owner = await ownerFor(ctx, true);
       const admin = await adminFor(ctx);
@@ -763,7 +860,7 @@ export const mutate = mutation({
       const service = await getService(ctx, booking.serviceId);
       const provider = await getProvider(ctx, p.providerId || booking.providerId);
       if (!service || service.active === false || !provider || provider.active === false || !(service.staff || []).includes(provider.id)) throw new Error("Invalid provider for this service.");
-      const ok = await slotAvailable(ctx, service, provider, String(p.date), Number(p.hour), booking.id);
+      const ok = await slotAvailable(ctx, service, provider, String(p.date), Number(p.hour), booking.id, booking.duration, booking.petId);
       if (!ok) throw new Error("That time slot is no longer available.");
       await ctx.db.patch(booking._id, { date: String(p.date), hour: Number(p.hour), providerId: provider.id });
       if (admin) await audit(ctx, admin, "Booking rescheduled", booking.id);
@@ -829,7 +926,7 @@ export const mutate = mutation({
         const qty = Number(item.qty);
         if (!Number.isInteger(qty) || qty <= 0) throw new Error("Invalid quantity.");
         const product = await getProduct(ctx, id);
-        if (!product || !Number.isFinite(product.price) || product.price < 0) throw new Error("Invalid product.");
+        if (!product || product.active === false || !Number.isFinite(product.price) || product.price < 0) throw new Error("Invalid product.");
         if (qty > product.stock) throw new Error(product.name + " only has " + product.stock + " in stock.");
         lines.push({ product, qty });
       }
@@ -880,12 +977,47 @@ export const mutate = mutation({
       requirePermission(admin, "listings.edit");
       const l = await ctx.db.query("listings").filter(q => q.eq(q.field("id"), p.listingId)).first();
       if (!l) throw new Error("Listing not found.");
-      if (p.imageStorageId !== undefined) await ctx.db.patch(l._id, { imageStorageId: p.imageStorageId });
+      if (p.imageStorageId !== undefined) {
+        await claimImage(ctx, p.imageStorageId, "listing:" + l.id);
+        await ctx.db.patch(l._id, { imageStorageId: p.imageStorageId });
+      }
       const status = String(p.status || "");
       if (!["available","reserved","sold"].includes(status)) throw new Error("Invalid listing status.");
       await ctx.db.patch(l._id, { status });
       await audit(ctx, admin, "Listing status", l.name + " -> " + status);
       return { ok: true, listingId: l.id };
+    }
+
+    if (op === "createListing" || op === "updateListing") {
+      const admin = await adminFor(ctx);
+      requirePermission(admin, "listings.edit");
+      const input = op === "createListing" ? (p.input || {}) : (p.patch || {});
+      const existing = op === "updateListing" ? await ctx.db.query("listings").withIndex("by_external_id", q => q.eq("id", String(p.listingId || ""))).first() : null;
+      if (op === "updateListing" && !existing) throw new Error("Listing not found.");
+      const values = { ...(existing || {}), ...input };
+      const species = String(values.species || "").trim(), name = String(values.name || "").trim(), breed = String(values.breed || "").trim(), sex = String(values.sex || "").trim();
+      const ageMonths = Number(values.ageMonths), price = Number(values.price);
+      const status = String(values.status || "available");
+      if (!species || !name || !breed || !["Male","Female"].includes(sex) || !Number.isInteger(ageMonths) || ageMonths < 0 || !Number.isFinite(price) || price < 0 || !["draft","available","reserved","sold","archived"].includes(status)) throw new Error("Enter valid listing details.");
+      const patch = { species, name, breed, sex, ageMonths, price: round2(price), status,
+        icon: String(values.icon || ""), breeder: String(values.breeder || ""), pedigree: String(values.pedigree || ""), bio: String(values.bio || "").slice(0, 4000),
+        health: Array.isArray(values.health) ? values.health.map(String).slice(0, 20) : [], temperament: Array.isArray(values.temperament) ? values.temperament.map(String).slice(0, 20) : [] };
+      const listingId = existing?.id || uid("ls");
+      if (input.imageStorageId !== undefined) { await claimImage(ctx, input.imageStorageId, "listing:" + listingId); patch.imageStorageId = input.imageStorageId; }
+      if (existing) await ctx.db.patch(existing._id, patch);
+      else await ctx.db.insert("listings", { id: listingId, listedAt: today(), ...patch });
+      await audit(ctx, admin, existing ? "Listing edited" : "Listing created", listingId + " — " + name);
+      return { ok: true, listingId };
+    }
+
+    if (op === "deleteListing") {
+      const admin = await adminFor(ctx);
+      requirePermission(admin, "listings.edit");
+      const listing = await ctx.db.query("listings").withIndex("by_external_id", q => q.eq("id", String(p.listingId || ""))).first();
+      if (!listing) throw new Error("Listing not found.");
+      await ctx.db.patch(listing._id, { status: "archived" });
+      await audit(ctx, admin, "Listing archived", listing.id + " — " + listing.name);
+      return { ok: true, listingId: listing.id };
     }
 
     if (op === "adjustStock") {
@@ -909,7 +1041,7 @@ export const mutate = mutation({
       const input = p.patch || {};
       if (input.name !== undefined) {
         const name = String(input.name).trim();
-        if (!/paw/i.test(name)) throw new Error("Service names must include Paw.");
+        if (!name) throw new Error("Enter a product name.");
         patch.name = name;
       }
       if (input.cat !== undefined) patch.cat = String(input.cat);
@@ -930,10 +1062,36 @@ export const mutate = mutation({
       }
       if (input.desc !== undefined) patch.desc = String(input.desc);
       if (input.icon !== undefined) patch.icon = String(input.icon);
-      if (input.imageStorageId !== undefined) patch.imageStorageId = input.imageStorageId;
+      if (input.sku !== undefined) patch.sku = String(input.sku).trim().slice(0, 80);
+      if (input.cost !== undefined) { const cost = Number(input.cost); if (!Number.isFinite(cost) || cost < 0) throw new Error("Invalid cost."); patch.cost = round2(cost); }
+      if (input.imageStorageId !== undefined) { await claimImage(ctx, input.imageStorageId, "product:" + product.id); patch.imageStorageId = input.imageStorageId; }
       patch.lowStock = (patch.stock ?? product.stock) <= (patch.lowAt ?? product.lowAt);
       await ctx.db.patch(product._id, patch);
       await audit(ctx, admin, "Product edited", product.id);
+      return { ok: true, productId: product.id };
+    }
+
+    if (op === "createProduct") {
+      const admin = await adminFor(ctx);
+      requirePermission(admin, "inventory.edit");
+      const input = p.input || {};
+      const name = String(input.name || "").trim(), cat = String(input.cat || "").trim(), desc = String(input.desc || "").trim();
+      const price = Number(input.price), cost = Number(input.cost || 0), stock = Number(input.stock), lowAt = Number(input.lowAt);
+      if (!name || !cat || !desc || !Number.isFinite(price) || price < 0 || !Number.isFinite(cost) || cost < 0 || !Number.isInteger(stock) || stock < 0 || !Number.isInteger(lowAt) || lowAt < 0) throw new Error("Enter valid product details.");
+      const product = { id: uid("pr"), active: true, name, cat, price: round2(price), cost: round2(cost), stock, lowAt, lowStock: stock <= lowAt, desc, sku: String(input.sku || "").trim().slice(0, 80), icon: String(input.icon || "") };
+      if (input.imageStorageId) { await claimImage(ctx, input.imageStorageId, "product:" + product.id); product.imageStorageId = input.imageStorageId; }
+      await ctx.db.insert("products", product);
+      await audit(ctx, admin, "Product created", product.id + " — " + name);
+      return { ok: true, productId: product.id };
+    }
+
+    if (op === "deleteProduct") {
+      const admin = await adminFor(ctx);
+      requirePermission(admin, "inventory.edit");
+      const product = await getProduct(ctx, p.productId);
+      if (!product) throw new Error("Product not found.");
+      await ctx.db.patch(product._id, { active: false, stock: 0, lowStock: true });
+      await audit(ctx, admin, "Product archived", product.id + " — " + product.name);
       return { ok: true, productId: product.id };
     }
 
@@ -948,6 +1106,15 @@ export const mutate = mutation({
       if (patch.siteName !== undefined && patch.siteName.trim().length < 2) throw new Error("Enter a site name with at least 2 characters.");
       if (p.patch?.catalogConfirmed !== undefined) {
         if (typeof p.patch.catalogConfirmed !== "boolean") throw new Error("Invalid catalog setting.");
+        if (p.patch.catalogConfirmed) {
+          const products = (await ctx.db.query("products").collect()).filter(product => product.active !== false);
+          const services = await ctx.db.query("services").collect();
+          const listings = await ctx.db.query("listings").collect();
+          if (!products.length || !services.some(service => service.active !== false)) throw new Error("Add products and at least one active service before publishing the catalog.");
+          if (products.some(item => !item.name?.trim() || !item.cat?.trim() || !item.desc?.trim() || !Number.isFinite(item.price) || item.price < 0 || !Number.isInteger(item.stock) || item.stock < 0)) throw new Error("Complete every product before publishing the catalog.");
+          if (services.some(item => item.active !== false && (!/paw/i.test(item.name) || !Number.isFinite(item.price) || item.price < 0 || !item.staff?.length))) throw new Error("Complete every active service and include Paw in each name before publishing the catalog.");
+          if (listings.some(item => !["draft","available","reserved","sold","archived"].includes(item.status) || !item.name?.trim() || !Number.isFinite(item.price) || item.price < 0)) throw new Error("Complete every pet listing before publishing the catalog.");
+        }
         patch.catalogConfirmed = p.patch.catalogConfirmed;
       }
       if (p.patch?.hours !== undefined) {
@@ -988,7 +1155,11 @@ export const mutate = mutation({
         if (typeof input.active !== "boolean") throw new Error("Choose whether this service is active.");
         patch.active = input.active;
       }
-      if (input.name !== undefined) patch.name = String(input.name).trim();
+      if (input.name !== undefined) {
+        const name = String(input.name).trim();
+        if (!/paw/i.test(name)) throw new Error("Service names must include Paw.");
+        patch.name = name;
+      }
       if (input.group !== undefined) {
         const group = await ctx.db.query("serviceGroups").filter(q => q.eq(q.field("id"), String(input.group))).first();
         if (!group) throw new Error("Choose a valid department.");
@@ -1015,7 +1186,7 @@ export const mutate = mutation({
         patch.staff = input.staff.map(String);
       }
       if (!patch.name && !s.name) throw new Error("Enter a service name.");
-      if (input.imageStorageId !== undefined) patch.imageStorageId = input.imageStorageId;
+      if (input.imageStorageId !== undefined) { await claimImage(ctx, input.imageStorageId, "service:" + s.id); patch.imageStorageId = input.imageStorageId; }
       await ctx.db.patch(s._id, patch);
       await audit(ctx, admin, "Service edited", s.id);
       return { ok: true, serviceId: s.id };
@@ -1041,8 +1212,10 @@ export const mutate = mutation({
       const service = {
         id: uid("sv"), active: true, group: groupId, name, icon: String(input.icon || "&#128062;"),
         price: round2(price), duration, deposit: !!input.deposit, requiresVaccine: !!input.requiresVaccine,
-        staff, desc: String(input.desc || "").trim(), popular: !!input.popular
+        staff, desc: String(input.desc || "").trim(), popular: !!input.popular,
+        ...(input.imageStorageId ? { imageStorageId: input.imageStorageId } : {})
       };
+      if (input.imageStorageId) await claimImage(ctx, input.imageStorageId, "service:" + service.id);
       await ctx.db.insert("services", service);
       await audit(ctx, admin, "Service created", service.id + " — " + service.name);
       return { ok: true, serviceId: service.id };
@@ -1067,9 +1240,14 @@ export const mutate = mutation({
       const patch = {};
       for (const key of ["name", "role", "title", "icon", "bio"]) if (input[key] !== undefined) patch[key] = String(input[key]).trim();
       if (input.ownerId !== undefined) {
-        const owner = await getOwnerById(ctx, String(input.ownerId || ""));
-        if (!owner || !owner.clerkId) throw new Error("Choose a registered account for this staff profile.");
-        patch.ownerId = owner.id;
+        const ownerId = String(input.ownerId || "");
+        if (ownerId) {
+          const owner = await getOwnerById(ctx, ownerId);
+          if (!owner || !owner.clerkId) throw new Error("Choose a registered account for this staff profile.");
+          const other = (await ctx.db.query("providers").collect()).find(row => row.ownerId === owner.id && row._id !== provider._id);
+          if (other) throw new Error("That registered account is linked to another staff profile.");
+          patch.ownerId = owner.id;
+        } else patch.ownerId = undefined;
       }
       if (input.group !== undefined) {
         const group = await ctx.db.query("serviceGroups").filter(q => q.eq(q.field("id"), String(input.group))).first();

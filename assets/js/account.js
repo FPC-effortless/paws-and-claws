@@ -365,6 +365,7 @@
     $('#vfName').value = presetName || $('#vfName').options[0].value;
     $('#vfDate').value = '';
     $('#vfLot').value = '';
+    $('#vfExpires').value = '';
     PNC.openModal('vaxModal');
   }
 
@@ -373,7 +374,9 @@
     if (!vaxPetId) return;
     const date = $('#vfDate').value;
     if (!date) { PNC.toast('Pick the administration date', 'err'); return; }
-    const res = await Promise.resolve(D.addVaccine(vaxPetId, $('#vfName').value, date, $('#vfLot').value.trim()));
+    const expires = $('#vfExpires').value;
+    if (!expires) { PNC.toast('Pick the valid-until date', 'err'); return; }
+    const res = await Promise.resolve(D.addVaccine(vaxPetId, $('#vfName').value, date, $('#vfLot').value.trim(), expires));
     if (res.error) { PNC.toast(res.error, 'err'); return; }
     PNC.closeModal();
     PNC.toast('Vaccine record submitted for review');
