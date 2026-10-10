@@ -163,24 +163,22 @@
     if (!host) return;
     const groups = D.SERVICE_GROUPS;
     host.innerHTML = groups.map(function (g) {
-      const list = D.db.services.filter((s) => s.group === g.id);
+      const list = D.SERVICES.filter((s) => s.group === g.id);
+      if (!list.length) return "";
       return (
         '<div style="grid-column:1/-1;display:flex;align-items:center;gap:10px;margin-top:8px">' +
           '<span style="font-size:1.3rem">' + D.icon(g.icon) + "</span>" +
           '<b style="font-family:var(--font-display);font-size:1.05rem">' + g.name + "</b>" +
           '<span class="small muted">' + esc(g.blurb) + "</span>" +
-        "</div>"
-      );
-    }).join("") + D.db.services.map(function (s) {
-      const on = W.serviceId === s.id;
-      return (
-        '<button class="pick' + (on ? " on" : "") + '"' +
-          ((D.productionMode() && s.deposit) || s.duration >= 24 ? ' disabled title="Contact the store to arrange this service"' : '') +
-          ' data-pick="' + s.id + '">' +
-          '<span class="pi">' + (s.imageUrl ? '<img src="' + esc(s.imageUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">' : D.icon(s.icon)) + "</span>" +
-          "<span><b>" + esc(s.name) + "</b><small>" + publicPrice(s.price) + " · " + s.duration + " hr" + (s.duration === 1 ? "" : "s") +
-          (s.requiresVaccine ? " · vaccines required" : "") + "</small></span>" +
-        "</button>"
+        "</div>" + list.map(function (s) {
+          const on = W.serviceId === s.id;
+          return '<button class="pick' + (on ? " on" : "") + '"' +
+            ((D.productionMode() && s.deposit) || s.duration >= 24 ? ' disabled title="Contact the store to arrange this service"' : '') +
+            ' data-pick="' + s.id + '">' +
+            '<span class="pi">' + (s.imageUrl ? '<img src="' + esc(s.imageUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">' : D.icon(s.icon)) + "</span>" +
+            "<span><b>" + esc(s.name) + "</b><small>" + publicPrice(s.price) + " · " + s.duration + " hr" + (s.duration === 1 ? "" : "s") +
+            (s.requiresVaccine ? " · vaccines required" : "") + "</small></span></button>";
+        }).join("")
       );
     }).join("");
   }
@@ -468,7 +466,7 @@
       if (b) { startBooking(b.dataset.book); return; }
       const pb = e.target.closest("[data-provider-book]");
       if (pb) {
-        const svc = D.db.services.find((s) => s.staff.indexOf(pb.dataset.providerBook) !== -1);
+        const svc = D.SERVICES.find((s) => s.staff.indexOf(pb.dataset.providerBook) !== -1);
         if (svc) {
           startBooking(svc.id);
           W.providerId = pb.dataset.providerBook;

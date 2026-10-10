@@ -1064,6 +1064,10 @@ export const mutate = mutation({
       if (input.icon !== undefined) patch.icon = String(input.icon);
       if (input.sku !== undefined) patch.sku = String(input.sku).trim().slice(0, 80);
       if (input.cost !== undefined) { const cost = Number(input.cost); if (!Number.isFinite(cost) || cost < 0) throw new Error("Invalid cost."); patch.cost = round2(cost); }
+      if (input.active !== undefined) {
+        if (typeof input.active !== "boolean") throw new Error("Invalid product status.");
+        patch.active = input.active;
+      }
       if (input.imageStorageId !== undefined) { await claimImage(ctx, input.imageStorageId, "product:" + product.id); patch.imageStorageId = input.imageStorageId; }
       patch.lowStock = (patch.stock ?? product.stock) <= (patch.lowAt ?? product.lowAt);
       await ctx.db.patch(product._id, patch);

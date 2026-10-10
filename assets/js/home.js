@@ -92,7 +92,7 @@
     host.innerHTML = list.map(function (l) {
       return '<article class="pet-card">' +
         '<div class="pet-art">' +
-          '<span class="pet-emoji" aria-hidden="true">' + D.icon(l.icon) + "</span>" +
+          (l.imageUrl ? '<img src="' + esc(l.imageUrl) + '" alt="' + esc(l.name) + '" style="width:100%;height:100%;object-fit:cover">' : '<span class="pet-emoji" aria-hidden="true">' + D.icon(l.icon) + "</span>") +
           '<span class="pet-price">' + money(l.price) + "</span>" +
         "</div>" +
         '<div class="pet-body">' +
@@ -122,7 +122,7 @@
     host.innerHTML = prods.map(function (p) {
       const badge = p.badge ? '<span class="badge tag tag--yellow">' + esc(p.badge) + "</span>" : "";
       return '<div class="card product reveal in">' +
-        '<div class="product-art">' + badge + D.icon(p.icon) +
+        '<div class="product-art">' + badge + (p.imageUrl ? '<img src="' + esc(p.imageUrl) + '" alt="' + esc(p.name) + '" style="width:100%;height:100%;object-fit:cover">' : D.icon(p.icon)) +
         "</div>" +
         '<div class="product-body">' +
           "<h3>" + esc(p.name) + "</h3>" +

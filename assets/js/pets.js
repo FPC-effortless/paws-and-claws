@@ -22,7 +22,11 @@
 
   let inqId = null;
 
-  function listings() { return D.catalogReady() ? D.db.listings : []; }
+  function listings() {
+    return D.catalogReady()
+      ? (D.db.listings || []).filter(l => !['draft', 'archived'].includes(l.status))
+      : [];
+  }
   function member() { return D.currentOwner(); }
 
   function ageLabel(m) {
@@ -250,7 +254,7 @@
 
   /* ---------- init ---------- */
   function init() {
-    window.addEventListener('pnc:data-ready', function () { renderFacts(); render(); });
+    window.addEventListener('pnc:data-ready', function () { buildFacets(); renderFacts(); render(); });
     const filterToggle = $('#togglePetFilters');
     if (filterToggle) filterToggle.addEventListener('click', function () {
       const open = $('#petFilters').classList.toggle('filters-open');
@@ -266,13 +270,13 @@
       if (b && !b.disabled) openInquiry(b.dataset.inq);
     });
 
-    $$('.f-chip').forEach(function (b) {
-      b.addEventListener('click', function () {
-        const set = state[b.dataset.f];
-        if (!set) return;
-        if (set.has(b.dataset.v)) set.delete(b.dataset.v); else set.add(b.dataset.v);
-        render();
-      });
+    $('#petFilters').addEventListener('click', function (e) {
+      const b = e.target.closest('.f-chip');
+      if (!b) return;
+      const set = state[b.dataset.f];
+      if (!set) return;
+      if (set.has(b.dataset.v)) set.delete(b.dataset.v); else set.add(b.dataset.v);
+      render();
     });
 
     $('#petChips').addEventListener('click', function (e) {
