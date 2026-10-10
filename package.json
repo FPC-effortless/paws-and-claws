@@ -5,7 +5,7 @@
   "description": "Pet care platform: bookings, shop, marketplace, member portal and admin panel.",
   "scripts": {
     "build": "node scripts/build.js",
-    "test": "npm run test:types && node test/harness.js && node test/clerk_demo.js && node test/clerk_production_guard.js && node test/production_guard.js && node test/auth_integration.js && node test/storefront.js && node test/workflows.js && node test/cohesion.js",
+    "test": "npm run test:types && node test/harness.js && node test/clerk_demo.js && node test/clerk_production_guard.js && node test/production_guard.js && node test/auth_integration.js && node test/storefront.js && node test/home_services.js && node test/workflows.js && node test/cohesion.js",
     "test:types": "tsc -p convex/tsconfig.json --noEmit",
     "test:unit": "node test/harness.js",
     "test:production": "node test/production_guard.js",

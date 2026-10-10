@@ -8,6 +8,9 @@ const booking = read("assets/js/booking.js");
 const services = read("services.html");
 const contact = read("contact.html");
 const nav = read("assets/js/nav.js");
+const home = read("assets/js/home.js");
+const data = read("assets/js/data.js");
+const convexClient = read("assets/js/convexClient.js");
 
 assert(!contact.includes("a licensed vet will triage"), "Do not promise an unverified vet emergency hotline");
 assert(contact.includes("Seek immediate advice from a local veterinary clinic."), "Direct emergencies to a clinic");
@@ -20,4 +23,9 @@ assert(!booking.includes('"Charged now"'), "Never describe uncollected deposits 
 assert(booking.includes("D.productionMode() && s.deposit"), "Deposit-only services must not advertise online booking");
 assert(nav.includes("syncVisitCta();"), "Navbar reacts to catalog publication");
 assert(nav.includes("Online delivery not available"), "Cart must not promise online delivery");
+assert(home.includes("(D.SERVICES || []).filter"), "Homepage service cards must use the current backend service snapshot");
+assert(home.includes('data-service-id="'), "Homepage must render real service records rather than category placeholders");
+assert(!home.includes("groups.push('<a class=\"home-service-card"), "Homepage must not append hard-coded pseudo-services");
+assert(data.includes("filter(service => service.active !== false)"), "Public service selectors must hide archived backend services");
+assert(convexClient.includes("clearBootstrapSubscription();"), "Authentication changes must rebind the live backend catalog subscription");
 console.log("WEBSITE COHESION CHECKS PASSED");

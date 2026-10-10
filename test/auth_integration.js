@@ -7,12 +7,13 @@ const read = (name) => fs.readFileSync(path.join(__dirname, "..", "assets", "js"
 const events = [];
 let signedIn = { id: "user_first", primaryEmailAddress: { emailAddress: "first@example.test" } };
 let clerkListener;
-let cleared = 0, applied = 0;
+let cleared = 0, applied = 0, subscriptions = 0, unsubscribed = 0;
+const updateCallbacks = [];
 const client = { setAuth(callback, onAuth) { this.tokenCallback = callback; this.authChange = onAuth; }, query: async () => ({ version: 1, owners: [], admins: [] }),
-  mutation: async () => ({ ok: true }), onUpdate() { return () => {}; }, close: async () => {} };
+  mutation: async () => ({ ok: true }), onUpdate(name, args, callback) { subscriptions++; updateCallbacks.push(callback); return () => { unsubscribed++; }; }, close: async () => {} };
 const Clerk = {
   user: signedIn,
-  session: { getToken: async () => "example-jwt" },
+  session: { id: "session_first", getToken: async () => "example-jwt" },
   async load() {},
   addListener(fn) { clerkListener = fn; return () => {}; },
   async signOut() { this.user = null; this.session = null; clerkListener(); }
@@ -43,6 +44,10 @@ vm.runInContext(read("convexClient.js"), sandbox);
   assert.equal(sandbox.PNC_CLERK.clerk.user.id, "user_first", "the Clerk SDK is exposed on the bridge");
   assert.equal(typeof client.tokenCallback, "function", "Convex receives a token getter");
   assert.equal(await client.tokenCallback(), "example-jwt", "Clerk template token is passed through");
+  assert.equal(subscriptions,1,"the signed-in session receives a live backend subscription");
+  const beforeLiveApply=applied;
+  updateCallbacks[0]({version:1,owners:[],admins:[],services:[{id:'live-service'}]});
+  assert.equal(applied,beforeLiveApply+1,"live backend updates refresh the current session");
   client.authChange(true);
   let finishSnapshot;
   client.query = () => new Promise(resolve => { finishSnapshot = resolve; });
@@ -51,12 +56,15 @@ vm.runInContext(read("convexClient.js"), sandbox);
   await new Promise(resolve => setImmediate(resolve));
   client.authChange(false);
   assert.equal(cleared,beforeClear+1,"expired backend auth clears private browser records");
+  assert.equal(unsubscribed,1,"expired authentication removes the old session subscription");
   finishSnapshot({version:1,owners:[{id:'private'}],admins:[]});
   assert.equal(await pendingSync,false,"a snapshot arriving after auth loss is discarded");
   assert.equal(applied,beforeApply,"stale private records cannot return to the browser cache");
   client.query = async () => ({version:1,owners:[],admins:[]});
   await sandbox.PNC_CLERK.signOut();
+  for (let i = 0; i < 4; i++) await new Promise(resolve => setImmediate(resolve));
   assert.equal(sandbox.PNC_CLERK.currentOwner(), null, "sign-out clears identity");
   assert.equal(await client.tokenCallback(), null, "no Clerk session means no token");
+  assert.equal(subscriptions,2,"sign-out binds a fresh anonymous catalog subscription");
   console.log("AUTH INTEGRATION GUARDS PASSED");
 })().catch(error => { console.error(error); process.exitCode = 1; });

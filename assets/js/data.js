@@ -1722,7 +1722,7 @@ function prepareStoreSale(lines, products, method, options) {
     get SERVICE_GROUPS() { return db?.serviceGroups || SERVICE_GROUPS; },
     get PRODUCTS() { return (db?.products || PRODUCTS).filter(product => product.active !== false); },
     get PRODUCT_BY_ID() { return Object.fromEntries(this.PRODUCTS.map(p => [p.id, p])); },
-    get SERVICES() { return db?.services || SERVICES; },
+    get SERVICES() { return (db?.services || SERVICES).filter(service => service.active !== false); },
     get SERVICE_BY_ID() { return Object.fromEntries(this.SERVICES.map(s => [s.id, s])); },
     get PROVIDERS() { return db?.providers || PROVIDERS; },
     get PROVIDER_BY_ID() { return Object.fromEntries(this.PROVIDERS.map(p => [p.id, p])); },

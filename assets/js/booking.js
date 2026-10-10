@@ -36,7 +36,7 @@
   function serviceCard(s) {
     const providers = s.staff.map((id) => D.PROVIDER_BY_ID[id]).filter(Boolean);
     return (
-      '<div class="card svc-card reveal in" data-svc-card="' + s.id + '">' +
+      '<div class="card svc-card reveal in" id="service-' + esc(s.id) + '" data-svc-card="' + esc(s.id) + '">' +
         '<div class="flex gap12" style="align-items:flex-start">' +
           '<span class="ico" style="width:52px;height:52px;border-radius:14px;display:grid;place-items:center;font-size:1.5rem;background:var(--ocean-100);flex:none">' + (s.imageUrl ? '<img src="' + esc(s.imageUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">' : D.icon(s.icon)) + "</span>" +
           "<div><h3>" + esc(s.name) + "</h3>" +
@@ -63,7 +63,7 @@
   function renderServices() {
     const grid = $("#serviceGrid");
     if (!grid) return;
-    const list = D.db.services.filter((s) => activeGroup === "all" || s.group === activeGroup);
+    const list = D.SERVICES.filter((s) => activeGroup === "all" || s.group === activeGroup);
     grid.innerHTML = list.map(serviceCard).join("");
     const nav = $("#groupNav");
     if (nav) {
@@ -79,7 +79,7 @@
     const grid = $("#providerGrid");
     if (!grid) return;
     grid.innerHTML = D.PROVIDERS.filter(p => p.active !== false).map(function (p) {
-      const svc = D.db.services.filter((s) => s.staff.indexOf(p.id) !== -1);
+      const svc = D.SERVICES.filter((s) => s.staff.indexOf(p.id) !== -1);
       return (
         '<div class="card svc-card reveal in">' +
           '<div class="flex gap12" style="align-items:flex-start">' +
@@ -105,7 +105,7 @@
   function renderStats() {
     const host = $("#svcStats");
     if (!host) return;
-    const svc = D.db.services;
+    const svc = D.SERVICES;
     host.innerHTML =
       "<div><b>" + svc.length + "</b><span>Services on the menu</span></div>" +
       "<div><b>" + D.PROVIDERS.length + "</b><span>Care team members</span></div>";
@@ -115,7 +115,7 @@
   function renderQuickBook() {
     const sel = $("#qbService");
     if (!sel) return;
-    sel.innerHTML = D.db.services.filter(s => s.duration < 24 && (!D.productionMode() || !s.deposit))
+    sel.innerHTML = D.SERVICES.filter(s => s.duration < 24 && (!D.productionMode() || !s.deposit))
       .map((s) => '<option value="' + s.id + '">' + esc(s.name) + " · " + publicPrice(s.price) + "</option>").join("");
     const go = $("#qbGo");
     if (go) go.disabled = !sel.options.length;

@@ -18,6 +18,12 @@
   let authReady = false;
   let bootstrapUnsubscribe = null;
 
+  function clearBootstrapSubscription() {
+    if (!bootstrapUnsubscribe) return;
+    try { bootstrapUnsubscribe(); } catch {}
+    bootstrapUnsubscribe = null;
+  }
+
   function announceAuthReady(ready) {
     authReady = !!ready;
     try { global.dispatchEvent(new CustomEvent("pnc:auth-ready", { detail: { ready: authReady } })); } catch {}
@@ -82,6 +88,7 @@
           function (authenticated) {
             if (!authenticated && serverAuthenticated) {
               sessionVersion++;
+              clearBootstrapSubscription();
               if (global.PNC_DB?.clearRemoteSnapshot) global.PNC_DB.clearRemoteSnapshot();
             }
             serverAuthenticated = authenticated;
@@ -160,7 +167,7 @@
     },
 
     async close() {
-      if (bootstrapUnsubscribe) { try { bootstrapUnsubscribe(); } catch {} bootstrapUnsubscribe = null; }
+      clearBootstrapSubscription();
       if (api.client) {
         try { await api.client.close(); } catch {}
       }
@@ -185,6 +192,7 @@
       announceAuthReady(false);
       boundSession = session;
       sessionVersion++;
+      clearBootstrapSubscription();
       if (global.PNC_DB && global.PNC_DB.productionMode && global.PNC_DB.productionMode()) {
         if (global.PNC_DB.clearRemoteSnapshot) global.PNC_DB.clearRemoteSnapshot();
       }

@@ -45,24 +45,28 @@
     }).join("");
   }
 
-  /* ---------------------------- service groups ------------------------ */
+  /* ----------------------------- services ----------------------------- */
   function renderGroups() {
     const host = $("#groupGrid");
     if (!host) return;
     const ready = D.catalogReady();
-    const groups = D.SERVICE_GROUPS.map(function (g) {
-      const svc = (D.SERVICES || []).filter(function (s) { return s.group === g.id; });
-      const from = svc.length ? Math.min.apply(null, svc.map(function (s) { return s.price; })) : 0;
-      return '<a class="home-service-card reveal" href="services.html#' + g.id + '">' +
-        '<span class="cat-ico">' + D.icon(g.icon) + "</span>" +
-        "<h3>" + esc(g.name) + "</h3>" +
-        "<p>" + esc(g.blurb) + "</p>" +
-        '<span class="home-card-action">' + (ready ? 'From ' + money(from) : 'Enquire') + " →</span>" +
+    const services = (D.SERVICES || []).filter(function (service) { return service.active !== false; });
+    if (!services.length) {
+      host.innerHTML = '<div class="empty-card" style="grid-column:1/-1"><span class="ico">&#128062;</span><b>No services are published yet</b><p>Contact the store for current care options.</p></div>';
+      return;
+    }
+    host.innerHTML = services.map(function (service) {
+      const art = service.imageUrl
+        ? '<img src="' + esc(service.imageUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">'
+        : D.icon(service.icon);
+      const duration = service.duration >= 24 ? "Contact to schedule" : service.duration + " hr" + (service.duration === 1 ? "" : "s");
+      return '<a class="home-service-card reveal" data-service-id="' + esc(service.id) + '" href="services.html#service-' + encodeURIComponent(service.id) + '">' +
+        '<span class="cat-ico">' + art + "</span>" +
+        "<h3>" + esc(service.name) + "</h3>" +
+        "<p>" + esc(service.desc || "") + "</p>" +
+        '<span class="home-card-action">' + (ready ? money(service.price) + " · " + duration : "Enquire") + " →</span>" +
         "</a>";
-    });
-    groups.push('<a class="home-service-card reveal" href="pets.html"><span class="cat-ico">&#128054;&#128049;</span><h3>Pet Connect</h3><p>Responsible pet listings and guided introductions.</p><span class="home-card-action">Meet the pets →</span></a>');
-    groups.push('<a class="home-service-card reveal" href="shop.html"><span class="cat-ico">&#127918;</span><h3>Quality Supplies</h3><p>Food, toys and accessories chosen for everyday care.</p><span class="home-card-action">Visit the store →</span></a>');
-    host.innerHTML = groups.join("");
+    }).join("");
   }
 
   /* ---------------------------- featured pets ------------------------- */
