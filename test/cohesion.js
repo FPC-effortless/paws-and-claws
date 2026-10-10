@@ -9,7 +9,10 @@ const services = read("services.html");
 const contact = read("contact.html");
 const nav = read("assets/js/nav.js");
 const home = read("assets/js/home.js");
+const pets = read("assets/js/pets.js");
+const admin = read("assets/js/admin.js");
 const data = read("assets/js/data.js");
+const domain = read("convex/domain.js");
 const convexClient = read("assets/js/convexClient.js");
 
 assert(!contact.includes("a licensed vet will triage"), "Do not promise an unverified vet emergency hotline");
@@ -27,5 +30,13 @@ assert(home.includes("(D.SERVICES || []).filter"), "Homepage service cards must 
 assert(home.includes('data-service-id="'), "Homepage must render real service records rather than category placeholders");
 assert(!home.includes("groups.push('<a class=\"home-service-card"), "Homepage must not append hard-coded pseudo-services");
 assert(data.includes("filter(service => service.active !== false)"), "Public service selectors must hide archived backend services");
+assert(!booking.includes("D.db.services"), "Public booking controls must use the active-only service catalog");
+assert(pets.includes("!['draft', 'archived'].includes(l.status)"), "Public pet pages must hide privileged draft and archived listings");
+assert(pets.includes("function () { buildFacets(); renderFacts(); render(); }"), "Pet facets must rebuild after asynchronous catalog updates");
+assert(pets.includes("$('#petFilters').addEventListener('click'"), "Rebuilt pet facets must retain delegated interaction handlers");
+assert(admin.includes("D.updateListing(b.dataset.limg, { imageStorageId: up.storageId })"), "Draft listing images must update without forcing a public status");
+assert(admin.includes("D.updateProduct(p.id, { active: true })"), "Inventory must let administrators restore archived products");
+assert(data.includes('typeof patch.active !== "boolean"') && domain.includes('typeof input.active !== "boolean"'), "Product restoration must be validated in local and hosted backends");
+assert(home.includes("l.imageUrl ?") && home.includes("p.imageUrl ?"), "Homepage cards must render backend listing and product images");
 assert(convexClient.includes("clearBootstrapSubscription();"), "Authentication changes must rebind the live backend catalog subscription");
 console.log("WEBSITE COHESION CHECKS PASSED");

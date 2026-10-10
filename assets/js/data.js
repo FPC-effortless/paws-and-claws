@@ -1138,6 +1138,10 @@
       if (patch[k] !== undefined) p[k] = ["name", "cat", "desc", "icon", "sku"].includes(k) ? String(patch[k]).trim() : Number(patch[k]);
     });
     if (patch.imageStorageId !== undefined) p.imageStorageId = patch.imageStorageId;
+    if (patch.active !== undefined) {
+      if (typeof patch.active !== "boolean") return { error: "Invalid product status." };
+      p.active = patch.active;
+    }
     p.lowStock = p.stock <= p.lowAt;
     audit("Product edited", p.name);
     persist();

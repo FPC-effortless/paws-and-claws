@@ -734,16 +734,17 @@
   function renderInventory() {
     const host = $("#invTable");
     if (!host) return;
-    const list = D.db.products.filter(function (product) { return product.active !== false; });
-    const low = list.filter(function (p) { return p.stock <= p.lowAt; });
-    $("#invNote").textContent = list.length + " products · " + low.length + " low on stock";
+    const list = D.db.products || [];
+    const active = list.filter(function (product) { return product.active !== false; });
+    const low = active.filter(function (p) { return p.stock <= p.lowAt; });
+    $("#invNote").textContent = active.length + " active products · " + low.length + " low on stock";
 
     host.innerHTML = "<thead><tr><th>Product</th><th>SKU</th><th>Category</th><th>Price</th><th>Cost</th><th>Stock</th><th></th></tr></thead><tbody>" +
       list.map(function (p) {
         const out = p.stock <= 0;
         const isLow = p.stock <= p.lowAt;
         return "<tr>" +
-          "<td><b>" + esc(p.name) + "</b></td>" +
+          "<td><b>" + esc(p.name) + "</b>" + (p.active === false ? ' <span class="mini-btn danger" style="cursor:default">Archived</span>' : '') + "</td>" +
           '<td class="num">' + esc(p.sku || "—") + "</td>" +
           "<td>" + esc(p.cat) + "</td>" +
           '<td class="num">' + money(p.price) + "</td>" +
@@ -756,7 +757,7 @@
             '<button class="mini-btn" data-stk="' + p.id + ':10">+10</button>' +
             '<button class="mini-btn warn" data-pedit="' + p.id + '">Edit</button>' +
             '<button class="mini-btn" data-pimg="' + p.id + '">Image</button>' +
-            '<button class="mini-btn danger" data-pdelete="' + p.id + '">Archive</button>' +
+            '<button class="mini-btn' + (p.active === false ? ' primary' : ' danger') + '" data-pactive="' + p.id + '">' + (p.active === false ? 'Restore' : 'Archive') + '</button>' +
           "</div></td>" +
         "</tr>";
       }).join("") + "</tbody>";
@@ -788,9 +789,12 @@
         render();
       });
     });
-    $$("[data-pdelete]").forEach(function (b) { b.onclick = async function () {
-      const p = D.byId(D.db.products, b.dataset.pdelete); if (!p || !window.confirm("Archive " + p.name + "? It will leave the public shop and keep its sales history.")) return;
-      const r = await Promise.resolve(D.deleteProduct(p.id)); if (r.error) return toast(r.error, "err"); toast("Product archived"); render();
+    $$("[data-pactive]").forEach(function (b) { b.onclick = async function () {
+      const p = D.byId(D.db.products, b.dataset.pactive); if (!p) return;
+      const restoring = p.active === false;
+      if (!window.confirm((restoring ? "Restore " : "Archive ") + p.name + "?" + (restoring ? " Set its stock before selling it." : " It will leave the public shop and keep its sales history."))) return;
+      const r = await Promise.resolve(restoring ? D.updateProduct(p.id, { active: true }) : D.deleteProduct(p.id));
+      if (r.error) return toast(r.error, "err"); toast(restoring ? "Product restored" : "Product archived"); render();
     }; });
     const productNew = $("#productNew"); if (productNew) productNew.onclick = async function () {
       const name=window.prompt("Product name:","");if(name===null)return;const cat=window.prompt("Category:","");if(cat===null)return;const desc=window.prompt("Description:","");if(desc===null)return;const sku=window.prompt("SKU:","");if(sku===null)return;const price=window.prompt("Selling price:","0");if(price===null)return;const cost=window.prompt("Unit cost:","0");if(cost===null)return;const stock=window.prompt("Opening stock:","0");if(stock===null)return;const lowAt=window.prompt("Low-stock threshold:","0");if(lowAt===null)return;
@@ -852,7 +856,7 @@
     $$('[data-limg]').forEach(function (b) {
       b.addEventListener('click', function () {
         const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/jpeg,image/png,image/webp,image/gif';
-        input.onchange = async function () { const up = await window.PNC_CONVEX?.uploadImage(input.files[0]); if (!up || up.error) return toast(up?.error || 'Image uploads require the connected secure backend.', 'err'); const r = await window.PNC_CONVEX.mutate('setListingStatus', { listingId: b.dataset.limg, status: D.byId(D.db.listings, b.dataset.limg).status, imageStorageId: up.storageId }); if (r.error) return toast(r.error, 'err'); await window.PNC_CONVEX.syncBootstrap(); toast('Pet listing image saved'); render(); };
+        input.onchange = async function () { const up = await window.PNC_CONVEX?.uploadImage(input.files[0]); if (!up || up.error) return toast(up?.error || 'Image uploads require the connected secure backend.', 'err'); const r = await D.updateListing(b.dataset.limg, { imageStorageId: up.storageId }); if (r.error) return toast(r.error, 'err'); toast('Pet listing image saved'); render(); };
         input.click();
       });
     });
