@@ -88,7 +88,7 @@
   function renderBookingForm() {
     const host = $('#storeBookingHost');
     host.hidden = !D.can('bookings.manage');
-    if (host.hidden || host.querySelector('form')) return;
+    if (host.hidden) return;
     host.innerHTML = '<details><summary>Create an in-store / phone appointment</summary><p>Register the customer and pet in Customers & Pets first. Vaccine and availability checks apply to every appointment. Payment is recorded separately after collection.</p>' + (D.catalogReady() ? '' : '<p>Confirm real naira service prices in Site & Staff before creating appointments.</p>') + '<form id="storeBookingForm">' +
       '<div class="field"><label for="storeCustomer">Customer</label><select class="input" id="storeCustomer" required></select></div>' +
       '<div class="field"><label for="storePet">Pet</label><select class="input" id="storePet" required></select></div>' +
@@ -140,16 +140,24 @@
     if (vaccine) {
       const pet = D.byId(D.db.pets, vaccine.dataset.storeVaccine);
       if (!pet) return;
-      const element = dialog('Vaccine record for ' + pet.petName, '<form id="storeVaccineForm"><label>Vaccine<select class="input" name="name">' + D.VACCINES.map(x => option(x,x)).join('') + '</select></label><label>Date administered<input class="input" name="date" type="date" max="' + D.todayISO() + '" required></label><label>Record / lot reference<input class="input" name="lot" maxlength="120"></label><p>Save the record, then review it before approving it for appointments.</p><button class="btn btn-teal" type="submit">Save vaccine record</button><p role="status"></p></form>');
+      const element = dialog('Vaccine record for ' + pet.petName, '<form id="storeVaccineForm"><label>Vaccine<select class="input" name="name">' + D.VACCINES.map(x => option(x,x)).join('') + '</select></label><label>Date administered<input class="input" name="date" type="date" max="' + D.todayISO() + '" required></label><label>Valid until<input class="input" name="expires" type="date" required></label><label>Record / lot reference<input class="input" name="lot" maxlength="120"></label><p>Save the record, then review it before approving it for appointments.</p><button class="btn btn-teal" type="submit">Save vaccine record</button><p role="status"></p></form>');
       element.querySelector('form').onsubmit = async event => {
         event.preventDefault(); const form = event.target, button = form.querySelector('button'); if (button.disabled) return;
         const input = Object.fromEntries(new FormData(form)); button.disabled = true;
-        try { const r = await D.addVaccine(pet.id, input.name, input.date, input.lot); if (r.error) throw new Error(r.error); element.close(); saved(); }
+        try { const r = await D.addVaccine(pet.id, input.name, input.date, input.lot, input.expires); if (r.error) throw new Error(r.error); element.close(); saved(); }
         catch (error) { form.querySelector('[role="status"]').textContent = error.message; button.disabled = false; }
       };
       return;
     }
     const receipt = e.target.closest('[data-receipt]'); if (receipt) showReceipt(receipt.dataset.receipt);
+    const bookingRefund = e.target.closest('[data-bkrefund]');
+    if (bookingRefund) {
+      const booking = D.byId(D.db.bookings, bookingRefund.dataset.bkrefund); if (!booking || !booking.paid) return;
+      const refundId = token();
+      const element = dialog('Record an appointment refund', '<p>' + esc(booking.id) + ' · Up to ' + D.money(booking.paid) + ' can be refunded.</p><form><label>Amount already returned<input class="input" name="amount" type="number" step="0.01" min="0.01" max="' + booking.paid + '" value="' + booking.paid + '" required></label><label>Method<select class="input" name="method">' + methods + '</select></label><label>Reason<input class="input" name="reason" maxlength="500" required></label><p>Return the money first, then record the completed refund here.</p><button class="btn btn-teal" type="submit">Record completed refund</button><p role="status"></p></form>');
+      element.querySelector('form').onsubmit = async event => { event.preventDefault(); const form=event.target,button=form.querySelector('button');button.disabled=true;const input=Object.fromEntries(new FormData(form));try{const r=await D.refundBookingPayment(booking.id,Number(input.amount),input.method,{requestId:refundId,reason:input.reason});if(r.error)throw new Error(r.error);element.close();saved();}catch(error){form.querySelector('[role="status"]').textContent=error.message;button.disabled=false;} };
+      return;
+    }
     const refund = e.target.closest('[data-store-refund]');
     if (refund) {
       const order = D.byId(D.db.orders, refund.dataset.storeRefund);

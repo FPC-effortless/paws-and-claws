@@ -4,6 +4,7 @@ import { v } from "convex/values";
 const vaccine = v.object({
   name: v.string(),
   date: v.string(),
+  expires: v.optional(v.string()),
   lot: v.optional(v.string()),
   status: v.string(),
 });
@@ -61,6 +62,8 @@ export default defineSchema({
     total: v.number(),
     paid: v.number(),
     storePayments: v.optional(v.array(v.object({requestId: v.string(), amount: v.number(), method: v.string(), reference: v.string(), at: v.string()}))),
+    refunded: v.optional(v.number()),
+    storeRefunds: v.optional(v.array(v.object({requestId: v.string(), amount: v.number(), method: v.string(), reason: v.string(), at: v.string()}))),
     paymentStatus: v.optional(v.string()),
     completedAt: v.optional(v.string()),
     intake: v.optional(v.any()),
@@ -72,6 +75,8 @@ export default defineSchema({
   })
     .index("by_external_id", ["id"])
     .index("by_ownerId", ["ownerId"])
+    .index("by_petId_date", ["petId", "date"])
+    .index("by_providerId", ["providerId"])
     .index("by_providerId_date", ["providerId", "date"]),
 
   staffLeave: defineTable({
@@ -98,6 +103,7 @@ export default defineSchema({
 
   products: defineTable({
     id: v.optional(v.string()),
+    active: v.optional(v.boolean()),
     name: v.string(),
     cat: v.string(),
     price: v.number(),
@@ -240,6 +246,7 @@ export default defineSchema({
   admins: defineTable({
     id: v.optional(v.string()),
     clerkId: v.optional(v.string()),
+    ownerId: v.optional(v.string()),
     email: v.string(),
     name: v.string(),
     role: v.string(),
@@ -247,6 +254,15 @@ export default defineSchema({
   })
     .index("by_clerkId", ["clerkId"])
     .index("by_email", ["email"]),
+
+  uploads: defineTable({
+    storageId: v.id("_storage"),
+    subject: v.string(),
+    createdAt: v.number(),
+    attachedTo: v.optional(v.string()),
+  })
+    .index("by_storageId", ["storageId"])
+    .index("by_subject", ["subject"]),
 
   audit: defineTable({
     id: v.optional(v.string()),

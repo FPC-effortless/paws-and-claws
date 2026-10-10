@@ -6,7 +6,7 @@
 (function (global) {
   "use strict";
 
-  const DEFAULT_URL = "https://gallant-lion-490.convex.cloud";
+  const DEFAULT_URL = "";
   const SYNCED_KEY = "pnc_convex_seeded";
   let authConfigured = false;
   let syncPromise = null;
@@ -16,6 +16,7 @@
   let sessionVersion = 0;
   let serverAuthenticated = false;
   let authReady = false;
+  let bootstrapUnsubscribe = null;
 
   function announceAuthReady(ready) {
     authReady = !!ready;
@@ -109,6 +110,12 @@
           if (version !== sessionVersion) return false;
           if (snapshot && global.PNC_DB && global.PNC_DB.applyRemoteSnapshot) {
             global.PNC_DB.applyRemoteSnapshot(snapshot);
+            if (!bootstrapUnsubscribe && typeof api.client.onUpdate === "function") {
+              bootstrapUnsubscribe = api.client.onUpdate("domain:bootstrap", {}, function (latest) {
+                if (version !== sessionVersion) return;
+                if (latest && global.PNC_DB?.applyRemoteSnapshot) global.PNC_DB.applyRemoteSnapshot(latest);
+              }, function (error) { console.warn("[pnc] Live data update failed.", error); });
+            }
             global.dispatchEvent(new CustomEvent("pnc:convex-ready", { detail: { snapshot } }));
             return true;
           }
@@ -146,11 +153,14 @@
         const response = await fetch(ticket.uploadUrl, { method: "POST", headers: { "Content-Type": file.type }, body: file });
         if (!response.ok) throw new Error("Image upload failed.");
         const body = await response.json();
+        const registered = await api.mutate("registerUpload", { storageId: body.storageId });
+        if (registered.error) throw new Error(registered.error);
         return { storageId: body.storageId };
       } catch (err) { return { error: String(err.message || "Image upload failed.") }; }
     },
 
     async close() {
+      if (bootstrapUnsubscribe) { try { bootstrapUnsubscribe(); } catch {} bootstrapUnsubscribe = null; }
       if (api.client) {
         try { await api.client.close(); } catch {}
       }

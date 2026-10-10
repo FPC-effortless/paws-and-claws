@@ -42,6 +42,10 @@ assert.equal(D.db.payments.find(p=>p.id==='theirs').primary,true);
 assert(D.addPaymentMethod(originalOwner,'Visa','1234',13,2030).error);
 D.adminLogin('owner@pawsandclaws.example', 'admin123');
 const walkIn = D.createOwner({fullName: 'Walk In', phone: '01234'}).owner;
+const localProduct = D.createProduct({name:'Local Treat',cat:'Treats',desc:'Demo treat',sku:'LOCAL-1',price:5,cost:2,stock:3,lowAt:1}).product;
+assert(localProduct && !D.updateProduct(localProduct.id,{sku:'LOCAL-2',cost:2.5}).error);
+assert.equal(localProduct.sku,'LOCAL-2'); assert.equal(localProduct.cost,2.5);
+assert(!D.deleteProduct(localProduct.id).error); assert.equal(localProduct.active,false); assert(!D.PRODUCTS.some(product=>product.id===localProduct.id));
 assert(walkIn && walkIn.email === '');
 assert(D.createOwner({fullName: 'Other Walk In'}).owner, 'blank email is not a shared account');
 assert(!D.updateOwner(walkIn.id, {phone: '56789', email: ''}).error);
@@ -85,8 +89,11 @@ console.log('Local member/admin workflow tests passed.');
 // No deployed data or network calls are used.
 let who = null;
 const tables = {};
+const storedFiles = new Map();
+const deletedFiles = [];
 let serial = 0;
 const db = {
+ system: { async get(table, id) { assert.equal(table, '_storage'); return storedFiles.get(id) || null; } },
  query(table) {
    let rows = tables[table] ||= [];
    const query = { withIndex(name, fn) { const q = {eq(k,v){rows=rows.filter(r=>r[k]===v);return q;}};fn(q);return query; },
@@ -102,10 +109,14 @@ const backend = {console,crypto,process:{env:{}},mutation:x=>x,query:x=>x,v:{str
 vm.createContext(backend);
 let source=fs.readFileSync(path.join(root,'convex/domain.js'),'utf8').replace(/^import .*;\r?\n/gm,'').replace(/export const (\w+) =/g,'globalThis.$1 =');
 vm.runInContext(source,backend);
-const ctx={db,auth:{getUserIdentity:async()=>who}};
+const ctx={db,auth:{getUserIdentity:async()=>who},storage:{
+ async generateUploadUrl(){return 'https://upload.example.test/';},
+ async getUrl(id){return storedFiles.has(id)?'https://files.example.test/'+id:null;},
+ async delete(id){deletedFiles.push(id);storedFiles.delete(id);}
+}};
 const run=(op,payload={})=>backend.mutate.handler(ctx,{op,payload});
 (async()=>{
- await db.insert('listings',{id:'pet-public',status:'available'});
+ await db.insert('listings',{id:'pet-public',name:'Test Pet',species:'Dog',breed:'Mixed',sex:'Male',ageMonths:12,price:100,status:'available',listedAt:'2026-10-01'});
  await db.insert('cms',{id:'site',hours:[],catalogConfirmed:true});
  const anonymous=await backend.bootstrap.handler(ctx);
  assert.equal(anonymous.listings.length,1);
@@ -160,9 +171,26 @@ const run=(op,payload={})=>backend.mutate.handler(ctx,{op,payload});
  await run('createOwner',{input:{fullName:'New Customer',email:'customer@example.com'}});
  await assert.rejects(run('createOwner',{input:{fullName:'Duplicate',email:'customer@example.com'}}),/already/);
  backend.process.env.PNC_PAYMENTS_ENABLED='true';
- await db.insert('products',{id:'product-audit',name:'Test product',price:5,stock:4,lowAt:1});
+ await db.insert('products',{id:'product-audit',name:'Test product',cat:'Care',desc:'Test product',price:5,stock:4,lowAt:1});
+ storedFiles.set('valid-image',{contentType:'image/png',size:512});
+ await run('registerUpload',{storageId:'valid-image'});
+ await run('updateProduct',{productId:'product-audit',patch:{imageStorageId:'valid-image'}});
+ assert.equal(tables.uploads.find(row=>row.storageId==='valid-image').attachedTo,'product:product-audit');
+ storedFiles.set('oversized-image',{contentType:'image/jpeg',size:9*1024*1024});
+ await assert.rejects(run('registerUpload',{storageId:'oversized-image'}),/up to 8 MB/);
+ assert.deepEqual(deletedFiles,['oversized-image'],'rejected uploads are deleted from storage');
+ const createdProduct=await run('createProduct',{input:{name:'Dental Chews',cat:'Care',desc:'Daily dental chews',sku:'CHEW-1',price:12,cost:6,stock:8,lowAt:2}});
+ await run('updateProduct',{productId:createdProduct.productId,patch:{stock:7}});
+ assert.equal(tables.products.find(row=>row.id===createdProduct.productId).stock,7);
+ await run('deleteProduct',{productId:createdProduct.productId});
+ assert.equal(tables.products.find(row=>row.id===createdProduct.productId).active,false,'archived products preserve their sales references');
+ const createdListing=await run('createListing',{input:{name:'Milo',species:'Dog',breed:'Mixed',sex:'Male',ageMonths:8,price:250,status:'draft',bio:'Friendly young dog'}});
+ await run('updateListing',{listingId:createdListing.listingId,patch:{status:'available',price:275}});
+ assert.equal(tables.listings.find(row=>row.id===createdListing.listingId).price,275);
+ await run('deleteListing',{listingId:createdListing.listingId});
+ assert.equal(tables.listings.find(row=>row.id===createdListing.listingId).status,'archived');
  await db.insert('pets',{id:'pet-audit',ownerId:owner.id,petName:'Test pet',species:'Dog',vaccines:[]});
- await db.insert('services',{id:'svc-deposit',name:'Deposit service',price:100,duration:1,deposit:true,requiresVaccine:false,staff:['Dana']});
+ await db.insert('services',{id:'svc-deposit',name:'Paw Deposit service',group:'grooming',desc:'Test service',price:100,duration:1,deposit:true,requiresVaccine:false,staff:['Dana']});
  who={subject:'user-new',email:'new@example.com'};
  await assert.rejects(run('placeOrder',{items:[{id:'product-audit',qty:1}]}),/disabled|not connected/i);
  await assert.rejects(run('createBooking',{petId:'pet-audit',serviceId:'svc-deposit',providerId:'Dana',date:'2026-10-20',hour:9}),/disabled|not connected/i);
@@ -183,6 +211,11 @@ const run=(op,payload={})=>backend.mutate.handler(ctx,{op,payload});
  await db.insert('serviceGroups',{id:'grooming',name:'Grooming'});
  await db.insert('providers',{id:'Dana',name:'Dr Dana',role:'Veterinarian',title:'DVM',group:'grooming',start:8,end:19,off:[]});
  await db.insert('providers',{id:'Rosa',name:'Rosa',role:'Groomer',title:'Groomer',group:'grooming',start:8,end:19,off:[]});
+ await db.insert('owners',{id:'provider-owner',clerkId:'provider-link-user',fullName:'Provider Link',email:'provider-link@example.com',createdAt:'2026-10-10'});
+ await run('updateProvider',{providerId:'Dana',patch:{ownerId:'provider-owner'}});
+ assert.equal(tables.providers.find(row=>row.id==='Dana').ownerId,'provider-owner');
+ await run('updateProvider',{providerId:'Dana',patch:{ownerId:''}});
+ assert.equal(tables.providers.find(row=>row.id==='Dana').ownerId,undefined,'a provider account can be unlinked');
  const newProvider=await run('createProvider',{input:{name:'Coach Ray',role:'Trainer',title:'Positive Reinforcement Trainer',group:'grooming',start:9,end:17,off:[]}});
  assert.equal(newProvider.providerId,'coach-ray','new staff IDs are generated from names with spaces');
  assert.equal(tables.providers.find(p=>p.id==='coach-ray').active,true);
@@ -191,6 +224,7 @@ const run=(op,payload={})=>backend.mutate.handler(ctx,{op,payload});
  await db.insert('owners',{id:'retail-owner',clerkId:'retail-new-user',fullName:'Retail Teammate',email:'retail-new@example.com',createdAt:'2026-10-09'});
  await run('grantAdminAccess',{input:{ownerId:'retail-owner',role:'retail'}});
  assert(tables.admins.some(a=>a.email==='retail-new@example.com'&&a.role==='retail'));
+ assert.equal(tables.admins.find(a=>a.email==='retail-new@example.com').clerkId,'retail-new-user','granted access is bound to the selected Clerk subject');
  await assert.rejects(run('grantAdminAccess',{input:{ownerId:'retail-owner',role:'desk'}}),/already/);
  who={subject:'retail-new-user',email:'retail-new@example.com',emailVerified:true};
  assert.equal((await backend.bootstrap.handler(ctx)).admins[0].role,'retail','verified account can link to a granted staff role');
@@ -207,8 +241,17 @@ const run=(op,payload={})=>backend.mutate.handler(ctx,{op,payload});
  await assert.rejects(run('staffBooking',{ownerId:owner.id,petId:'pet-audit',serviceId:'svc-deposit'}),/prices need/);
  assert.equal((await run('posCharge',{lines:[{label:'Confirmed counter price',amount:12}],method:'Cash',options:{requestId:'custom-verified-001'}})).total,12);
  await run('updateCMS',{patch:{catalogConfirmed:true}});
- const service=await db.insert('services',{id:'svc-audit',name:'Audit service',price:20,duration:1});
- await run('updateService',{serviceId:'svc-audit',patch:{name:'Edited service',price:25,duration:1.5}});
+ await db.insert('pets',{id:'bird-audit',ownerId:owner.id,petName:'Kiwi',species:'Bird',vaccines:[]});
+ await db.insert('services',{id:'svc-vaccine',name:'Paw Vaccine Required',group:'grooming',desc:'Vaccine-gated care',price:30,duration:1,deposit:false,requiresVaccine:true,staff:['Dana']});
+ await assert.rejects(run('staffBooking',{ownerId:owner.id,petId:'bird-audit',serviceId:'svc-vaccine',providerId:'Dana',date:'2099-10-19',hour:10}),/species-specific vaccine review/);
+ await db.patch(tables.pets.find(row=>row.id==='pet-audit')._id,{vaccines:[
+   {name:'Rabies',date:'2025-01-01',expires:'2026-01-01',status:'approved'},
+   {name:'DHPP',date:'2025-01-01',expires:'2026-01-01',status:'approved'},
+   {name:'Bordetella',date:'2025-01-01',expires:'2026-01-01',status:'approved'}
+ ]});
+ await assert.rejects(run('staffBooking',{ownerId:owner.id,petId:'pet-audit',serviceId:'svc-vaccine',providerId:'Dana',date:'2099-10-19',hour:10}),/Missing required vaccines/,'expired vaccines do not satisfy booking policy');
+ const service=await db.insert('services',{id:'svc-audit',name:'Paw Audit service',price:20,duration:1});
+ await run('updateService',{serviceId:'svc-audit',patch:{name:'Paw Edited service',price:25,duration:1.5}});
  assert.equal((await run('updateService',{serviceId:'svc-audit',patch:{price:25}})).serviceId,'svc-audit');
  assert.equal(tables.services.find(r=>r.id==='svc-audit').price,25);
  await assert.rejects(run('updateService',{serviceId:'svc-audit',patch:{duration:25}}),/duration/);
@@ -235,7 +278,7 @@ const run=(op,payload={})=>backend.mutate.handler(ctx,{op,payload});
  await assert.rejects(run('addLeave',{providerId:'Dana',date:'2099-02-31'}),/Invalid/);
  await db.insert('orders',{id:'closed-order',stage:'done',status:'delivered',ownerId:owner.id});
  await assert.rejects(run('setOrderStage',{orderId:'closed-order',stage:'shipped'}),/Closed/);
- await db.insert('services',{id:'svc-open',name:'Open service',price:20,duration:1,staff:['Dana'],deposit:false,requiresVaccine:false});
+ await db.insert('services',{id:'svc-open',name:'Open service',price:20,duration:2,staff:['Dana'],deposit:false,requiresVaccine:false});
  who={subject:'user-new',email:owner.email,emailVerified:true};
  await assert.rejects(run('createBooking',{petId:'pet-audit',serviceId:'svc-open',providerId:'Dana',date:'2099-10-20',hour:9}),/available/);
  const newBooking=await run('createBooking',{petId:'pet-audit',serviceId:'svc-open',providerId:'Dana',date:'2099-10-20',hour:10});
@@ -274,6 +317,24 @@ const run=(op,payload={})=>backend.mutate.handler(ctx,{op,payload});
  await assert.rejects(run('recordBookingPayment',{bookingId:visitRow.id,amount:71,method:'Cash',options:{requestId:'server-pay-002'}}),/balance/);
  await run('recordBookingPayment',{bookingId:visitRow.id,amount:70,method:'Cash',options:{requestId:'server-pay-003'}});
  assert.equal(visitRow.paid,100); assert.equal(visitRow.paymentStatus,'paid');
+ await run('refundBookingPayment',{bookingId:visitRow.id,amount:20,method:'Cash',options:{requestId:'server-booking-refund-001',reason:'Cancelled add-on'}});
+ await run('refundBookingPayment',{bookingId:visitRow.id,amount:20,method:'Cash',options:{requestId:'server-booking-refund-001',reason:'Cancelled add-on'}});
+ assert.equal(visitRow.paid,80); assert.equal(visitRow.refunded,20); assert.equal(visitRow.storeRefunds.length,1);
+ await run('updateProduct',{productId:'product-audit',patch:{name:'Cat Food'}});
+ assert.equal(tables.products.find(x=>x.id==='product-audit').name,'Cat Food','product names are not subject to the service naming rule');
+ await assert.rejects(run('updateService',{serviceId:'svc-open',patch:{name:'Unbranded service'}}),/include Paw/);
+ await run('updateService',{serviceId:'svc-open',patch:{staff:['Dana','Rosa']}});
+ const durationA=await run('staffBooking',{ownerId:owner.id,petId:'pet-audit',serviceId:'svc-open',providerId:'Dana',date:'2099-10-21',hour:10});
+ await run('staffBooking',{ownerId:owner.id,petId:'pet-audit',serviceId:'svc-open',providerId:'Dana',date:'2099-10-21',hour:13});
+ await run('updateService',{serviceId:'svc-open',patch:{duration:1}});
+ await assert.rejects(run('rescheduleBooking',{bookingId:durationA.bookingId,date:'2099-10-21',hour:12}),/available/,'rescheduling must use the booked duration');
+ await run('staffBooking',{ownerId:owner.id,petId:'pet-audit',serviceId:'svc-open',providerId:'Dana',date:'2099-10-22',hour:10});
+ await assert.rejects(run('staffBooking',{ownerId:owner.id,petId:'pet-audit',serviceId:'svc-open',providerId:'Rosa',date:'2099-10-22',hour:10}),/available/,'a pet cannot have simultaneous appointments');
+ const closedHours=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map(day=>({day,open:'Closed',close:'Closed'}));
+ await run('updateCMS',{patch:{hours:closedHours}});
+ await assert.rejects(run('staffBooking',{ownerId:owner.id,petId:'pet-audit',serviceId:'svc-open',providerId:'Rosa',date:'2099-10-23',hour:10}),/available/,'published closed days must block booking');
+ await run('updateCMS',{patch:{hours:[]}});
+ await assert.rejects(run('clearStaffProfiles'),/appointments|waitlist/,'staff reset must preserve active schedule references');
  who={subject:'user-new',email:owner.email,emailVerified:true};
  await assert.rejects(run('staffBooking',{ownerId:owner.id}),/authorized/);
  await assert.rejects(run('posCharge',{lines:[{productId:'product-audit',qty:1}],method:'Cash',options:{requestId:'unauthorized-sale'}}),/authorized/);

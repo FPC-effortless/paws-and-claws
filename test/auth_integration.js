@@ -9,7 +9,7 @@ let signedIn = { id: "user_first", primaryEmailAddress: { emailAddress: "first@e
 let clerkListener;
 let cleared = 0, applied = 0;
 const client = { setAuth(callback, onAuth) { this.tokenCallback = callback; this.authChange = onAuth; }, query: async () => ({ version: 1, owners: [], admins: [] }),
-  mutation: async () => ({ ok: true }), close: async () => {} };
+  mutation: async () => ({ ok: true }), onUpdate() { return () => {}; }, close: async () => {} };
 const Clerk = {
   user: signedIn,
   session: { getToken: async () => "example-jwt" },
@@ -21,6 +21,7 @@ const sandbox = {
   console, URLSearchParams, CustomEvent, Promise,
   location: { hostname: "paws.example.test", search: "" },
   PNC_CLERK_PUBLISHABLE_KEY: "pk_test_" + Buffer.from("clerk.example.test$").toString("base64"),
+  __PNC_CONVEX_URL__: "https://test-deployment.convex.cloud",
   atob: s => Buffer.from(s, "base64").toString(),
   localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
   sessionStorage: { getItem: () => null },

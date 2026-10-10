@@ -2,6 +2,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const projectRoot = path.join(__dirname, "..");
+const clerkKey = String(process.env.CLERK_PUBLISHABLE_KEY || "").trim();
+const convexUrl = String(process.env.CONVEX_URL || "").trim();
+if (clerkKey && !/^pk_(?:live|test)_/.test(clerkKey)) throw new Error("CLERK_PUBLISHABLE_KEY must be a Clerk publishable key.");
+if (convexUrl && !/^https:\/\/[a-z0-9-]+\.convex\.cloud\/?$/i.test(convexUrl)) throw new Error("CONVEX_URL must be an HTTPS convex.cloud URL.");
+if (process.env.VERCEL_ENV && (!clerkKey || !convexUrl)) throw new Error("CLERK_PUBLISHABLE_KEY and CONVEX_URL are required for Vercel builds.");
 
 function copyBrowserRuntime(packageName, entryFile, destinationName) {
   const sourceDir = path.dirname(require.resolve(packageName));
@@ -46,4 +51,11 @@ for (const page of ["index.html", "services.html", "shop.html", "pets.html", "me
 fs.mkdirSync(path.join(outputDirectory, "admin"));
 fs.copyFileSync(path.join(projectRoot, "admin", "index.html"), path.join(outputDirectory, "admin", "index.html"));
 fs.cpSync(path.join(projectRoot, "assets"), path.join(outputDirectory, "assets"), { recursive: true });
+const runtimeConfig = "window.PNC_CLERK_PUBLISHABLE_KEY=" + JSON.stringify(clerkKey) + ";\nwindow.__PNC_CONVEX_URL__=" + JSON.stringify(convexUrl) + ";\n";
+fs.writeFileSync(path.join(outputDirectory, "assets", "js", "runtime-config.js"), runtimeConfig);
+for (const page of ["index.html", "services.html", "shop.html", "pets.html", "membership.html", "events.html", "account.html", "contact.html", "admin/index.html"]) {
+  const target = path.join(outputDirectory, page);
+  const html = fs.readFileSync(target, "utf8");
+  fs.writeFileSync(target, html.replace("</head>", '  <script src="/assets/js/runtime-config.js"></script>\n</head>'));
+}
 console.log("Built the static website in dist/.");

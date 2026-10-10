@@ -28,7 +28,7 @@
      for the whole site. A page may override it earlier with
      window.PNC_CLERK_PUBLISHABLE_KEY, but there is no reason to:
      one place, one deploy target. The SECRET key never goes here. */
-  const DEFAULT_KEY = "pk_live_Y2xlcmsucGF3c2FuZGNsYXdzY29ubmVjdGh1Yi5jb20k";
+  const DEFAULT_KEY = "";
   const PUBLISHABLE_KEY = typeof global.PNC_CLERK_PUBLISHABLE_KEY === "string"
     ? global.PNC_CLERK_PUBLISHABLE_KEY
     : DEFAULT_KEY;

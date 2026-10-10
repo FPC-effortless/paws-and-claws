@@ -10,7 +10,7 @@ import { v } from "convex/values";
 const TABLES = [
   "owners", "pets", "bookings", "orders", "listings", "products", "services",
   "serviceGroups", "providers", "staffLeave", "waitlist", "messages",
-  "notifications", "payments", "audit", "admins", "inquiries", "contactMessages", "cms"
+  "notifications", "payments", "audit", "admins", "uploads", "inquiries", "contactMessages", "cms"
 ];
 
 function requireSecret(given) {
@@ -27,8 +27,7 @@ export const all = mutation({
     if (!db || typeof db !== "object") throw new Error("Snapshot is not an object.");
 
     for (const table of TABLES) {
-      const rows = await ctx.db.query(table).collect();
-      for (const row of rows) await ctx.db.delete(row._id);
+      if (await ctx.db.query(table).first()) throw new Error("Bootstrap is one-time only. This deployment already contains data.");
     }
 
     const counts = {};

@@ -59,11 +59,11 @@ The local demo seed is available only on localhost/file-style development enviro
 Run:
 
 ```bash
-npm install
+npm ci
 npm test
 ```
 
-The suite covers the data layer, Clerk demo-mode behavior, and production fail-closed guards.
+The suite type-checks the Convex functions and covers the data layer, Clerk demo-mode behavior, authorization, upload ownership and validation, booking conflicts, refunds, catalog lifecycle operations, and production fail-closed guards.
 
 GitHub Actions runs the same regression and production-safety suite for pushes to `main` and pull requests. Vercel builds and deploys the project from the connected GitHub repository.
 
@@ -96,7 +96,7 @@ In the Vercel project, add these environment variables for Production (and Previ
 | `CLERK_PUBLISHABLE_KEY` | Clerk production publishable key beginning `pk_live_` |
 | `CONVEX_URL` | Production Convex deployment URL ending in `.convex.cloud` |
 
-The static client uses the public Clerk publishable key in `assets/js/clerk.js` and the Convex deployment URL in `assets/js/convexClient.js`. Keep them aligned with the Production values above when rotating either value. Both values are public by design; the Clerk secret key is not needed by this client or by Convex's Clerk JWT verification. Never put a Clerk secret key or bootstrap secret in frontend code. `npm run build` copies the pinned Convex browser SDK into the deployed assets so the site does not depend on a third-party CDN at runtime.
+The build writes these two public values to `dist/assets/js/runtime-config.js` and loads that file before the application scripts. Vercel builds fail when either value is absent, so rotating a value only requires updating the project environment and rebuilding. The Clerk secret key is not needed by this client or by Convex's Clerk JWT verification. Never put a Clerk secret key or bootstrap secret in frontend code. `npm run build` also copies the pinned Convex browser SDK into the deployed assets so the site does not depend on a third-party CDN at runtime.
 
 ### 3. Deploy Convex
 
@@ -113,7 +113,7 @@ For production, deploy the Convex backend after setting the production issuer:
 npx convex deploy
 ```
 
-Keep the Vercel values above aligned with the defaults in `assets/js/clerk.js` and `assets/js/convexClient.js`. Clerk must also allow the website's production origin and redirect URLs. The initial production Convex database should be populated with reviewed real data; do not run the demo snapshot bootstrap against production.
+Clerk must allow the website's production origin and redirect URLs. The frontend contains no production Clerk or Convex defaults; it reads the build-generated runtime configuration. The initial production Convex database should be populated with reviewed real data. The seed mutation refuses to run if any application table already contains data, preventing a bootstrap from overwriting an initialized deployment.
 
 ### 4. Bootstrap a non-production/demo deployment
 
@@ -133,7 +133,7 @@ PNC_BOOTSTRAP_SECRET="..." \
 node tools/seed-convex.cjs
 ```
 
-Review the seed data before importing it into any real environment. The repository seed contains demonstration customer and operational records.
+Review the seed data before importing it into an empty non-production environment. The repository seed contains demonstration customer and operational records and cannot replace an initialized database.
 
 ## Payments
 
@@ -194,7 +194,7 @@ Vercel production deploys are test-gated by GitHub Actions:
 
 Pull requests run the same test job without updating the Vercel production deployment.
 
-Vercel serves the static site with short-lived asset caching and basic browser security headers.
+Vercel serves the static site with short-lived asset caching, a non-cached runtime configuration, and a Content Security Policy plus browser security headers.
 
 The build creates `dist/` containing only the public HTML and assets. Vercel publishes this folder; backend code, tools, tests, dependencies, and local environment files are excluded. `npm run test:build` checks deployment isolation and referenced assets.
 
