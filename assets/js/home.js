@@ -29,8 +29,6 @@
       bookingLink.href = D.catalogReady() ? 'services.html#book' : 'contact.html';
       bookingLink.innerHTML = 'Explore pet care <span aria-hidden="true">→</span>';
     }
-    const services = $("#services");
-    if (services) services.hidden = !D.catalogReady();
     const visit = $("#storeVisitDetails");
     if (visit) visit.textContent = [cms.address, cms.phone].filter(Boolean).join(" · ");
 
@@ -49,7 +47,6 @@
   function renderGroups() {
     const host = $("#groupGrid");
     if (!host) return;
-    const ready = D.catalogReady();
     const services = (D.SERVICES || []).filter(function (service) { return service.active !== false; });
     if (!services.length) {
       host.innerHTML = '<div class="empty-card" style="grid-column:1/-1"><span class="ico">&#128062;</span><b>No services are published yet</b><p>Contact the store for current care options.</p></div>';
@@ -64,7 +61,7 @@
         '<span class="cat-ico">' + art + "</span>" +
         "<h3>" + esc(service.name) + "</h3>" +
         "<p>" + esc(service.desc || "") + "</p>" +
-        '<span class="home-card-action">' + (ready ? money(service.price) + " · " + duration : "Enquire") + " →</span>" +
+        '<span class="home-card-action">' + money(service.price) + " · " + duration + " →</span>" +
         "</a>";
     }).join("");
   }
@@ -114,10 +111,6 @@
   function renderBestsellers() {
     const host = $("#featuredGrid");
     if (!host) return;
-    if (!D.catalogReady()) {
-      host.innerHTML = '<p>Product prices and availability are being confirmed. Ask our team before visiting.</p>';
-      return;
-    }
     const prods = (PNC && PNC.PRODUCTS ? PNC.PRODUCTS.slice() : []).slice(0, 4);
     host.innerHTML = prods.map(function (p) {
       const badge = p.badge ? '<span class="badge tag tag--yellow">' + esc(p.badge) + "</span>" : "";
@@ -129,8 +122,8 @@
           "<p>" + esc(p.desc) + "</p>" +
           '<div class="product-foot">' +
             '<span class="product-price">' + money(p.price) + "</span>" +
-            '<button class="add-btn" data-add="' + p.id + '"' + (p.stock <= 0 ? ' disabled' : '') + '>' +
-              '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> Add' +
+            '<button class="add-btn" data-add="' + p.id + '"' + (p.stock <= 0 || !D.catalogReady() ? ' disabled' : '') + '>' +
+              '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> ' + (D.catalogReady() ? 'Add' : 'Ask in store') +
             "</button>" +
           "</div>" +
         "</div>" +

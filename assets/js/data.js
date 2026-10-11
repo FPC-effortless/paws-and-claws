@@ -1190,7 +1190,6 @@
     const s = byId(db.services, serviceId);
     if (!s) return { error: "Service not found." };
     const values = { ...s, ...patch };
-    if (patch.name !== undefined && !/paw/i.test(String(patch.name))) return { error: "Service names must include Paw." };
     const error = validateServiceValues(values);
     if (error) return { error };
     ["name", "group", "price", "duration", "desc", "popular", "deposit", "requiresVaccine", "staff", "active", "imageUrl"].forEach((k) => {
@@ -1224,7 +1223,6 @@
       staff: Array.isArray(input.staff) ? input.staff.slice() : [], desc: String(input.desc || "").trim(),
       popular: !!input.popular, imageUrl: String(input.imageUrl || "")
     };
-    if (!/paw/i.test(values.name)) return { error: "Service names must include Paw." };
     const error = validateServiceValues(values);
     if (error) return { error };
     db.services.push(values);
@@ -1351,16 +1349,6 @@
     (db.services || []).forEach(service => { service.staff = []; service.active = false; });
     db.admins = (db.admins || []).filter(entry => entry.role === "super");
     audit("Staff setup cleared", count + " profiles archived"); persist(); return { ok: true, providersArchived: count };
-  }
-  function removeNonPawServices() {
-    if (remoteEnabled()) return remoteMutation("removeNonPawServices", {});
-    if (productionMode()) return { error: "Secure backend is not available." };
-    const actor = currentAdmin();
-    if (!actor || !can("cms.edit")) return { error: "Not authorized." };
-    const targets = (db.services || []).filter(service => !/paw/i.test(service.name));
-    if (targets.some(service => (db.bookings || []).some(booking => booking.serviceId === service.id) || (db.waitlist || []).some(row => row.serviceId === service.id))) return { error: "A non-Paw service has history. Archive it instead." };
-    db.services = db.services.filter(service => /paw/i.test(service.name));
-    audit("Non-Paw services removed", targets.length + " services removed"); persist(); return { ok: true, removed: targets.length };
   }
   /* ------------------------- staff & waitlist ------------------------- */
   function addLeave(providerId, date, reason) {
@@ -1759,7 +1747,7 @@ function prepareStoreSale(lines, products, method, options) {
     /* inventory */
     adjustStock, updateProduct, createProduct, deleteProduct,
     /* cms */
-    updateCMS, updateService, createService, deleteService, updateProvider, createProvider, deleteProvider, grantAdminAccess, revokeAdminAccess, clearStaffProfiles, removeNonPawServices,
+    updateCMS, updateService, createService, deleteService, updateProvider, createProvider, deleteProvider, grantAdminAccess, revokeAdminAccess, clearStaffProfiles,
     /* staff */
     addLeave, removeLeave, joinWaitlist, removeWaitlist,
     /* crm */

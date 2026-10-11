@@ -248,8 +248,8 @@
                     <p class="hint">Enter both times for each open day. Leave both blank for a closed day. Leave every day blank until the real hours are confirmed.</p>
                     <div id="cmsHours"></div>
                   </fieldset>
-                  <div class="field"><label><input type="checkbox" id="cmsCatalogConfirmed"> Publish verified catalog and service prices</label>
-                    <p class="hint">Enable only after the products, services and pet listings match the real store, with correct naira prices and availability. Until then, staff can record confirmed prices using custom POS lines.</p></div>
+                  <div class="field"><label><input type="checkbox" id="cmsCatalogConfirmed"> Confirm prices for bookings and POS; publish pet listings</label>
+                    <p class="hint">Active products and services are visible to everyone. Enable only after their real naira prices and availability are verified; this also enables booking/POS catalog prices and publishes pet listings. Until then, staff can record confirmed prices using custom POS lines.</p></div>
                   <button class="btn btn-primary btn-block" type="submit">Save content</button>
                   <p class="hint" id="cmsMsg" role="status" style="margin:10px 0 0"></p>
                 </form>
@@ -281,8 +281,7 @@
                     <textarea class="input" id="svcDesc" rows="2"></textarea></div>
                   <div class="field"><label for="svcImage">Service image</label><input class="input" id="svcImage" type="file" accept="image/jpeg,image/png,image/webp,image/gif"><p class="hint">JPG, PNG, WEBP or GIF up to 8 MB.</p></div>
                   <div class="form-grid"><button class="btn btn-primary" type="submit" id="svcSave">Save service</button><button class="btn btn-ghost" type="button" id="svcNew">New service</button><button class="btn btn-ghost" type="button" id="svcDelete" style="color:var(--danger)">Archive service</button></div>
-                  <button class="btn btn-ghost btn-sm" type="button" id="removeNonPawServices" style="color:var(--danger);margin-top:10px">Remove non-Paw services</button>
-                  <p class="hint">New or renamed services must include “Paw”. This removes older services that do not meet that naming rule and have no booking history.</p>
+                  <p class="hint">Use the service name customers recognize. Active services and prices are public immediately; booking actions stay off until catalog prices are confirmed in Site content.</p>
                   <p class="hint" id="svcMsg" role="status" style="margin:10px 0 0"></p>
                 </form>
               </div>
@@ -353,13 +352,13 @@
     </div>
   </div>
 
-  <script src="../assets/js/data.js?v=20261010-servicesync1"></script>
+  <script src="../assets/js/data.js?v=20261011-admin-cms1"></script>
   <script src="../assets/js/app.js?v=20261009-polish3"></script>
   <script src="../assets/js/convexClient.js?v=20261010-servicesync1"></script>
   <!-- Clerk identity layer. The publishable key lives in clerk.js.
        Without a key the gate falls back to the demo accounts above. -->
   <script src="../assets/js/clerk.js?v=20261009-polish3"></script>
   <script src="../assets/js/store-admin.js?v=20261009-polish3"></script>
-  <script src="../assets/js/admin.js?v=20261009-catalog1"></script>
+  <script src="../assets/js/admin.js?v=20261011-admin-cms1"></script>
 </body>
 </html>

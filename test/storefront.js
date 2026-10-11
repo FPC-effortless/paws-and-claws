@@ -19,6 +19,7 @@ const products = [
   { id: 'two', name: 'Cat toy', desc: 'Feather', cat: 'Toys', species: ['Cat'], age: ['adult'], size: ['small'], price: 20, stock: 5 },
 ];
 const events = {};
+let catalogReady = false;
 const document = {
   readyState: 'loading',
   querySelector: node, querySelectorAll: () => [],
@@ -27,7 +28,7 @@ const document = {
 };
 const context = { document, addEventListener: document.addEventListener, console, URLSearchParams, setTimeout() {},
   location: { search: '' }, localStorage: { getItem: () => savedCart, setItem() {} },
-  PNC_DB: { PRODUCTS: products, PRODUCT_BY_ID: Object.fromEntries(products.map(p => [p.id, p])), catalogReady: () => true,
+  PNC_DB: { PRODUCTS: products, PRODUCT_BY_ID: Object.fromEntries(products.map(p => [p.id, p])), catalogReady: () => catalogReady,
     db: { products }, currentOwner: () => null, money: n => '$' + n.toFixed(2),
     esc: s => String(s), titleCase: s => s, speciesIcon: () => '' },
 };
@@ -37,6 +38,9 @@ for (const file of ['app.js', 'shop.js']) vm.runInContext(fs.readFileSync(path.j
 // Initialize only the shop controller; shared chrome is tested in the browser.
 events.DOMContentLoaded.at(-1)();
 assert.equal(node('#resultCount').textContent, '2 products');
+assert(node('#productGrid').innerHTML.includes('$10.00'), 'shop shows admin-set prices before catalog checkout is confirmed');
+assert(node('#productGrid').innerHTML.includes('disabled'), 'products remain non-purchasable until catalog prices are confirmed');
+catalogReady = true;
 node('#productSearch').listeners.input({ target: { value: 'SALMON' } });
 assert.equal(node('#resultCount').textContent, '1 product');
 node('#priceRange').listeners.input({ target: { value: '0', max: '20' } });

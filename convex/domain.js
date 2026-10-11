@@ -347,7 +347,11 @@ async function bootstrapData(ctx) {
     products: (await addImageUrls(await bounded(ctx.db.query("products"), "products"))).filter(product => product.active !== false).map(({ cost, ...p }) => p),
     services: (await addImageUrls(await bounded(ctx.db.query("services"), "services"))).filter(service => service.active !== false),
     serviceGroups: await bounded(ctx.db.query("serviceGroups"), "serviceGroups"),
-    providers: (await bounded(ctx.db.query("providers"), "providers")).filter(provider => provider.active !== false),
+    // Public profiles include only fields used by the directory and slot
+    // picker. Never expose the account link used to authenticate staff.
+    providers: (await bounded(ctx.db.query("providers"), "providers"))
+      .filter(provider => provider.active !== false)
+      .map(({ id, name, role, title, group, icon, start, end, off, bio }) => ({ id, name, role, title, group, icon, start, end, off, bio })),
     staffLeave: (await bounded(ctx.db.query("staffLeave"), "staffLeave")).map(l => ({ providerId: l.providerId, date: l.date })),
     occupiedSlots: (await bounded(ctx.db.query("bookings"), "bookings")).filter(b => b.date >= today() && activeBookingStatus(b.status))
       .map(b => ({ providerId: b.providerId, date: b.date, hour: b.hour, duration: b.duration })),
@@ -356,9 +360,10 @@ async function bootstrapData(ctx) {
     cms,
     inquiryCounter: 0
   };
-  const publicCatalog = data => cms?.catalogConfirmed ? data : {
-    ...data, listings: [], products: [], services: [], serviceGroups: [], providers: []
-  };
+  // Active products and services are public catalog content, independent of
+  // the transaction safety switch. That switch still gates bookings/POS and
+  // pet listings until an admin confirms their real-world details.
+  const publicCatalog = data => cms?.catalogConfirmed ? data : { ...data, listings: [] };
   if (!id) return publicCatalog(publicData);
 
   const admin = await adminFor(ctx);
@@ -367,6 +372,9 @@ async function bootstrapData(ctx) {
     out.admins = [admin];
     if (permission(admin, "inventory.edit")) out.products = await addImageUrls(await bounded(ctx.db.query("products"), "products"));
     if (admin.role === "super") {
+      // Give a first-run super admin editable CMS defaults without exposing
+      // unconfigured site details to public or non-super-admin bootstraps.
+      out.cms = cms || { ...DEFAULT_CMS, hours: [], toggles: {} };
       out.admins = (await bounded(ctx.db.query("admins"), "admins")).map(({ _id, clerkId, ...safe }) => safe);
       out.providers = await bounded(ctx.db.query("providers"), "providers");
       out.services = await addImageUrls(await bounded(ctx.db.query("services"), "services"));
@@ -448,7 +456,7 @@ export const bootstrap = query({
 
 const OPS = new Set([
   "generateUploadUrl","registerUpload",
-  "grantAdminAccess","revokeAdminAccess","clearStaffProfiles","removeNonPawServices",
+  "grantAdminAccess","revokeAdminAccess","clearStaffProfiles",
   "ensureOwner","markNotificationRead","markNotificationsRead","updateOwner","addPet","updatePet",
   "removePet","addVaccine","setVaccineStatus","createBooking","rescheduleBooking","cancelBooking",
   "setBookingStatus","addBookingNote","placeOrder","setOrderStage","refund","setListingStatus","createListing","updateListing","deleteListing",
@@ -536,21 +544,6 @@ export const mutate = mutation({
       }
       await audit(ctx, admin, "Staff setup cleared", providers.length + " profiles archived, " + leaves.length + " leave blocks, " + accessRemoved + " staff access entries removed");
       return { ok: true, providersArchived: providers.length, accessRemoved };
-    }
-
-    if (op === "removeNonPawServices") {
-      const admin = await adminFor(ctx);
-      requirePermission(admin, "cms.edit");
-      const services = await ctx.db.query("services").collect();
-      const targets = services.filter(service => !/paw/i.test(service.name));
-      const bookings = await ctx.db.query("bookings").collect();
-      const waitlist = await ctx.db.query("waitlist").collect();
-      if (targets.some(service => bookings.some(booking => booking.serviceId === service.id) || waitlist.some(row => row.serviceId === service.id))) {
-        throw new Error("A non-Paw service has history. Archive it from the service editor instead.");
-      }
-      for (const service of targets) await ctx.db.delete(service._id);
-      await audit(ctx, admin, "Non-Paw services removed", targets.length + " services removed");
-      return { ok: true, removed: targets.length };
     }
 
     if (op === "revokeAdminAccess") {
@@ -1124,7 +1117,7 @@ export const mutate = mutation({
           const listings = await ctx.db.query("listings").collect();
           if (!products.length || !services.some(service => service.active !== false)) throw new Error("Add products and at least one active service before publishing the catalog.");
           if (products.some(item => !item.name?.trim() || !item.cat?.trim() || !item.desc?.trim() || !Number.isFinite(item.price) || item.price < 0 || !Number.isInteger(item.stock) || item.stock < 0)) throw new Error("Complete every product before publishing the catalog.");
-          if (services.some(item => item.active !== false && (!/paw/i.test(item.name) || !Number.isFinite(item.price) || item.price < 0 || !item.staff?.length))) throw new Error("Complete every active service and include Paw in each name before publishing the catalog.");
+          if (services.some(item => item.active !== false && (!item.name?.trim() || !Number.isFinite(item.price) || item.price < 0 || !item.staff?.length))) throw new Error("Complete every active service with a name, valid price and at least one care-team member before publishing the catalog.");
           if (listings.some(item => !["draft","available","reserved","sold","archived"].includes(item.status) || !item.name?.trim() || !Number.isFinite(item.price) || item.price < 0)) throw new Error("Complete every pet listing before publishing the catalog.");
         }
         patch.catalogConfirmed = p.patch.catalogConfirmed;
@@ -1149,7 +1142,7 @@ export const mutate = mutation({
       if (p.patch?.toggles !== undefined) patch.toggles = p.patch.toggles;
       if (cms) await ctx.db.patch(cms._id, patch);
       else {
-        cms = { id: "site", siteName: "", emergencyHotline: "", emergencyNote: "", hours: [], toggles: {}, address: "", phone: "", email: "", ...patch };
+        cms = { ...DEFAULT_CMS, hours: [], toggles: {}, ...patch };
         await ctx.db.insert("cms", cms);
       }
       await audit(ctx, admin, "CMS update", Object.keys(patch).join(", "));
@@ -1169,7 +1162,7 @@ export const mutate = mutation({
       }
       if (input.name !== undefined) {
         const name = String(input.name).trim();
-        if (!/paw/i.test(name)) throw new Error("Service names must include Paw.");
+        if (!name) throw new Error("Enter a service name.");
         patch.name = name;
       }
       if (input.group !== undefined) {
@@ -1225,7 +1218,6 @@ export const mutate = mutation({
       const price = Number(input.price);
       const duration = Number(input.duration);
       if (!name) throw new Error("Enter a service name.");
-      if (!/paw/i.test(name)) throw new Error("Service names must include Paw.");
       if (!Number.isFinite(price) || price < 0) throw new Error("Invalid service price.");
       if (!Number.isFinite(duration) || duration <= 0 || duration > 24) throw new Error("Invalid service duration.");
       const service = {

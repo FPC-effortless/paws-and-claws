@@ -13,20 +13,16 @@
   const D = window.PNC_DB;
   const esc = D.esc;
   const money = D.money;
-  const publicPrice = n => D.catalogReady() ? money(n) : "Price confirmed in store";
+  const publicPrice = n => money(n);
 
   function syncCatalogAvailability() {
     const ready = D.catalogReady();
-    ['#services', '#our-team', '#book', '#svcStats', '.quick-book'].forEach(selector => {
+    ['#book', '#svcStats', '.quick-book'].forEach(selector => {
       const element = $(selector); if (element) element.hidden = !ready;
     });
     if (!ready) {
-      const title = $('#heroTitle');
-      if (title) title.textContent = 'Ask us about pet care services';
-      const lead = $('.hero-grid .lead');
-      if (lead) lead.textContent = 'Our launch services are being confirmed. Contact our Amasoma team about grooming, limited daycare, scheduled vet days or GoodPaws training.';
       const actions = $('.hero-grid .hero-cta');
-      if (actions) actions.innerHTML = '<a class="btn btn-primary btn-lg" href="contact.html">Contact the store</a>';
+      if (actions) actions.innerHTML = '<a class="btn btn-primary btn-lg" href="contact.html">Ask about booking</a><a class="btn btn-ghost btn-lg" href="#our-team">Meet the care team</a>';
     }
   }
 

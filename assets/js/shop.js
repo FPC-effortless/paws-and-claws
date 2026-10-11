@@ -114,7 +114,7 @@
           ((p.size || []).length ? '<span>Size ' + D.esc(p.size.join('/')) + '</span>' : '') +
         '</div>' +
         '<div class="price-row">' +
-          '<span class="price">' + (D.catalogReady() ? D.money(p.price) : 'Price confirmed in store') + '</span>' +
+          '<span class="price">' + D.money(p.price) + '</span>' +
           '<button type="button" class="btn btn-teal btn-sm add-btn" data-add="' + p.id + '"' +
             (p.stock <= 0 || !D.catalogReady() ? ' disabled' : '') + '>' +
             (!D.catalogReady() ? 'Visit the store' : p.stock <= 0 ? 'Sold out' : 'Add to cart') + '</button>' +
@@ -145,27 +145,25 @@
   }
 
   function render() {
-    const list = D.catalogReady() ? filtered() : [];
+    const list = filtered();
     if (D.productionMode && D.productionMode()) {
       const lead = $('#shopLead');
-      if (lead) lead.textContent = D.catalogReady()
-        ? 'Browse our range, then visit our Amasoma store. Pay in naira by cash or bank transfer; no account required. Online checkout is not available yet.'
-        : 'Our product catalog is being confirmed. Visit our Amasoma store and ask about current stock and naira prices. Pay by cash or bank transfer; no account required.';
+      if (lead) lead.textContent = 'Browse products, details and current prices set by our team, then visit our Amasoma store. Online checkout is not available yet.';
     }
     const filters = $('#shopFilters');
-    if (filters) filters.hidden = !D.catalogReady();
+    if (filters) filters.hidden = false;
     const search = $('.shop-search');
-    if (search) search.hidden = !D.catalogReady();
+    if (search) search.hidden = false;
     const toolbar = $('.shop-toolbar');
-    if (toolbar) toolbar.hidden = !D.catalogReady();
+    if (toolbar) toolbar.hidden = false;
     const reset = $('#resetEmpty');
-    if (reset) reset.hidden = !D.catalogReady();
+    if (reset) reset.hidden = false;
     $('#productGrid').innerHTML = list.map(card).join('');
-    $('#resultCount').textContent = D.catalogReady() ? list.length + (list.length === 1 ? ' product' : ' products') : 'Catalog pending';
-    $('#noResults').style.display = list.length ? 'none' : 'block';
-    if (!D.catalogReady()) $('#noResults').firstChild.textContent = 'Our product catalog is being updated with verified naira prices. Contact the store to ask about stock. ';
+    $('#resultCount').textContent = list.length + (list.length === 1 ? ' product' : ' products');
+    const noResults = $('#noResults');
+    noResults.style.display = list.length ? 'none' : 'block';
+    if (!list.length && noResults.firstChild) noResults.firstChild.textContent = 'No active products are available right now. Please check back soon. ';
     renderChips();
-    if (!D.catalogReady()) $('#activeChips').innerHTML = '';
     syncFacets();
   }
 
@@ -273,7 +271,6 @@
     });
 
     const range = $('#priceRange');
-    if (range?.closest('.filter-group')) range.closest('.filter-group').hidden = !D.catalogReady();
     if (range) {
       range.addEventListener('input', function (e) {
         const v = Number(e.target.value), max = Number(e.target.max);

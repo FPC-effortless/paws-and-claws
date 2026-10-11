@@ -10,7 +10,7 @@ const elements = { '#groupGrid': groupGrid, '#services': servicesSection };
 const D = {
   db: { cms: null, listings: [] },
   SERVICES: [{ id: 'seed-service', name: 'Seed service', desc: 'Old browser seed', price: 1, duration: 1, icon: '🐾', active: true }],
-  load() {}, reset() {}, catalogReady() { return true; }, money(n) { return '₦' + n; }, esc(value) { return String(value); }, icon(value) { return value || ''; }
+  load() {}, reset() {}, catalogReady() { return false; }, money(n) { return '₦' + n; }, esc(value) { return String(value); }, icon(value) { return value || ''; }
 };
 const sandbox = {
   console, encodeURIComponent,
@@ -36,5 +36,6 @@ D.SERVICES = [{ id: 'admin-added', name: 'Paw Spa Deluxe', desc: 'Added by an ad
 sandbox.dispatchEvent({ type: 'pnc:data-ready' });
 assert(groupGrid.innerHTML.includes('Paw Spa Deluxe'), 'backend updates replace the homepage service cards');
 assert(groupGrid.innerHTML.includes('data-service-id="admin-added"'), 'homepage cards retain the backend service ID');
+assert(groupGrid.innerHTML.includes('₦25000'), 'homepage shows admin-set service prices before checkout is enabled');
 assert(!groupGrid.innerHTML.includes('Seed service'), 'stale seed services disappear after backend synchronization');
 console.log('Homepage backend-service synchronization passed.');
