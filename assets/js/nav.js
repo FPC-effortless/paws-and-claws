@@ -17,7 +17,6 @@
     { href: "index.html", label: "Home" },
     { href: "services.html", label: "Services", match: ["services.html"] },
     { href: "shop.html", label: "Shop", match: ["shop.html"] },
-    { href: "membership.html", label: "Join now", match: ["account.html", "membership.html"] },
     { href: "pets.html", label: "Pets", match: ["pets.html"] },
     { href: "events.html", label: "Events", match: ["events.html"] },
     { href: "contact.html", label: "Contact", match: ["contact.html"] }
