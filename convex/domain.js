@@ -229,6 +229,10 @@ async function getService(ctx, id) {
 async function getProvider(ctx, id) {
   return await ctx.db.query("providers").withIndex("by_external_id", q => q.eq("id", id)).first();
 }
+async function providerHasActiveService(ctx, providerId) {
+  const services = await ctx.db.query("services").collect();
+  return services.some(service => service.active !== false && (service.staff || []).includes(providerId));
+}
 async function getPet(ctx, id) {
   return await ctx.db.query("pets").withIndex("by_external_id", q => q.eq("id", id)).first();
 }
@@ -402,7 +406,6 @@ async function bootstrapData(ctx) {
       out.listings = await addImageUrls(await bounded(ctx.db.query("listings"), "listings"));
       out.audit = await bounded(ctx.db.query("audit"), "audit");
       out.inquiries = await bounded(ctx.db.query("inquiries"), "inquiries");
-      out.contactMessages = await bounded(ctx.db.query("contactMessages"), "contactMessages");
       return out;
     }
     if (admin.role === "provider") {
@@ -410,7 +413,12 @@ async function bootstrapData(ctx) {
       const ownerIds = [...new Set(bookings.map(b => b.ownerId))];
       const petIds = [...new Set(bookings.map(b => b.petId))];
       out.bookings = bookings;
-      out.owners = (await bounded(ctx.db.query("owners"), "owners")).filter(o => ownerIds.includes(o.id));
+      out.owners = (await bounded(ctx.db.query("owners"), "owners"))
+        .filter(o => ownerIds.includes(o.id))
+        .map(o => ({
+          id: o.id, fullName: o.fullName, email: o.email, phone: o.phone || "",
+          createdAt: o.createdAt, plan: o.plan
+        }));
       out.pets = (await addImageUrls(await bounded(ctx.db.query("pets"), "pets"))).filter(p => petIds.includes(p.id));
       out.messages = (await bounded(ctx.db.query("messages"), "messages")).filter(m => ownerIds.includes(m.ownerId));
       return out;
@@ -1186,8 +1194,15 @@ export const mutate = mutation({
       if (input.staff !== undefined) {
         if (!Array.isArray(input.staff) || !input.staff.length) throw new Error("Assign at least one care-team member.");
         const providers = await ctx.db.query("providers").collect();
-        if (input.staff.some(id => !providers.some(provider => provider.id === id))) throw new Error("Choose valid care-team members.");
+        if (input.staff.some(id => !providers.some(provider => provider.id === String(id) && provider.active !== false))) throw new Error("Choose active care-team members.");
         patch.staff = input.staff.map(String);
+      }
+      if (patch.active === true || (s.active !== false && patch.staff !== undefined)) {
+        const staff = patch.staff || s.staff || [];
+        const providers = await ctx.db.query("providers").collect();
+        if (!staff.length || staff.some(id => !providers.some(provider => provider.id === id && provider.active !== false))) {
+          throw new Error("Assign at least one active care-team member to an active service.");
+        }
       }
       if (!patch.name && !s.name) throw new Error("Enter a service name.");
       if (input.imageStorageId !== undefined) { await claimImage(ctx, input.imageStorageId, "service:" + s.id); patch.imageStorageId = input.imageStorageId; }
@@ -1205,7 +1220,7 @@ export const mutate = mutation({
       if (!group) throw new Error("Choose a valid department.");
       const providers = await ctx.db.query("providers").collect();
       const staff = Array.isArray(input.staff) ? input.staff.map(String) : [];
-      if (!staff.length || staff.some(id => !providers.some(provider => provider.id === id))) throw new Error("Assign valid care-team members.");
+      if (!staff.length || staff.some(id => !providers.some(provider => provider.id === id && provider.active !== false))) throw new Error("Assign active care-team members.");
       const name = String(input.name || "").trim();
       const price = Number(input.price);
       const duration = Number(input.duration);
@@ -1265,6 +1280,9 @@ export const mutate = mutation({
         if (typeof input.active !== "boolean") throw new Error("Choose whether this staff member is active.");
         patch.active = input.active;
       }
+      if (patch.active === false && await providerHasActiveService(ctx, provider.id)) {
+        throw new Error("Reassign this staff member's active services before archiving their profile.");
+      }
       const values = { ...provider, ...patch };
       if (!values.name || !values.role || !values.title) throw new Error("Enter the staff member's name, role and title.");
       if (!Number.isFinite(values.start) || !Number.isFinite(values.end) || values.start < 0 || values.end > 24 || values.end <= values.start) throw new Error("Enter valid working hours.");
@@ -1308,6 +1326,9 @@ export const mutate = mutation({
       const provider = await ctx.db.query("providers").filter(q => q.eq(q.field("id"), String(p.providerId || ""))).first();
       if (!provider) throw new Error("Staff member not found.");
       if (provider.active === false) throw new Error("This staff profile is already archived.");
+      if (await providerHasActiveService(ctx, provider.id)) {
+        throw new Error("Reassign this staff member's active services before archiving their profile.");
+      }
       await ctx.db.patch(provider._id, { active: false });
       await audit(ctx, admin, "Staff profile archived", provider.id + " — " + provider.name);
       return { ok: true, providerId: provider.id, active: false };

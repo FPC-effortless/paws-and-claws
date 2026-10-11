@@ -722,6 +722,7 @@
     super: { everything: true },
     desk: {
       "crm.view": true, "crm.edit": true, "bookings.manage": true, "bookings.view": true,
+      "bookings.notes": true,
       "messages.send": true, "payments.take": true, "payments.refund": false,
       "cms.edit": false, "inventory.edit": false, "listings.edit": false, "reports.view": false,
       "staff.manage": false, "roles.edit": false
