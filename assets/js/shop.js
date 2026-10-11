@@ -146,25 +146,31 @@
 
   function render() {
     const list = filtered();
+    /* A verified catalog can still be browseable before checkout is enabled.
+       Treat an empty product collection—not its transaction status—as the
+       unavailable storefront state. */
+    const available = catalog().length > 0;
     if (D.productionMode && D.productionMode()) {
       const lead = $('#shopLead');
       if (lead && !(D.db.cms && D.db.cms.content && D.db.cms.content.shop && D.db.cms.content.shop.lead)) lead.textContent = 'Browse products, details and current prices set by our team, then visit our Amasoma store. Online checkout is not available yet.';
     }
     const filters = $('#shopFilters');
-    if (filters) filters.hidden = false;
+    if (filters) filters.hidden = !available;
     const search = $('.shop-search');
-    if (search) search.hidden = false;
+    if (search) search.hidden = !available;
     const toolbar = $('.shop-toolbar');
-    if (toolbar) toolbar.hidden = false;
+    if (toolbar) toolbar.hidden = !available;
     const reset = $('#resetEmpty');
-    if (reset) reset.hidden = false;
-    $('#productGrid').innerHTML = list.map(card).join('');
-    $('#resultCount').textContent = list.length + (list.length === 1 ? ' product' : ' products');
+    if (reset) reset.hidden = !available;
+    const availability = $('#shopAvailability');
+    if (availability) availability.hidden = available;
+    $('#productGrid').innerHTML = available ? list.map(card).join('') : '';
+    $('#resultCount').textContent = available ? list.length + (list.length === 1 ? ' product' : ' products') : '';
     const noResults = $('#noResults');
-    noResults.style.display = list.length ? 'none' : 'block';
-    if (!list.length && noResults.firstChild) noResults.firstChild.textContent = 'No active products are available right now. Please check back soon. ';
-    renderChips();
-    syncFacets();
+    noResults.style.display = available && !list.length ? 'block' : 'none';
+    if (available && !list.length && noResults.firstChild) noResults.firstChild.textContent = 'No products match those filters. Try clearing a filter or searching another term. ';
+    $('#activeChips').hidden = !available;
+    if (available) { renderChips(); syncFacets(); }
   }
 
   function reset() {
@@ -180,23 +186,6 @@
     const ro = $('#priceReadout');
     if (ro) ro.textContent = 'Any price';
     render();
-  }
-
-  /* ---------- fulfillment ---------- */
-  function setFul(v) {
-    state.ful = v;
-    $$('.ful-opt').forEach(b => {
-      const on = b.dataset.ful === v;
-      b.classList.toggle('active', on);
-      b.setAttribute('aria-pressed', on ? 'true' : 'false');
-    });
-    const note = $('#fulNote');
-    if (note) {
-      note.textContent = D.productionMode && D.productionMode()
-        ? 'Online ordering and fulfillment are not available yet.'
-        : (v === 'pickup' ? 'Demo pickup at our Amasoma store' : 'Demo delivery');
-    }
-    PNC.toast((D.productionMode && D.productionMode()) ? 'Online ordering is not available yet' : (v === 'pickup' ? 'Demo pickup selected' : 'Demo delivery selected'));
   }
 
   /* ---------- totals & checkout ---------- */
@@ -289,10 +278,6 @@
     $('#clearFilters').addEventListener('click', reset);
     $('#resetEmpty').addEventListener('click', reset);
     $('#sortBy').addEventListener('change', function (e) { state.sort = e.target.value; render(); });
-
-    $$('.ful-opt').forEach(function (b) {
-      b.addEventListener('click', function () { setFul(b.dataset.ful); });
-    });
 
     /* deep link: shop.html?cat=Toys */
     const cat = new URLSearchParams(window.location.search).get('cat');

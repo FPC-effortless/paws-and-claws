@@ -63,14 +63,6 @@
           <div class="filter-group" style="border-top:none">
             <button class="btn btn-ghost btn-block" id="clearFilters">Clear filters</button>
           </div>
-                    <div class="filter-group" style="border-top:none;padding-top:0">
-            <strong style="display:block;font-size:.82rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:8px">Fulfillment</strong>
-            <div style="display:flex;gap:8px">
-              <button type="button" class="btn btn-sm btn-ghost ful-opt" aria-pressed="true" data-ful="delivery" style="flex:1">Delivery</button>
-              <button type="button" class="btn btn-sm btn-ghost ful-opt" aria-pressed="false" data-ful="pickup" style="flex:1">Pickup</button>
-            </div>
-            <p id="fulNote" style="font-size:.84rem;color:var(--ink-soft);margin:8px 0 0">Online ordering and delivery are not available yet.</p>
-          </div>
           <div class="filter-group" style="border-top:none;padding-top:0">
             <a class="btn btn-teal btn-block" href="membership.html">Create a free account</a>
           </div>
@@ -94,6 +86,11 @@
             </div>
           </div>
           <div class="chips" id="activeChips" style="margin-bottom:20px"></div>
+          <section class="shop-availability" id="shopAvailability" hidden aria-live="polite">
+            <span class="shop-availability-icon" aria-hidden="true">🐾</span>
+            <div><span class="eyebrow">In-store shopping</span><h2>Our online catalog is being updated</h2><p>Visit the store or contact the team for today’s stock, product advice, and prices.</p></div>
+            <div class="shop-availability-actions"><a class="btn btn-primary" href="contact.html">Ask about availability</a><a class="btn btn-ghost" href="services.html">Explore pet care</a></div>
+          </section>
           <div class="grid g-3" id="productGrid"></div>
           <p id="noResults" style="text-align:center;padding:50px 0;display:none">No products match those filters. <button id="resetEmpty" class="btn btn-ghost" style="margin-left:8px">Reset</button></p>
         </div>
