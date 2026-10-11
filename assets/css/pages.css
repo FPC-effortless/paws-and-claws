@@ -117,6 +117,7 @@
 
 /* ---------------------------- Shop layout -------------------------- */
 .shop-layout { display: grid; grid-template-columns: 268px 1fr; gap: 32px; align-items: start; }
+.shop-layout.catalog-unavailable { grid-template-columns: minmax(0, 1fr); }
 @media (max-width: 900px) { .shop-layout { grid-template-columns: 1fr; } }
 .shop-filters { position: sticky; top: calc(var(--nav-h) + 18px); background: var(--white); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 20px; box-shadow: var(--sh-1); }
 @media (max-width: 900px) { .shop-filters { position: static; } }
