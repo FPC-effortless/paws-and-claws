@@ -56,8 +56,13 @@ const svcToday = D.SERVICES.find(function (s) { return slotsForToday(s.id).lengt
 assert(!!svcToday, "found a service with slots today");
 const slots = slotsForToday(svcToday.id);
 assert(slots.length > 0, "slotsFor " + svcToday.id + " today -> " + slots.length + " slots");
-const open = slots.filter((s) => s.available);
-assert(open.length > 0, "at least one open slot today");
+/* A run late in the day can legitimately have no bookable slots left today.
+   Confirm availability across the upcoming week instead of making CI depend on
+   the runner's clock. */
+const upcomingOpen = Array.from({ length: 8 }, (_, i) => D.addDays(i))
+  .some((date) => D.SERVICES.some((service) =>
+    D.slotsFor(D.db, service.id, date).some((slot) => slot.available)));
+assert(upcomingOpen, "at least one open slot in the next seven days");
 const det = Array.from({length: 7}, (_, i) => D.slotsFor(D.db, "sv-haircut", D.addDays(i + 1)))
   .find(day => day.some(s => s.providerId === "Rosa")) || [];
 assert(det.some((s) => s.providerId === "Rosa"), "haircut slots include Rosa on a working day this week");

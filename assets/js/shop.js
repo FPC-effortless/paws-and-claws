@@ -157,7 +157,7 @@
     const filters = $('#shopFilters');
     if (filters) filters.hidden = !available;
     const layout = $('.shop-layout');
-    if (layout) layout.classList.toggle('catalog-unavailable', !available);
+  if (layout && layout.classList) layout.classList.toggle('catalog-unavailable', !available);
     const search = $('.shop-search');
     if (search) search.hidden = !available;
     const toolbar = $('.shop-toolbar');
