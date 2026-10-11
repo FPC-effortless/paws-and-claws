@@ -313,5 +313,6 @@ export default defineSchema({
     address: v.string(),
     phone: v.string(),
     email: v.string(),
+    content: v.optional(v.any()),
   }).index("by_external_id", ["id"]),
 });

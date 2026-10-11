@@ -23,7 +23,7 @@
     const tagline = $(".hero-tagline");
     if (tagline && cms.tagline) tagline.textContent = cms.tagline;
     const lead = $("#heroLead");
-    if (lead) lead.textContent = "Quality pet supplies, thoughtful grooming, daycare, vet support, training and a community of pet lovers — all in one place.";
+    if (lead && !(cms.content && cms.content.home && cms.content.home.lead)) lead.textContent = "Quality pet supplies, thoughtful grooming, daycare, vet support, training and a community of pet lovers — all in one place.";
     const bookingLink = $("#heroBookingLink");
     if (bookingLink) {
       bookingLink.href = D.catalogReady() ? 'services.html#book' : 'contact.html';

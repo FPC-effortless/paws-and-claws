@@ -56,7 +56,8 @@ const DEFAULT_CMS = {
   toggles: {},
   address: "Amasoma",
   phone: "",
-  email: ""
+  email: "",
+  content: {}
 };
 
 // First-run production catalog. This is only used by the one-time, super-admin
@@ -1107,6 +1108,11 @@ export const mutate = mutation({
       const patch = {};
       for (const k of ["siteName","tagline","banner","heroTitle","emergencyHotline","emergencyNote","phone","email","address"]) {
         if (p.patch?.[k] !== undefined) patch[k] = String(p.patch[k]);
+      }
+      if (p.patch?.content !== undefined) {
+        if (!p.patch.content || typeof p.patch.content !== "object" || Array.isArray(p.patch.content)) throw new Error("Invalid page content.");
+        if (JSON.stringify(p.patch.content).length > 60000) throw new Error("Page content is too large.");
+        patch.content = p.patch.content;
       }
       if (patch.siteName !== undefined && patch.siteName.trim().length < 2) throw new Error("Enter a site name with at least 2 characters.");
       if (p.patch?.catalogConfirmed !== undefined) {

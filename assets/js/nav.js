@@ -111,11 +111,12 @@
     const f = '<svg viewBox="0 0 24 24"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.2c-1.2 0-1.6.8-1.6 1.6V12h2.7l-.4 2.9h-2.3v7A10 10 0 0 0 22 12Z"/></svg>';
     const t = '<svg viewBox="0 0 24 24"><path d="M16.5 2h-2.6v13a2.4 2.4 0 1 1-2.4-2.4c.2 0 .5 0 .7.1V9.9a5.1 5.1 0 1 0 4.3 5V8.6a5.9 5.9 0 0 0 3.5 1.2V7.1a3.4 3.4 0 0 1-3.5-3.4V2Z"/></svg>';
     const mark = brandImg("brand-mark brand-img footer-mark");
+    const footerLead = (((D.db.cms || {}).content || {}).global || {}).footerLead || "Visit our pet store in Amasoma for supplies and care. Plan appointments and contact our team online.";
     return (
       '<footer class="site-footer"><div class="wrap"><div class="footer-grid">' +
         "<div>" +
           '<div class="footer-brand">' + mark + "Paws &amp; Claws</div>" +
-          "<p>Visit our pet store in Amasoma for supplies and care. Plan appointments and contact our team online.</p>" +
+          '<p id="footerLead">' + D.esc(footerLead) + "</p>" +
         "</div>" +
         "<div><h4>Shop</h4><ul>" +
           '<li><a href="shop.html?cat=Food">Food &amp; Treats</a></li>' +
@@ -252,6 +253,9 @@
       const title = document.title.split(" — ");
       document.title = (title[0] || "Paws & Claws") + " — " + cms.siteName;
     }
+    const footerLead = $("#footerLead");
+    const configuredLead = cms.content && cms.content.global && cms.content.global.footerLead;
+    if (footerLead && configuredLead) footerLead.textContent = configuredLead;
     let banner = $(".site-banner");
     if (cms.banner) {
       if (!banner) { banner = document.createElement("div"); banner.className = "site-banner"; header.before(banner); }

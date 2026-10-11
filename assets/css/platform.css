@@ -742,6 +742,12 @@
 .store-dialog-actions { margin-top:20px; }
 #storeBookingHost summary { cursor:pointer; font-weight:700; }
 .store-hours-editor { border:1px solid var(--line,#ddd); border-radius:12px; padding:14px; margin:12px 0; }
+.cms-content-group{border:1px solid var(--line,#ddd);border-radius:12px;margin:10px 0;background:var(--paper,#fff)}
+.cms-content-group summary{cursor:pointer;padding:13px 14px;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.cms-content-group summary::-webkit-details-marker{display:none}
+.cms-content-group summary::after{content:"+";font-size:1.25rem;color:var(--ocean)}
+.cms-content-group[open] summary::after{content:"–"}
+.cms-content-fields{padding:0 14px 14px;display:grid;gap:10px}
 .store-hour-row { display:grid; grid-template-columns:minmax(80px,1fr) repeat(2,minmax(110px,1fr)); gap:10px; align-items:center; margin:8px 0; }
 .store-hour-row label { display:grid; gap:4px; }
 @media (max-width:650px) { .store-hour-row { grid-template-columns:1fr 1fr; } .store-hour-row b { grid-column:1/-1; } }

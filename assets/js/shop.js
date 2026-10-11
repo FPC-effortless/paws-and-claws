@@ -148,7 +148,7 @@
     const list = filtered();
     if (D.productionMode && D.productionMode()) {
       const lead = $('#shopLead');
-      if (lead) lead.textContent = 'Browse products, details and current prices set by our team, then visit our Amasoma store. Online checkout is not available yet.';
+      if (lead && !(D.db.cms && D.db.cms.content && D.db.cms.content.shop && D.db.cms.content.shop.lead)) lead.textContent = 'Browse products, details and current prices set by our team, then visit our Amasoma store. Online checkout is not available yet.';
     }
     const filters = $('#shopFilters');
     if (filters) filters.hidden = false;

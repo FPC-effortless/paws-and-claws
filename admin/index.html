@@ -285,6 +285,15 @@
                   <p class="hint" id="svcMsg" role="status" style="margin:10px 0 0"></p>
                 </form>
               </div>
+              <div class="admin-panel pos-pad">
+                <div class="panel-head"><h2>Page content</h2><span class="muted">Edit public copy safely, page by page</span></div>
+                <p class="hint">These fields update the public pages without changing layout or code. Leave a field empty to keep the current default copy.</p>
+                <form id="cmsEditorialForm" novalidate>
+                  <div id="cmsEditorial"></div>
+                  <button class="btn btn-primary btn-block" type="submit">Save page content</button>
+                  <p class="hint" id="cmsEditorialMsg" role="status" style="margin:10px 0 0"></p>
+                </form>
+              </div>
             </div>
             <div class="panel-stack">
               <div class="admin-panel pos-pad">
@@ -355,6 +364,7 @@
   <script src="../assets/js/data.js?v=20261011-admin-cms1"></script>
   <script src="../assets/js/app.js?v=20261009-polish3"></script>
   <script src="../assets/js/convexClient.js?v=20261010-servicesync1"></script>
+  <script src="../assets/js/content.js?v=20261011-content-cms1"></script>
   <!-- Clerk identity layer. The publishable key lives in clerk.js.
        Without a key the gate falls back to the demo accounts above. -->
   <script src="../assets/js/clerk.js?v=20261009-polish3"></script>

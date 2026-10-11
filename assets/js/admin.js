@@ -900,6 +900,7 @@
           '<label>Closes<input class="input" type="time" data-hour-close value="' + esc(to24(row.close)) + '"></label></div>';
       }).join("");
     }
+    renderEditorialCMS(cms);
 
     const pick = $("#svcPick");
     if (pick) {
@@ -923,6 +924,34 @@
     renderRoles();
     renderAdminAccess();
     renderAudit();
+  }
+
+  function renderEditorialCMS(cms) {
+    const host = $("#cmsEditorial"), registry = window.PNC_CONTENT;
+    if (!host || !registry) return;
+    host.innerHTML = '<p class="hint">Loading current page copy…</p>';
+    registry.defaults().then(function (defaults) {
+      const complete = JSON.parse(JSON.stringify(defaults));
+      registry.fields.forEach(function (field) {
+        const saved = registry.read(cms.content || {}, field[2]);
+        if (typeof saved === "string") registry.set(complete, field[2], saved);
+      });
+      drawEditorialCMS(host, registry, complete);
+    });
+  }
+
+  function drawEditorialCMS(host, registry, content) {
+    const groups = {};
+    registry.fields.forEach(function (field) { (groups[field[0]] ||= { title: field[1], fields: [] }).fields.push(field); });
+    host.innerHTML = Object.keys(groups).map(function (key) {
+      const group = groups[key];
+      return '<details class="cms-content-group"' + (key === "home" ? " open" : "") + '><summary><b>' + esc(group.title) + '</b><span class="muted small"> ' + group.fields.length + ' editable fields</span></summary><div class="cms-content-fields">' +
+        group.fields.map(function (field) {
+          const value = registry.read(content, field[2]);
+          return '<div class="field"><label for="content-' + esc(field[2]) + '">' + esc(field[3]) + '</label>' +
+            '<textarea class="input" id="content-' + esc(field[2]) + '" data-content-key="' + esc(field[2]) + '" rows="2" placeholder="Leave empty to use the current public copy.">' + esc(typeof value === "string" ? value : "") + '</textarea></div>';
+        }).join("") + '</div></details>';
+    }).join("");
   }
 
   function fillServiceForm() {
@@ -981,6 +1010,23 @@
         ? "Site content saved. Catalog prices are confirmed for bookings and POS; pet listings are public."
         : "Site content saved. Active products and services remain visible; booking/POS price confirmation and pet listing publication remain off.";
       toast(published ? "Site content and catalog settings saved" : "Site content saved");
+    });
+
+    const editorial = $("#cmsEditorialForm");
+    if (editorial) editorial.addEventListener("submit", async function (e) {
+      e.preventDefault();
+      const registry = window.PNC_CONTENT;
+      if (!registry) return toast("The content editor is unavailable. Refresh and try again.", "err");
+      const next = JSON.parse(JSON.stringify((D.db.cms || {}).content || {}));
+      $$('[data-content-key]', editorial).forEach(function (input) {
+        const value = input.value.trim();
+        if (value) registry.set(next, input.dataset.contentKey, value);
+      });
+      const result = await Promise.resolve(D.updateCMS({ content: next }));
+      if (result && result.error) return toast(result.error, "err");
+      const message = $("#cmsEditorialMsg");
+      if (message) { message.style.color = "var(--ok)"; message.textContent = "Page content saved and published."; }
+      toast("Page content saved");
     });
 
     const sf = $("#svcForm");

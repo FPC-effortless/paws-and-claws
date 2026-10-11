@@ -339,7 +339,8 @@
         toggles: { appointmentReminder: true, vaccineRenewal: true, abandonedCart: true, waitlistAlerts: true },
         address: "Amasoma",
         phone: "",
-        email: ""
+        email: "",
+        content: {}
       },
       inquiries: [],
       contactMessages: [],
@@ -1173,10 +1174,11 @@
     if (patch.siteName !== undefined && String(patch.siteName).trim().length < 2) return { error: "Enter a site name with at least 2 characters." };
     if (patch.email && !isValidEmail(patch.email)) return { error: "Enter a valid store email." };
     if (patch.catalogConfirmed !== undefined && typeof patch.catalogConfirmed !== "boolean") return { error: "Invalid catalog setting." };
+    if (patch.content !== undefined && (!patch.content || typeof patch.content !== "object" || Array.isArray(patch.content) || JSON.stringify(patch.content).length > 60000)) return { error: "Invalid page content." };
     db.cms = Object.assign(db.cms || {
       id: "site", siteName: "", tagline: "", banner: "", heroTitle: "",
       emergencyHotline: "", emergencyNote: "", hours: [], toggles: {},
-      address: "", phone: "", email: "", catalogConfirmed: false
+      address: "", phone: "", email: "", content: {}, catalogConfirmed: false
     }, patch);
     audit("CMS update", Object.keys(patch).join(", "));
     persist();
