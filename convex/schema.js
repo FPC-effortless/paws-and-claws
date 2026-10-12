@@ -75,6 +75,7 @@ export default defineSchema({
   })
     .index("by_external_id", ["id"])
     .index("by_ownerId", ["ownerId"])
+    .index("by_date", ["date"])
     .index("by_petId_date", ["petId", "date"])
     .index("by_providerId", ["providerId"])
     .index("by_providerId_date", ["providerId", "date"]),
@@ -151,6 +152,22 @@ export default defineSchema({
     .index("by_external_id", ["id"])
     .index("by_ownerId", ["ownerId"])
     .index("by_requestId", ["requestId"]),
+
+  paymentAttempts: defineTable({
+    reference: v.string(),
+    kind: v.union(v.literal("order"), v.literal("booking")),
+    targetId: v.string(),
+    ownerId: v.string(),
+    email: v.string(),
+    amountKobo: v.number(),
+    status: v.string(),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+    providerId: v.optional(v.number()),
+    refundKobo: v.optional(v.number()),
+    refundedKobo: v.optional(v.number()),
+    lateRefund: v.optional(v.boolean()),
+  }).index("by_reference", ["reference"]).index("by_target", ["targetId"]).index("by_owner_status", ["ownerId", "status"]),
 
   listings: defineTable({
     id: v.optional(v.string()),

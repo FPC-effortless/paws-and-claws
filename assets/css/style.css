@@ -351,3 +351,11 @@ textarea.input { resize: vertical; min-height: 110px; }
 .product-card .badge-tag { left: auto; }
 
 [hidden] { display: none !important; }
+/* Keep static editorial fallbacks off the production screen until CMS data arrives. */
+:root:not(.cms-ready) [data-cms],
+:root:not(.cms-ready) #heroTitle,
+:root:not(.cms-ready) .hero-tagline,
+:root:not(.cms-ready) [data-cms-date] { visibility: hidden; }
+:root:not(.cms-ready) [data-cms-feature-date] { visibility: hidden; }
+:root:not(.cms-ready) .brand span,
+:root:not(.cms-ready) .footer-brand { visibility: hidden; }

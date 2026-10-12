@@ -207,9 +207,9 @@
       if (totalEl) totalEl.textContent = money(this.total);
       const checkoutBtn = $("#cartCheckout");
       if (checkoutBtn) {
-        const unavailable = !!(window.PNC_DB && PNC_DB.productionMode && PNC_DB.productionMode());
+        const unavailable = !!(window.PNC_DB && PNC_DB.productionMode && PNC_DB.productionMode() && !(PNC_DB.db && PNC_DB.db.paymentsEnabled && PNC_DB.catalogReady()));
         checkoutBtn.disabled = !this.items.length || unavailable;
-        if (unavailable) checkoutBtn.textContent = "Online checkout unavailable";
+        checkoutBtn.textContent = unavailable ? "Online checkout unavailable" : "Proceed to checkout";
       }
 
       /* Show the member discount as its own line so the total is

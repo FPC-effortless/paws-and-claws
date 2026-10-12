@@ -347,7 +347,7 @@
         '<div class="rev-row"><span>Retail</span><div class="rev-bar"><i style="width:' +
         Math.round(st.revenueRetail / max * 100) + '%"></i></div><b>' + money(st.revenueRetail) + "</b></div>";
       const note = $("#revNote");
-      if (note) note.textContent = "Lifetime booked + paid";
+      if (note) note.textContent = "Loaded records: booked + paid";
     }
 
     /* audit */
@@ -428,7 +428,7 @@
             (allowed("payments.take") && canManage && !["cancelled", "no-show"].includes(b.status) && b.paid < b.total
               ? '<button class="mini-btn" data-bkpay="' + esc(b.id) + '">Record payment</button>' : "") +
             (allowed("payments.refund") && b.paid > 0
-              ? '<button class="mini-btn danger" data-bkrefund="' + esc(b.id) + '">Record refund</button>' : "") +
+              ? '<button class="mini-btn danger" data-bkrefund="' + esc(b.id) + '">' + (D.productionMode() && b.createdBy === "self" && b.deposit > 0 && !(b.storePayments || []).length ? "Request refund" : "Record refund") + '</button>' : "") +
             (allowed("bookings.notes")
               ? '<button class="mini-btn warn" data-bknote="' + b.id + '">Note</button>' : "") +
             (canManage && ["pending", "confirmed"].includes(b.status)
@@ -680,7 +680,7 @@
       return;
     }
     const production = D.productionMode && D.productionMode();
-    host.innerHTML = (production ? '<p class="hint">Online payments and refunds cannot be processed from this app because no payment provider is connected.</p>' : '') + list.map(function (o) {
+    host.innerHTML = (production && !D.db.paymentsEnabled ? '<p class="hint">Paystack checkout is awaiting configuration.</p>' : '') + list.map(function (o) {
       const own = ownerOfId(o.ownerId) || {};
       const items = (o.items || []).map(function (it) {
         const p = D.PRODUCT_BY_ID[it.productId];
@@ -698,11 +698,11 @@
           (o.fulfillment === 'pos' ? '<button class="mini-btn" data-receipt="' + esc(o.id) + '">Receipt</button>' : '') +
           (o.fulfillment === 'pos' && o.paid > 0 && allowed("payments.refund")
             ? '<button class="mini-btn danger" data-store-refund="' + esc(o.id) + '">Record refund</button>' : '') +
-          (idx > 0 && !["cancelled", "refunded"].includes(o.status) && o.stage !== "done"
+          (idx > 0 && !["cancelled", "refunded", "payment_pending"].includes(o.status) && o.stage !== "done"
             ? '<button class="mini-btn" data-ostage="' + o.id + ":" + STAGES[idx - 1] + '">&larr; ' + esc(STAGES[idx - 1]) + "</button>" : "") +
-          (idx >= 0 && idx < STAGES.length - 1 && !["cancelled", "refunded"].includes(o.status) && o.stage !== "done"
+          (idx >= 0 && idx < STAGES.length - 1 && !["cancelled", "refunded", "payment_pending"].includes(o.status) && o.stage !== "done"
             ? '<button class="mini-btn primary" data-ostage="' + o.id + ":" + STAGES[idx + 1] + '">' + esc(STAGES[idx + 1]) + " &rarr;</button>" : "") +
-          (allowed("payments.refund") && !production && o.status !== "cancelled" && o.status !== "delivered"
+          (allowed("payments.refund") && o.fulfillment !== "pos" && o.paid > 0 && o.status !== "cancelled" && o.status !== "refunded"
             ? '<button class="mini-btn danger" data-orefund="' + o.id + '">Refund</button>' : "") +
         "</span></div></div>";
     }).join("");
@@ -724,7 +724,7 @@
         if (amt === null) return;
         const r = await Promise.resolve(D.refund(o.id, Number(amt)));
         if (r.error) return toast(r.error, "err");
-        toast("Refunded " + money(Number(amt)));
+        toast(r.status === "processed" ? "Refund processed" : "Refund requested. Paystack will confirm completion.");
         render();
       });
     });
@@ -949,7 +949,7 @@
         group.fields.map(function (field) {
           const value = registry.read(content, field[2]);
           return '<div class="field"><label for="content-' + esc(field[2]) + '">' + esc(field[3]) + '</label>' +
-            '<textarea class="input" id="content-' + esc(field[2]) + '" data-content-key="' + esc(field[2]) + '" rows="2" placeholder="Leave empty to use the current public copy.">' + esc(typeof value === "string" ? value : "") + '</textarea></div>';
+            '<textarea class="input" id="content-' + esc(field[2]) + '" data-content-key="' + esc(field[2]) + '" rows="2" placeholder="Leave empty to hide this copy.">' + esc(typeof value === "string" ? value : "") + '</textarea></div>';
         }).join("") + '</div></details>';
     }).join("");
   }
@@ -1020,7 +1020,7 @@
       const next = JSON.parse(JSON.stringify((D.db.cms || {}).content || {}));
       $$('[data-content-key]', editorial).forEach(function (input) {
         const value = input.value.trim();
-        if (value) registry.set(next, input.dataset.contentKey, value);
+        registry.set(next, input.dataset.contentKey, value);
       });
       const result = await Promise.resolve(D.updateCMS({ content: next }));
       if (result && result.error) return toast(result.error, "err");
@@ -1371,9 +1371,71 @@
     ownerFilter: null
   };
 
+  const historySections = {
+    dashboard: ["bookings", "audit"], bookings: ["bookings", "waitlist"],
+    crm: ["owners", "pets", "messages", "notifications", "inquiries", "contactMessages"],
+    pos: ["orders"], inventory: ["products", "listings"], cms: ["services", "providers", "staffLeave"]
+  };
+  const historyCursor = {}, historyDone = {}, historyCache = {};
+  let historyActor = "", historyLoading = "";
+  function restoreHistory() {
+    const current = admin();
+    const actor = current && (current.id || current.email);
+    if (!actor || (historyActor && historyActor !== actor)) {
+      Object.keys(historyCursor).forEach(key => delete historyCursor[key]);
+      Object.keys(historyDone).forEach(key => delete historyDone[key]);
+      Object.keys(historyCache).forEach(key => delete historyCache[key]);
+    }
+    historyActor = actor || "";
+    if (!actor) return;
+    Object.keys(historyCache).forEach(function (table) {
+      const rows = D.db[table];
+      if (!Array.isArray(rows)) return;
+      const seen = new Set(rows.map(row => row._id));
+      historyCache[table].forEach(function (row) { if (!seen.has(row._id)) rows.push(row); });
+    });
+  }
+  function renderHistoryTools() {
+    const host = $("#historyTools"), current = admin();
+    if (!host) return;
+    if (!D.productionMode() || !current || !window.PNC_CONVEX?.active) { host.innerHTML = ""; return; }
+    const allowedTables = current.role === "super" ? historySections[state.section] || []
+      : current.role === "desk" ? (historySections[state.section] || []).filter(table => !["products", "services", "providers", "staffLeave"].includes(table))
+      : current.role === "retail" ? (historySections[state.section] || []).filter(table => ["orders", "listings", "products"].includes(table)) : [];
+    host.innerHTML = allowedTables.filter(table => Array.isArray(D.db[table]) && D.db[table].length >= 2000 && !historyDone[table]).map(table =>
+      '<button type="button" class="btn btn-ghost btn-sm" data-history-table="' + table + '"' + (historyLoading ? " disabled" : "") + '>' +
+      (historyLoading === table ? "Loading older records…" : "Load older " + table) + '</button>').join(" ");
+  }
+  async function loadHistory(table) {
+    if (historyLoading || !window.PNC_CONVEX?.adminHistory) return;
+    historyLoading = table; renderHistoryTools();
+    try {
+      const existing = new Set((D.db[table] || []).map(row => row._id));
+      let added = 0, pages = 0;
+      do {
+        const page = await window.PNC_CONVEX.adminHistory(table, historyCursor[table] || null);
+        if (page.error) throw new Error(page.error);
+        historyCursor[table] = page.continueCursor;
+        historyDone[table] = page.isDone;
+        for (const row of page.page || []) {
+          if (existing.has(row._id)) continue;
+          existing.add(row._id); (D.db[table] ||= []).push(row);
+          (historyCache[table] ||= []).push(row); added++;
+        }
+        pages++;
+      } while (!historyDone[table] && added === 0 && pages < 12);
+      toast(added ? "Loaded " + added + " older " + table + " records" : historyDone[table] ? "No older " + table + " records remain" : "More history is available. Select Load older again.");
+      render();
+    } catch (error) { toast(error.message || "History could not be loaded.", "err"); }
+    finally { historyLoading = ""; renderHistoryTools(); }
+  }
+
   /* ============================== render =========================== */
   function render() {
     if (!admin()) return;
+    renderHistoryTools();
+    const sideBrand = $(".side-brand span"), cms = D.db.cms;
+    if (sideBrand && cms?.siteName) sideBrand.innerHTML = esc(cms.siteName) + "<br><small>Control Panel</small>";
     const s = state.section;
     if (s === "dashboard") renderDashboard();
     else if (s === "bookings") renderBookings();
@@ -1384,6 +1446,10 @@
   }
 
   function mountShell() {
+    $("#historyTools").addEventListener("click", function (event) {
+      const button = event.target.closest("[data-history-table]");
+      if (button) loadHistory(button.dataset.historyTable);
+    });
     document.addEventListener("click", function (e) {
       const shortcut = e.target.closest("[data-goto]");
       if (!shortcut) return;
@@ -1470,6 +1536,7 @@
     });
 
     window.addEventListener("pnc:data-ready", function () {
+      restoreHistory();
       if (admin()) enter();
       else { $("#adminShell").hidden = true; $("#adminGate").hidden = false; }
     });

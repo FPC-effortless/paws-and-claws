@@ -429,6 +429,13 @@
     }
   }
 
+  async function remotePayment(name, payload) {
+    const cv = global.PNC_CONVEX;
+    if (!cv || !cv.active) return { error: "Secure backend is not available." };
+    const result = await cv.action(name, payload);
+    return result || { error: "Payment service did not respond." };
+  }
+
   function load() {
     if (db) return db;
     if (productionMode()) {
@@ -818,7 +825,9 @@
 
   /* --------------------------- bookings API --------------------------- */
   function createBooking(input, staffMode = false) {
-    if (remoteEnabled()) return remoteMutation(staffMode ? "staffBooking" : "createBooking", input);
+    if (remoteEnabled()) return !staffMode && db.services?.find(s => s.id === input.serviceId)?.deposit
+      ? remotePayment("beginBooking", { input })
+      : remoteMutation(staffMode ? "staffBooking" : "createBooking", input);
     if (productionMode()) return { error: "Secure backend is not available." };
     if (staffMode && !can("bookings.manage")) return {error: "Not authorized."};
     const owner = staffMode ? byId(db.owners, input.ownerId) : currentOwner();
@@ -880,7 +889,9 @@
   }
 
   function refundBookingPayment(bookingId, amount, method, options = {}) {
-    if (remoteEnabled()) return remoteMutation("refundBookingPayment", {bookingId, amount, method, options});
+    if (remoteEnabled()) return method === "Paystack" || (db.bookings?.find(b => b.id === bookingId)?.createdBy === "self" && db.bookings?.find(b => b.id === bookingId)?.deposit > 0 && ["paid", "partial", "partial_refund"].includes(db.bookings?.find(b => b.id === bookingId)?.paymentStatus) && !db.bookings?.find(b => b.id === bookingId)?.storePayments?.length)
+      ? remotePayment("refund", { bookingId, amount })
+      : remoteMutation("refundBookingPayment", {bookingId, amount, method, options});
     if (productionMode()) return {error: "Secure backend is not available."};
     if (!can("payments.refund")) return {error: "Not authorized."};
     const booking = byId(db.bookings, bookingId);
@@ -969,7 +980,7 @@
 
   /* ---------------------------- orders API ---------------------------- */
   function placeOrder(items, fulfillment, address) {
-    if (remoteEnabled()) return remoteMutation("placeOrder", { items, fulfillment, address });
+    if (remoteEnabled()) return remotePayment("beginOrder", { items, fulfillment, address });
     if (productionMode()) return { error: "Secure backend is not available." };
     const owner = currentOwner();
     if (!owner) return { error: "Please sign in to checkout." };
@@ -1031,7 +1042,7 @@
   }
 
   function refund(orderId, amount) {
-    if (remoteEnabled()) return remoteMutation("refund", { orderId, amount });
+    if (remoteEnabled()) return remotePayment("refund", { orderId, amount });
     if (productionMode()) return { error: "Secure backend is not available." };
     const admin = currentAdmin();
     if (!admin || !can("payments.refund")) return { error: "Not authorized." };

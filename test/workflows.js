@@ -96,7 +96,7 @@ const db = {
  system: { async get(table, id) { assert.equal(table, '_storage'); return storedFiles.get(id) || null; } },
  query(table) {
    let rows = tables[table] ||= [];
-   const query = { withIndex(name, fn) { const q = {eq(k,v){rows=rows.filter(r=>r[k]===v);return q;}};fn(q);return query; },
+   const query = { withIndex(name, fn) { const q = {eq(k,v){rows=rows.filter(r=>r[k]===v);return q;},gte(k,v){rows=rows.filter(r=>r[k]>=v);return q;}};fn(q);return query; },
      filter(fn) { const expr = {field:k=>k,eq:(k,v)=>r=>r[k]===v};rows=rows.filter(fn(expr));return query; },
      async collect(){return rows.map(r=>({...r}));}, async first(){return rows[0] || null;} };
    return query;
@@ -105,7 +105,7 @@ const db = {
  async patch(id,patch){assert(id,'patch requires document ID');for(const rows of Object.values(tables)){const row=rows.find(r=>r._id===id);if(row){Object.assign(row,patch);return;}}throw Error('Missing doc');},
  async delete(id){for(const key of Object.keys(tables)) tables[key]=tables[key].filter(r=>r._id!==id);}
 };
-const backend = {console,crypto,process:{env:{}},mutation:x=>x,query:x=>x,v:{string:()=>({}),any:()=>({})}};
+const backend = {console,crypto,process:{env:{}},mutation:x=>x,query:x=>x,v:{string:()=>({}),any:()=>({}),null:()=>({}),union:()=>({})}};
 vm.createContext(backend);
 let source=fs.readFileSync(path.join(root,'convex/domain.js'),'utf8').replace(/^import .*;\r?\n/gm,'').replace(/export const (\w+) =/g,'globalThis.$1 =');
 vm.runInContext(source,backend);
@@ -198,7 +198,7 @@ const run=(op,payload={})=>backend.mutate.handler(ctx,{op,payload});
  await db.insert('pets',{id:'pet-audit',ownerId:owner.id,petName:'Test pet',species:'Dog',vaccines:[]});
  await db.insert('services',{id:'svc-deposit',name:'Paw Deposit service',group:'grooming',desc:'Test service',price:100,duration:1,deposit:true,requiresVaccine:false,staff:['Dana']});
  who={subject:'user-new',email:'new@example.com'};
- await assert.rejects(run('placeOrder',{items:[{id:'product-audit',qty:1}]}),/disabled|not connected/i);
+ await assert.rejects(run('placeOrder',{items:[{id:'product-audit',qty:1}]}),/secure Paystack checkout/i);
  await assert.rejects(run('createBooking',{petId:'pet-audit',serviceId:'svc-deposit',providerId:'Dana',date:'2026-10-20',hour:9}),/disabled|not connected/i);
  assert.equal(tables.products.find(r=>r.id==='product-audit').stock,4,'unpaid checkout must not reserve inventory');
  assert.equal((tables.bookings||[]).some(r=>r.serviceId==='svc-deposit'),false,'unpaid deposit booking must not reserve a slot');

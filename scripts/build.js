@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 
 const projectRoot = path.join(__dirname, "..");
 const clerkKey = String(process.env.CLERK_PUBLISHABLE_KEY || "").trim();
@@ -56,6 +57,13 @@ fs.writeFileSync(path.join(outputDirectory, "assets", "js", "runtime-config.js")
 for (const page of ["index.html", "services.html", "shop.html", "pets.html", "membership.html", "events.html", "account.html", "contact.html", "admin/index.html"]) {
   const target = path.join(outputDirectory, page);
   const html = fs.readFileSync(target, "utf8");
-  fs.writeFileSync(target, html.replace("</head>", '  <script src="/assets/js/runtime-config.js"></script>\n</head>'));
+  const versioned = html.replace(/((?:\.\.\/|\/)?assets\/(?:js|css)\/[^"'?\s]+\.(?:js|css))(?:\?v=[^"'\s]*)?/g, (match, url) => {
+    const relative = url.startsWith("/") ? url.slice(1) : path.normalize(path.join(path.dirname(page), url));
+    const asset = path.resolve(outputDirectory, relative);
+    if (!asset.startsWith(outputDirectory + path.sep) || !fs.existsSync(asset)) return match;
+    const hash = crypto.createHash("sha256").update(fs.readFileSync(asset)).digest("hex").slice(0, 12);
+    return url + "?v=" + hash;
+  });
+  fs.writeFileSync(target, versioned.replace("</head>", '  <script src="/assets/js/runtime-config.js"></script>\n</head>'));
 }
 console.log("Built the static website in dist/.");

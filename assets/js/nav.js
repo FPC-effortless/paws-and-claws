@@ -67,7 +67,7 @@
       '<div class="wrap"><nav class="nav">' +
         '<a class="brand" href="index.html" aria-label="Paws and Claws home">' +
           brandImg("brand-mark brand-img") +
-          "<span>Paws &amp; Claws<small>Connect Hub</small></span>" +
+          "<span>Paws &amp; Claws<small>Pet care and community</small></span>" +
         "</a>" +
         '<div class="nav-links" id="primaryNav">' + links +
           '<a href="account.html" data-member-only hidden>My pets</a>' +
@@ -96,9 +96,9 @@
               '<div class="row" id="cartSubtotal" hidden></div>' +
               '<div class="row" id="cartDiscount" hidden></div>' +
               '<div class="row"><span>Total</span><span id="cartTotal">&#8358;0.00</span></div>' +
-              '<div class="row"><span>Fulfillment</span><span>Online delivery not available</span></div>' +
+              '<div class="row"><span>Fulfillment</span><span>Store pickup</span></div>' +
               '<button class="btn btn-primary btn-block" id="cartCheckout">Proceed to checkout</button>' +
-              '<p class="cart-note">Online payments are unavailable. Visit our Amasoma store to confirm price and availability.</p>' +
+              '<p class="cart-note">Pay securely with Paystack. Your order is confirmed after payment verification.</p>' +
             "</div>" +
           "</div>" +
         "</div>" +
@@ -111,17 +111,16 @@
     const f = '<svg viewBox="0 0 24 24"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.2c-1.2 0-1.6.8-1.6 1.6V12h2.7l-.4 2.9h-2.3v7A10 10 0 0 0 22 12Z"/></svg>';
     const t = '<svg viewBox="0 0 24 24"><path d="M16.5 2h-2.6v13a2.4 2.4 0 1 1-2.4-2.4c.2 0 .5 0 .7.1V9.9a5.1 5.1 0 1 0 4.3 5V8.6a5.9 5.9 0 0 0 3.5 1.2V7.1a3.4 3.4 0 0 1-3.5-3.4V2Z"/></svg>';
     const mark = brandImg("brand-mark brand-img footer-mark");
-    const footerLead = (((D.db.cms || {}).content || {}).global || {}).footerLead || "Visit our pet store in Amasoma for supplies and care. Plan appointments and contact our team online.";
+    const footerLead = (((D.db.cms || {}).content || {}).global || {}).footerLead || "Visit our store for supplies and care. Plan appointments and contact our team online.";
+    const categories = [...new Set((D.db.products || []).filter(p => p.active !== false).map(p => p.cat).filter(Boolean))].sort();
     return (
       '<footer class="site-footer"><div class="wrap"><div class="footer-grid">' +
         "<div>" +
           '<div class="footer-brand">' + mark + "Paws &amp; Claws</div>" +
-          '<p id="footerLead">' + D.esc(footerLead) + "</p>" +
+          '<p id="footerLead" data-cms="global.footerLead">' + D.esc(footerLead) + "</p>" +
         "</div>" +
-        "<div><h4>Shop</h4><ul>" +
-          '<li><a href="shop.html?cat=Food">Food &amp; Treats</a></li>' +
-          '<li><a href="shop.html?cat=Toys">Toys</a></li>' +
-          '<li><a href="shop.html?cat=Grooming">Grooming</a></li>' +
+        '<div><h4>Shop</h4><ul id="footerCategories">' +
+          categories.map(cat => '<li><a href="shop.html?cat=' + encodeURIComponent(cat) + '">' + D.esc(cat) + '</a></li>').join("") +
           '<li><a href="pets.html">Pet Marketplace</a></li>' +
         "</ul></div>" +
         "<div><h4>Company</h4><ul>" +
@@ -134,7 +133,7 @@
         '<div id="footerVisit"><h4>Visit us</h4><ul></ul></div>' +
       "</div>" +
       '<div class="footer-bottom">' +
-        "<span>© 2026 Paws &amp; Claws Pet Co. All rights reserved.</span>" +
+        "<span>© " + new Date().getFullYear() + " Paws &amp; Claws Pet Co. All rights reserved.</span>" +
         "<span>Made with 🐾 for pets everywhere.</span>" +
       "</div></div></footer>"
     );
@@ -244,18 +243,22 @@
     const header = $(".site-header"), cms = D.db.cms;
     if (!header || !cms) return;
     const brandName = $(".brand span");
-    if (brandName && cms.siteName) brandName.innerHTML = D.esc(cms.siteName) + "<small>Connect Hub</small>";
+    if (brandName && cms.siteName) brandName.innerHTML = D.esc(cms.siteName) + "<small>" + D.esc(cms.content?.global?.brandSubtitle ?? cms.tagline ?? "") + "</small>";
     const footerBrand = $(".footer-brand");
     if (footerBrand && cms.siteName) footerBrand.innerHTML = brandImg("brand-mark brand-img footer-mark") + D.esc(cms.siteName);
     const footerCopyright = $(".footer-bottom span");
-    if (footerCopyright && cms.siteName) footerCopyright.textContent = "© 2026 " + cms.siteName + ". All rights reserved.";
+    if (footerCopyright && cms.siteName) footerCopyright.textContent = "© " + new Date().getFullYear() + " " + cms.siteName + ". All rights reserved.";
     if (cms.siteName) {
       const title = document.title.split(" — ");
       document.title = (title[0] || "Paws & Claws") + " — " + cms.siteName;
     }
     const footerLead = $("#footerLead");
     const configuredLead = cms.content && cms.content.global && cms.content.global.footerLead;
-    if (footerLead && configuredLead) footerLead.textContent = configuredLead;
+    if (footerLead && typeof configuredLead === "string") footerLead.textContent = configuredLead;
+    const categories = $("#footerCategories");
+    if (categories) categories.innerHTML = [...new Set((D.db.products || []).filter(p => p.active !== false).map(p => p.cat).filter(Boolean))].sort()
+      .map(cat => '<li><a href="shop.html?cat=' + encodeURIComponent(cat) + '">' + D.esc(cat) + '</a></li>').join("") +
+      '<li><a href="pets.html">Pet Marketplace</a></li>';
     let banner = $(".site-banner");
     if (cms.banner) {
       if (!banner) { banner = document.createElement("div"); banner.className = "site-banner"; header.before(banner); }

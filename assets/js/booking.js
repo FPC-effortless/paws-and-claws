@@ -48,7 +48,7 @@
         '<div class="svc-foot">' +
           '<span class="svc-price">' + publicPrice(s.price) + "</span>" +
           '<span class="svc-dur">' + s.duration + " hr" + (s.duration === 1 ? "" : "s") + "</span>" +
-          (s.duration >= 24 || !D.catalogReady() || (D.productionMode() && s.deposit)
+          (s.duration >= 24 || !D.catalogReady() || (D.productionMode() && s.deposit && !D.db.paymentsEnabled)
             ? '<a class="mini-btn" href="contact.html">Contact us</a>'
             : '<button class="mini-btn primary" data-book="' + s.id + '">Book now</button>') +
         "</div>" +
@@ -111,7 +111,7 @@
   function renderQuickBook() {
     const sel = $("#qbService");
     if (!sel) return;
-    sel.innerHTML = D.SERVICES.filter(s => s.duration < 24 && (!D.productionMode() || !s.deposit))
+    sel.innerHTML = D.SERVICES.filter(s => s.duration < 24 && (!D.productionMode() || !s.deposit || D.db.paymentsEnabled))
       .map((s) => '<option value="' + s.id + '">' + esc(s.name) + " · " + publicPrice(s.price) + "</option>").join("");
     const go = $("#qbGo");
     if (go) go.disabled = !sel.options.length;
@@ -169,7 +169,7 @@
         "</div>" + list.map(function (s) {
           const on = W.serviceId === s.id;
           return '<button class="pick' + (on ? " on" : "") + '"' +
-            ((D.productionMode() && s.deposit) || s.duration >= 24 ? ' disabled title="Contact the store to arrange this service"' : '') +
+            ((D.productionMode() && s.deposit && !D.db.paymentsEnabled) || s.duration >= 24 ? ' disabled title="Contact the store to arrange this service"' : '') +
             ' data-pick="' + s.id + '">' +
             '<span class="pi">' + (s.imageUrl ? '<img src="' + esc(s.imageUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">' : D.icon(s.icon)) + "</span>" +
             "<span><b>" + esc(s.name) + "</b><small>" + publicPrice(s.price) + " · " + s.duration + " hr" + (s.duration === 1 ? "" : "s") +
@@ -388,12 +388,12 @@
       (b.rate
         ? '<div class="row"><span>Member discount (' + Math.round(b.rate * 100) + '%)</span><span style="color:var(--ok)">&minus;' + money(Math.round(svc.price * b.rate * 100) / 100) + "</span></div>"
         : "") +
-      '<div class="row"><span>' + (svc.deposit ? "Deposit to arrange with the store (30%)" : "Amount due at your visit") +
+      '<div class="row"><span>' + (svc.deposit ? "Booking deposit (30%)" : "Amount due at your visit") +
         '</span><span><b>' + money(svc.deposit ? b.deposit : b.net) + "</b></span></div>" +
       (svc.deposit ? '<div class="row"><span>Remaining balance at the visit</span><span>' + money(b.remainder) + "</span></div>" : "") +
-      '<div class="row total"><span>Paid online now</span><span>' + money(0) + "</span></div>" +
+      '<div class="row total"><span>Pay online now</span><span>' + money(D.productionMode() && svc.deposit ? b.deposit : 0) + "</span></div>" +
       '<p class="tiny muted" style="margin:10px 0 0">' +
-        (D.productionMode() ? 'No payment is taken online. For services requiring a deposit, contact the store before booking.' :
+        (D.productionMode() ? (svc.deposit ? 'Paystack will collect the deposit. Your booking is confirmed after payment verification.' : 'No payment is taken online. Pay at your visit.') :
           'Local demo only — no real payment is collected.') + '</p>';
 
     $("#acctGate").innerHTML = o
@@ -418,7 +418,7 @@
   function startBooking(serviceId) {
     if (!D.catalogReady()) { PNC.toast("Service prices are being confirmed. Please contact the store to arrange a visit.", "err"); return; }
     const service = D.SERVICE_BY_ID[serviceId];
-    if (!service || service.duration >= 24 || (D.productionMode() && service.deposit)) {
+    if (!service || service.duration >= 24 || (D.productionMode() && service.deposit && !D.db.paymentsEnabled)) {
       PNC.toast("Contact the store to arrange this service and any required deposit.", "err");
       return;
     }
@@ -430,6 +430,20 @@
 
   /* ---------------------------- events ------------------------------ */
   document.addEventListener("pnc:nav-ready", function () {
+    const paymentRef = new URLSearchParams(window.location.search).get("payment_ref");
+    if (paymentRef && D.productionMode()) {
+      let confirming = false;
+      async function confirmPayment() {
+        if (confirming || !window.PNC_CONVEX?.active || !D.db?.cms) return;
+        confirming = true;
+        const result = await window.PNC_CONVEX.action("confirm", { reference: paymentRef });
+        if (result.error) PNC.toast(result.error, "err");
+        else { window.removeEventListener("pnc:data-ready", confirmPayment); history.replaceState({}, "", "services.html"); await window.PNC_CONVEX.syncBootstrap(); PNC.toast("Deposit verified. Booking " + result.targetId + " is confirmed."); }
+        confirming = false;
+      }
+      window.addEventListener("pnc:data-ready", confirmPayment);
+      queueMicrotask(confirmPayment);
+    }
     window.addEventListener("pnc:data-ready", function () {
       syncCatalogAvailability();
       renderStats(); renderServices(); renderProviders(); renderQuickBook();
@@ -542,7 +556,7 @@
       if (!o) { PNC.toast("Sign in to complete this booking", "err"); window.location.href = "membership.html#join"; return; }
       collectIntake();
       const svcForBook = D.SERVICE_BY_ID[W.serviceId];
-      if (D.productionMode && D.productionMode() && svcForBook && svcForBook.deposit) {
+      if (D.productionMode && D.productionMode() && svcForBook && svcForBook.deposit && !D.db.paymentsEnabled) {
         PNC.toast("Online booking deposits are not configured yet.", "err");
         return;
       }
@@ -555,6 +569,7 @@
         intake: W.intake
       }));
       if (r.error) { PNC.toast(r.error, "err"); return; }
+      if (r.authorizationUrl) { window.location.assign(r.authorizationUrl); return; }
       const bk = r.booking;
       const svc = D.SERVICE_BY_ID[bk.serviceId];
       PNC.toast("Booked! " + svc.name + " on " + D.fmtDate(bk.date));

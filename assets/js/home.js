@@ -22,8 +22,6 @@
     if (title && cms.heroTitle) title.textContent = cms.heroTitle;
     const tagline = $(".hero-tagline");
     if (tagline && cms.tagline) tagline.textContent = cms.tagline;
-    const lead = $("#heroLead");
-    if (lead && !(cms.content && cms.content.home && cms.content.home.lead)) lead.textContent = "Quality pet supplies, thoughtful grooming, daycare, vet support, training and a community of pet lovers — all in one place.";
     const bookingLink = $("#heroBookingLink");
     if (bookingLink) {
       bookingLink.href = D.catalogReady() ? 'services.html#book' : 'contact.html';
@@ -35,9 +33,9 @@
     const host = $("#heroStats");
     if (!host) return;
     host.innerHTML = [
-      { b: "Visit", s: "Shop and pay in store" },
-      { b: "Book", s: "Plan your next appointment" },
-      { b: "Connect", s: "Manage pet care online" }
+      { b: D.PRODUCTS.length, s: "Products in our catalog" },
+      { b: D.SERVICES.length, s: "Care services" },
+      { b: D.PROVIDERS.filter(function (p) { return p.active !== false; }).length, s: "Care team members" }
     ].map(function (x) {
       return "<div><b>" + x.b + "</b><span>" + x.s + "</span></div>";
     }).join("");
@@ -131,25 +129,6 @@
     }).join("");
   }
 
-  /* ----------------------------- newsletter --------------------------- */
-  function mountNewsletter() {
-    const form = $("#newsletterForm");
-    if (!form) return;
-    form.addEventListener("submit", function (e) {
-      e.preventDefault();
-      const msg = $("#nl-msg");
-      const email = $("#nl-email");
-      const valid = PNC && PNC.isValidEmail ? PNC.isValidEmail(email.value) : D.isValidEmail(email.value);
-      if (!valid) {
-        msg.style.color = "var(--danger)";
-        msg.textContent = "Please enter a valid email address.";
-        return;
-      }
-      msg.style.color = "var(--ink-soft)";
-      msg.textContent = "Newsletter signup is not available yet. Please contact the store for updates.";
-    });
-  }
-
   /* -------------------------- interactive hero ----------------------- */
   function mountHeroScene() {
     const scene = $("[data-hero-scene]");
@@ -190,7 +169,6 @@
     renderGroups();
     renderListings();
     renderBestsellers();
-    mountNewsletter();
     mountHeroScene();
     window.addEventListener("pnc:data-ready", function () {
       renderHero(); renderGroups(); renderListings(); renderBestsellers();

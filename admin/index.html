@@ -94,6 +94,8 @@
 
       <div id="searchResults" hidden></div>
 
+      <div id="historyTools" class="wrap" aria-live="polite"></div>
+
       <main class="admin-scroll" id="adminScroll">
         <!-- Dashboard -->
         <section class="admin-view active" id="view-dashboard">
@@ -146,7 +148,7 @@
         <!-- CRM -->
         <section class="admin-view" id="view-crm">
           <div class="view-head">
-            <div><h1>Customers &amp; Pets</h1><p>Owners, pets, vaccine records and lifetime value.</p></div>
+            <div><h1>Customers &amp; Pets</h1><p>Owners, pets, vaccine records and loaded payment history.</p></div>
             <button class="btn btn-teal btn-sm" id="newOwnerBtn">&#43; New customer</button>
           </div>
           <div class="admin-panel">
@@ -164,7 +166,7 @@
         <!-- POS -->
         <section class="admin-view" id="view-pos">
           <div class="view-head">
-            <div><h1>POS &amp; Orders</h1><p>Fulfill orders and record payments collected in person. Online payments are not connected.</p></div>
+            <div><h1>POS &amp; Orders</h1><p>Fulfill Paystack orders and record cash or bank transfer payments collected in person.</p></div>
           </div>
           <div class="pos-cols">
             <div class="admin-panel pos-pad">

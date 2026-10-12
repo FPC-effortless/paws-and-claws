@@ -19,13 +19,13 @@ assert(!contact.includes("a licensed vet will triage"), "Do not promise an unver
 assert(contact.includes("Seek immediate advice from a local veterinary clinic."), "Direct emergencies to a clinic");
 assert(contact.includes("Send a non-urgent message"), "Do not present contact forms as emergency triage");
 assert(!services.includes("A deposit holds your spot"), "Online deposit collection is unavailable");
-assert(services.includes("Online payments are not available"), "Booking flow explains payment limits");
+assert(services.includes("Eligible deposits are collected securely through Paystack when checkout is enabled."), "Booking flow explains conditional online payment");
 assert(booking.includes("o && !D.productionMode()"), "Production must not show demo membership discounts");
-assert(booking.includes("Paid online now"), "Display online payment amount explicitly");
+assert(booking.includes("Pay online now"), "Display online payment amount explicitly");
 assert(!booking.includes('"Charged now"'), "Never describe uncollected deposits as charged");
-assert(booking.includes("D.productionMode() && s.deposit"), "Deposit-only services must not advertise online booking");
+assert(booking.includes("D.productionMode() && s.deposit && !D.db.paymentsEnabled"), "Deposit services require configured checkout");
 assert(nav.includes("syncVisitCta();"), "Navbar reacts to catalog publication");
-assert(nav.includes("Online delivery not available"), "Cart must not promise online delivery");
+assert(nav.includes("Proceed to checkout"), "Cart directs customers to the checkout flow");
 assert(home.includes("(D.SERVICES || []).filter"), "Homepage service cards must use the current backend service snapshot");
 assert(home.includes('data-service-id="'), "Homepage must render real service records rather than category placeholders");
 assert(!home.includes("groups.push('<a class=\"home-service-card"), "Homepage must not append hard-coded pseudo-services");

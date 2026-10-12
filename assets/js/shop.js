@@ -19,7 +19,7 @@
     maxPrice: null,
     sort: 'featured',
     query: '',
-    ful: 'delivery'
+    ful: 'pickup'
   };
 
   /* The cart lives in the shared PNC chrome and stores {id, qty} lines.
@@ -150,10 +150,6 @@
        Treat an empty product collection—not its transaction status—as the
        unavailable storefront state. */
     const available = catalog().length > 0;
-    if (D.productionMode && D.productionMode()) {
-      const lead = $('#shopLead');
-      if (lead && !(D.db.cms && D.db.cms.content && D.db.cms.content.shop && D.db.cms.content.shop.lead)) lead.textContent = 'Browse products, details and current prices set by our team, then visit our Amasoma store. Online checkout is not available yet.';
-    }
     const filters = $('#shopFilters');
     if (filters) filters.hidden = !available;
     const layout = $('.shop-layout');
@@ -195,10 +191,7 @@
   async function checkout() {
     const items = PNC.Cart.items;
     if (!items.length) { PNC.toast('Your cart is empty'); return; }
-    if (D.productionMode && D.productionMode()) {
-      PNC.toast('Online checkout is disabled until a payment processor is configured.', 'err');
-      return;
-    }
+    if (D.productionMode && D.productionMode() && !D.db.paymentsEnabled) { PNC.toast('Online checkout is not configured yet.', 'err'); return; }
     const m = member();
     if (!m) {
       PNC.toast('Create a free account to check out');
@@ -212,6 +205,7 @@
     if (!lines.length) { PNC.toast('Those items are no longer available'); return; }
     const res = await Promise.resolve(D.placeOrder(lines, state.ful));
     if (res.error) { PNC.toast(res.error, 'err'); return; }
+    if (res.authorizationUrl) { window.location.assign(res.authorizationUrl); return; }
     PNC.Cart.clear();
     PNC.closeModal();
     if (res.order && res.order.paymentStatus === 'pending') {
@@ -224,6 +218,20 @@
 
   /* ---------- init ---------- */
   function init() {
+    const paymentRef = new URLSearchParams(window.location.search).get('payment_ref');
+    if (paymentRef && D.productionMode()) {
+      let confirming = false;
+      async function confirmPayment() {
+        if (confirming || !window.PNC_CONVEX?.active || !D.db?.cms) return;
+        confirming = true;
+        const result = await window.PNC_CONVEX.action('confirm', { reference: paymentRef });
+        if (result.error) PNC.toast(result.error, 'err');
+        else { window.removeEventListener('pnc:data-ready', confirmPayment); history.replaceState({}, '', 'shop.html'); PNC.Cart.clear(); await window.PNC_CONVEX.syncBootstrap(); PNC.toast('Payment verified. Order ' + result.targetId + ' is confirmed.'); }
+        confirming = false;
+      }
+      window.addEventListener('pnc:data-ready', confirmPayment);
+      queueMicrotask(confirmPayment);
+    }
     window.addEventListener('pnc:data-ready', function () { buildFacets(); render(); });
     $('#toggleFilters').addEventListener('click', function () {
       const open = $('#shopFilters').classList.toggle('filters-open');

@@ -150,6 +150,22 @@
       }
     },
 
+    async action(name, payload) {
+      const version = sessionVersion;
+      if (!(await api.connect())) return { error: "Secure backend is not configured." };
+      try {
+        const result = await api.client.action("paystack:" + name, payload || {});
+        return version === sessionVersion ? result : { error: "Your session changed. Refresh and check payment status before retrying." };
+      }
+      catch (err) { return { error: String(err && err.message || err || "Payment request failed.") }; }
+    },
+
+    async adminHistory(table, cursor) {
+      if (!(await api.connect())) return { error: "Secure backend is not configured." };
+      try { return await api.client.query("domain:adminHistory", { table, cursor: cursor || null }); }
+      catch (err) { return { error: String(err && err.message || err || "History could not be loaded.") }; }
+    },
+
     async uploadImage(file) {
       if (!file || !/^image\/(jpeg|png|webp|gif)$/i.test(file.type) || file.size > 8 * 1024 * 1024) {
         return { error: "Choose a JPG, PNG, WEBP or GIF image up to 8 MB." };

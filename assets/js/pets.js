@@ -208,8 +208,8 @@
     const el = $('#petCta');
     if (!el) return;
     el.innerHTML = '<div class="pet-cta-card">' +
-      '<h3>Ask about available pets or PawMatch</h3>' +
-      '<p>Contact the store for current listings, health details, or a carefully moderated introduction for eligible adult dogs. PawMatch is a welfare-led service, not a casual mating marketplace.</p>' +
+      '<h3>Ask about available pets</h3>' +
+      '<p>Contact the store for current listings, health details and adoption or purchase information.</p>' +
       '<a class="btn btn-teal" href="contact.html">Contact the team</a>' +
       ' <a class="btn btn-ghost" href="services.html">See our care services</a>' +
     '</div>';

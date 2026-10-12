@@ -328,10 +328,34 @@ async function limitSubmission(ctx, id, email) {
 }
 
 async function bounded(query, label, limit = 2000) {
-  const rows = typeof query.take === "function" ? await query.take(limit + 1) : await query.collect();
-  if (rows.length > limit) throw new Error(label + " has too many records for one view. Archive older operational records before reopening this view.");
-  return rows;
+  // Initial views show the newest records. Older staff history is fetched with
+  // a cursor so a long-running business never makes bootstrap fail outright.
+  if (typeof query.order === "function") return query.order("desc").take(limit);
+  if (typeof query.take === "function") return query.take(limit);
+  return query.collect();
 }
+
+const HISTORY_TABLES = new Set(["owners", "pets", "bookings", "orders", "listings", "waitlist", "messages", "notifications", "audit", "inquiries", "contactMessages", "products", "services", "providers", "staffLeave"]);
+const HISTORY_ACCESS = {
+  super: HISTORY_TABLES,
+  desk: new Set(["owners", "pets", "bookings", "orders", "listings", "waitlist", "messages", "notifications", "audit", "inquiries", "contactMessages"]),
+  retail: new Set(["orders", "listings", "products", "audit", "inquiries"])
+};
+export const adminHistory = query({
+  args: { table: v.string(), cursor: v.union(v.string(), v.null()) },
+  handler: async (ctx, { table, cursor }) => {
+    const admin = await adminFor(ctx);
+    if (!admin || !HISTORY_TABLES.has(table) || !HISTORY_ACCESS[admin.role]?.has(table)) throw new Error("Not authorized to read this history.");
+    const result = await ctx.db.query(table).order("desc").paginate({ numItems: 250, cursor });
+    if (["pets", "products", "services", "listings"].includes(table)) result.page = await Promise.all(result.page.map(async record => {
+      if (!record.imageStorageId) return record;
+      const imageUrl = await ctx.storage.getUrl(record.imageStorageId);
+      const { imageStorageId, ...safe } = record;
+      return { ...safe, imageUrl: imageUrl || "" };
+    }));
+    return result;
+  }
+});
 
 async function bootstrapData(ctx) {
   const id = await ctx.auth.getUserIdentity();
@@ -354,11 +378,12 @@ async function bootstrapData(ctx) {
       .filter(provider => provider.active !== false)
       .map(({ id, name, role, title, group, icon, start, end, off, bio }) => ({ id, name, role, title, group, icon, start, end, off, bio })),
     staffLeave: (await bounded(ctx.db.query("staffLeave"), "staffLeave")).map(l => ({ providerId: l.providerId, date: l.date })),
-    occupiedSlots: (await bounded(ctx.db.query("bookings"), "bookings")).filter(b => b.date >= today() && activeBookingStatus(b.status))
+    occupiedSlots: (await ctx.db.query("bookings").withIndex("by_date", q => q.gte("date", today())).collect()).filter(b => activeBookingStatus(b.status))
       .map(b => ({ providerId: b.providerId, date: b.date, hour: b.hour, duration: b.duration })),
     waitlist: [], messages: [], notifications: [], payments: [],
     audit: [], admins: [], inquiries: [], contactMessages: [],
     cms,
+    paymentsEnabled: !!(process.env.PAYSTACK_SECRET_KEY && process.env.PNC_SITE_URL),
     inquiryCounter: 0
   };
   // Active products and services are public catalog content, independent of
@@ -815,6 +840,7 @@ export const mutate = mutation({
       requirePermission(admin, "payments.take");
       requirePermission(admin, "bookings.manage");
       const booking = await getBooking(ctx, p.bookingId);
+      if (booking?.status === "payment_pending") throw new Error("Wait for Paystack to verify the deposit.");
       if (!booking || ["cancelled", "no-show"].includes(booking.status)) throw new Error("Appointment is not payable.");
       const options = p.options || {};
       const payments = booking.storePayments || [];
@@ -834,6 +860,8 @@ export const mutate = mutation({
       requirePermission(admin, "payments.refund");
       const booking = await getBooking(ctx, p.bookingId);
       if (!booking) throw new Error("Appointment not found.");
+      const onlineAttempt = await ctx.db.query("paymentAttempts").withIndex("by_target", q => q.eq("targetId", booking.id)).first();
+      if (onlineAttempt && ["refund_requested", "refund_pending"].includes(onlineAttempt.status)) throw new Error("Wait for the pending Paystack refund before recording another refund.");
       const options = p.options || {};
       if (!/^[a-zA-Z0-9_-]{8,100}$/.test(options.requestId || "")) throw new Error("A refund reference is required.");
       const refunds = booking.storeRefunds || [];
@@ -842,6 +870,9 @@ export const mutate = mutation({
       const reason = String(options.reason || "").trim().slice(0, 500);
       if (!Number.isFinite(amount) || amount <= 0 || round2(amount) !== amount || amount > booking.paid) throw new Error("Refund must be positive and cannot exceed the amount received.");
       if (!["Cash", "Bank transfer"].includes(p.method) || !reason) throw new Error("Enter the refund method and reason.");
+      const methodBalance = (booking.storePayments || []).filter(item => item.method === p.method).reduce((sum, item) => sum + item.amount, 0)
+        - refunds.filter(item => item.method === p.method).reduce((sum, item) => sum + item.amount, 0);
+      if (amount > round2(methodBalance)) throw new Error("Refund exceeds the amount recorded for that payment method.");
       refunds.push({ requestId: options.requestId, amount, method: p.method, reason, at: new Date().toISOString() });
       const paid = round2(booking.paid - amount);
       await ctx.db.patch(booking._id, { paid, refunded: round2((booking.refunded || 0) + amount), paymentStatus: paid === 0 ? "refunded" : "partial", storeRefunds: refunds });
@@ -853,6 +884,7 @@ export const mutate = mutation({
       const owner = await ownerFor(ctx, true);
       const admin = await adminFor(ctx);
       const booking = await getBooking(ctx, p.bookingId);
+      if (booking?.status === "payment_pending") throw new Error("Wait for Paystack to verify the deposit before rescheduling.");
       if (!booking) throw new Error("Booking not found.");
       const scope = admin ? permission(admin, "bookings.manage") : false;
       if (!admin && booking.ownerId !== owner?.id) throw new Error("Not authorized.");
@@ -891,6 +923,7 @@ export const mutate = mutation({
       if (!booking) throw new Error("Booking not found.");
       if (scope === "own" && booking.providerId !== admin.providerId) throw new Error("Not authorized.");
       const status = String(p.status || "");
+      if (booking.status === "payment_pending") throw new Error("Wait for Paystack to verify this deposit before changing the booking status.");
       if (!["pending","confirmed","completed","cancelled","no-show"].includes(status)) throw new Error("Invalid booking status.");
       if (!activeBookingStatus(booking.status) && status !== booking.status) throw new Error("Closed bookings cannot be changed.");
       const patch = { status };
@@ -919,7 +952,7 @@ export const mutate = mutation({
     if (op === "placeOrder") {
       const owner = await ownerFor(ctx, true);
       if (!owner) throw new Error("Please sign in to checkout.");
-      throw new Error("Online checkout is disabled until a payment processor is connected.");
+      throw new Error("Use the secure Paystack checkout to place an online order.");
       const rawLines = Array.isArray(p.items) ? p.items : [];
       if (!rawLines.length) throw new Error("Your cart is empty.");
       const lines = [];
@@ -953,6 +986,7 @@ export const mutate = mutation({
       requirePermission(admin, "payments.take");
       const order = await getOrder(ctx, p.orderId);
       if (!order) throw new Error("Order not found.");
+      if (order.status === "payment_pending") throw new Error("Wait for Paystack to verify payment before processing this order.");
       const stages = ["pending","packing","ready","shipped","done"];
       const stage = String(p.stage || "");
       if (!stages.includes(stage)) throw new Error("Invalid order stage.");
@@ -971,7 +1005,7 @@ export const mutate = mutation({
     if (op === "refund") {
       const admin = await adminFor(ctx);
       requirePermission(admin, "payments.refund");
-      throw new Error("Refunds require a configured payment processor; no money was moved.");
+      throw new Error("Use the secure Paystack refund action for online orders.");
     }
 
     if (op === "setListingStatus") {

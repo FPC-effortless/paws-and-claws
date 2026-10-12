@@ -215,7 +215,7 @@
       '</div>' +
       '<div class="panel">' +
         '<h3>' + (D.productionMode() ? 'Member tools' : 'Demo member perks') + '</h3>' +
-        (D.productionMode() ? '<p>Manage your pets, appointments and messages. Paid plans, online checkout and delivery perks are not connected.</p>' : '<div class="perk-row">' +
+        (D.productionMode() ? '<p>Manage your pets, appointments and messages. Store pickup and eligible booking deposits can be paid through Paystack when checkout is enabled. Paid membership plans are not available.</p>' : '<div class="perk-row">' +
           '<div class="perk"><span class="perk-ico">&#128375;</span><div><strong>' +
             PLAN_DISCOUNT[m.plan] + ' off everything</strong><small>Applied automatically at checkout</small></div></div>' +
           '<div class="perk"><span class="perk-ico">&#128666;</span><div><strong>' +
@@ -509,7 +509,7 @@
     $('#panelPayment').innerHTML =
       '<div class="panel-head"><h3>Payment methods</h3>' +
       (D.productionMode() ? '' : '<button type="button" class="btn btn-teal btn-sm" id="addCardBtn">&#43; Add a demo card</button>') + '</div>' +
-      (D.productionMode() ? '<div class="empty-card"><h3>Payments are not connected</h3><p>Online checkout and saved payment methods are unavailable on this site.</p></div>' : (cs.length ? '<div class="pay-grid">' + cs.map(cardRow).join('') + '</div>'
+      (D.productionMode() ? '<div class="empty-card"><h3>Paystack checkout</h3><p>' + (D.db.paymentsEnabled ? 'Pay securely when placing an order or booking a service that requires a deposit. Card details are handled by Paystack; this site does not save cards.' : 'Checkout is being configured. You can still ask the store about orders and appointments.') + '</p></div>' : (cs.length ? '<div class="pay-grid">' + cs.map(cardRow).join('') + '</div>'
         : '<div class="empty-card"><h3>No cards on file</h3>' +
           '<p>Demo payment methods are for local testing only.</p></div>')) +
       '<form id="cardForm" class="pay-form" style="display:none;margin-top:18px" novalidate>' +

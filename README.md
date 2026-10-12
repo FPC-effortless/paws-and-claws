@@ -113,6 +113,14 @@ For production, deploy the Convex backend after setting the production issuer:
 npx convex deploy
 ```
 
+### Paystack checkout and deposits
+
+Set `PAYSTACK_SECRET_KEY` and `PNC_SITE_URL` on the **production Convex deployment** before enabling checkout. `PNC_SITE_URL` must be the public HTTPS origin of this site, with no trailing slash. Keep the Paystack secret out of Vercel and all browser assets. Register `https://<your-convex-deployment>.convex.site/paystack/webhook` as the Paystack webhook URL, then deploy Convex before publishing the frontend. The site offers store pickup checkout and online deposits for eligible appointments when both variables are set. Paystack transaction initialization, callback verification, webhook signatures, amount and currency checks, reservation expiry, and refund requests run in Convex. Orders and deposit bookings remain pending until Paystack confirms payment. Test both successful and abandoned payments on a preview deployment using Paystack test keys before using live keys.
+
+Refund requests are asynchronous. The admin page reports a requested refund until Paystack sends a `refund.processed` webhook. If webhook delivery is interrupted, reconcile the Paystack dashboard and the `paymentAttempts` table before retrying a refund. Paid memberships, saved cards, email newsletter delivery, and online delivery are not offered by this integration.
+
+Admin screens initially load the newest 2,000 records per collection. When a collection reaches that window, the relevant admin section shows a **Load older** control backed by cursor pagination. Upcoming slot availability queries future bookings through the date index, so historical bookings do not block the public site.
+
 Clerk must allow the website's production origin and redirect URLs. The frontend contains no production Clerk or Convex defaults; it reads the build-generated runtime configuration. The initial production Convex database should be populated with reviewed real data. The seed mutation refuses to run if any application table already contains data, preventing a bootstrap from overwriting an initialized deployment.
 
 ### 4. Bootstrap a non-production/demo deployment
@@ -137,9 +145,9 @@ Review the seed data before importing it into an empty non-production environmen
 
 ## Payments
 
-The application deliberately **fails closed** for hosted online checkout and deposit-required online bookings until a real payment processor is configured.
+Hosted online checkout and deposit-required bookings fail closed until Paystack is configured on the Convex deployment. Once configured, orders and bookings remain pending until a verified Paystack transaction confirms the payment.
 
-It does not claim that an order is paid merely because the customer clicked checkout, and it does not claim to have issued a refund when no processor transaction was reversed.
+It does not claim that an order is paid merely because the customer clicked checkout, and refund requests remain pending until Paystack confirms they were processed.
 
 The current POS path records a staff-entered payment event rather than pretending to be a card processor.
 
@@ -200,7 +208,7 @@ The build creates `dist/` containing only the public HTML and assets. Vercel pub
 
 ## Important limitations
 
-The site is for a physical store in Amasoma. Staff can record walk-in sales, cash or bank-transfer payments, returns/refunds, customer and pet records, and appointments while connected to the internet. In-store customers do not need an online account. The optional free Puppy Pass account connects online pet and appointment tools; the other membership tiers are local demo concepts, with no live subscription billing. Exact street directions, phone number, opening hours, and actual naira catalog prices still need to be set by the store. Until a super admin reviews the product, service, and pet records and checks **Publish verified catalog and service prices** in Site & Staff, hosted pages and public API responses hide the demo catalog, and catalog-price sales, appointments, and pet listing inquiries are blocked. Staff can still record a walk-in sale with a custom line and a price confirmed at the counter.
+The site is for a physical store in Amasoma. Staff can record walk-in sales, cash or bank-transfer payments, returns/refunds, customer and pet records, and appointments while connected to the internet. In-store customers do not need an online account. The optional free Puppy Pass account connects online pet and appointment tools; the other membership tiers are local demo concepts, with no live subscription billing. Exact street directions, phone number, opening hours, and actual naira catalog prices still need to be set by the store. Active products and services remain visible in the catalog; until a super admin reviews their prices and checks **Publish verified catalog and service prices** in Site & Staff, catalog-price sales, appointments, and pet listing inquiries are blocked. Staff can still record a walk-in sale with a custom line and a price confirmed at the counter.
 
 Deploy the Convex schema and functions before publishing a frontend update that uses the in-store operations.
 
