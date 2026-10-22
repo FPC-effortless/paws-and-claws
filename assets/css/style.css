@@ -356,6 +356,9 @@ textarea.input { resize: vertical; min-height: 110px; }
 :root:not(.cms-ready) #heroTitle,
 :root:not(.cms-ready) .hero-tagline,
 :root:not(.cms-ready) [data-cms-date] { visibility: hidden; }
+:root:not(.cms-ready) .hero--hub [data-cms],
+:root:not(.cms-ready) .hero--hub #heroTitle,
+:root:not(.cms-ready) .hero--hub .hero-tagline { visibility: visible; }
 :root:not(.cms-ready) [data-cms-feature-date] { visibility: hidden; }
 :root:not(.cms-ready) .brand span,
 :root:not(.cms-ready) .footer-brand { visibility: hidden; }
