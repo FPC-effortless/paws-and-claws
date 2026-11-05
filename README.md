@@ -198,7 +198,10 @@ Overnight boarding is intentionally not represented as a normal one-day appointm
 Vercel production deploys are test-gated by GitHub Actions:
 
 1. pushes to `main` start the GitHub Actions regression and production-safety suite;
-2. Vercel automatically builds and deploys the connected `main` branch.
+2. Vercel independently runs `npm test && npm run test:build` for the deployment commit;
+3. only a successful regression suite, build, and static-output validation can publish that deployment.
+
+The gate is enforced by Vercel's `buildCommand` in `vercel.json`, so it does not depend on a separate GitHub Actions run finishing first. Keep development dependencies installed in Vercel because the tests and build require TypeScript and the browser SDK packages. A failing gate leaves the previous successful deployment active.
 
 Pull requests run the same test job without updating the Vercel production deployment.
 
